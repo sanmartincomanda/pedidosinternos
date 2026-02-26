@@ -1,5 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
+import { db } from '../firebase';
+import { ref, set, onValue, off } from "firebase/database";
 
 // Iconos SVG
 const Icons = {
@@ -13,46 +15,77 @@ const Icons = {
   upload: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
   file: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
   download: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-  table: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/></svg>
+  table: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/></svg>,
+  cloud: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>,
+  sync: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
 };
 
 export default function Configuracion({ config, setConfig }) {
   const [activeTab, setActiveTab] = useState('cocina');
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [mensaje, setMensaje] = useState('');
-  const [cocinaLocal, setCocinaLocal] = useState(config?.personalCocina || []);
-  const [transporteLocal, setTransporteLocal] = useState(config?.personalTransporte || []);
-  
-  // Estados para CSV de productos
-  const [productosCSV, setProductosCSV] = useState(config?.productos || []);
+  const [cocinaLocal, setCocinaLocal] = useState([]);
+  const [transporteLocal, setTransporteLocal] = useState([]);
+  const [productosCSV, setProductosCSV] = useState([]);
   const [previewCSV, setPreviewCSV] = useState([]);
   const [mostrarPreview, setMostrarPreview] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [guardando, setGuardando] = useState(false);
 
-  // Sincronizar con props cuando cambien
+  // Cargar configuración desde Firebase al montar
   useEffect(() => {
-    if (config) {
-      setCocinaLocal(config.personalCocina || []);
-      setTransporteLocal(config.personalTransporte || []);
-      setProductosCSV(config.productos || []);
-    }
-  }, [config]);
+    const configRef = ref(db, 'configuracion');
+    
+    const unsubscribe = onValue(configRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setCocinaLocal(data.personalCocina || []);
+        setTransporteLocal(data.personalTransporte || []);
+        setProductosCSV(data.productos || []);
+        
+        // Actualizar también el prop config si existe
+        if (setConfig) {
+          setConfig(data);
+        }
+      } else {
+        // Si no hay datos en Firebase, inicializar vacío
+        setCocinaLocal([]);
+        setTransporteLocal([]);
+        setProductosCSV([]);
+      }
+    }, (error) => {
+      console.error("Error cargando configuración:", error);
+      setMensaje('⚠️ Error al cargar configuración de Firebase');
+      setTimeout(() => setMensaje(''), 3000);
+    });
 
-  const guardarConfiguracion = () => {
-    const nuevaConfig = {
-      personalCocina: cocinaLocal,
-      personalTransporte: transporteLocal,
-      productos: productosCSV
-    };
+    return () => off(configRef, 'value', unsubscribe);
+  }, [setConfig]);
+
+  // Guardar configuración en Firebase
+  const guardarConfiguracion = async () => {
+    setGuardando(true);
     
-    localStorage.setItem('appConfig', JSON.stringify(nuevaConfig));
-    
-    if (setConfig) {
-      setConfig(nuevaConfig);
+    try {
+      const nuevaConfig = {
+        personalCocina: cocinaLocal,
+        personalTransporte: transporteLocal,
+        productos: productosCSV,
+        ultimaActualizacion: new Date().toISOString()
+      };
+      
+      // Guardar en Firebase
+      await set(ref(db, 'configuracion'), nuevaConfig);
+      
+      setMensaje('✅ Configuración guardada en Firebase');
+      setTimeout(() => setMensaje(''), 3000);
+    } catch (error) {
+      console.error("Error guardando:", error);
+      setMensaje('❌ Error al guardar: ' + error.message);
+      setTimeout(() => setMensaje(''), 5000);
+    } finally {
+      setGuardando(false);
     }
-    
-    setMensaje('✅ Configuración guardada exitosamente');
-    setTimeout(() => setMensaje(''), 3000);
   };
 
   // ========== FUNCIONES CSV DE PRODUCTOS ==========
@@ -61,7 +94,6 @@ export default function Configuracion({ config, setConfig }) {
     const lineas = contenido.split('\n').filter(l => l.trim() !== '');
     const productos = [];
     
-    // Detectar si tiene encabezado
     let inicio = 0;
     const primeraLinea = lineas[0].toUpperCase();
     if (primeraLinea.includes('CLAVE') || primeraLinea.includes('PRODUCTO') || primeraLinea.includes('NOMBRE')) {
@@ -72,7 +104,6 @@ export default function Configuracion({ config, setConfig }) {
       const linea = lineas[i].trim();
       if (!linea) continue;
       
-      // Separar por coma o punto y coma
       const partes = linea.includes(';') ? linea.split(';') : linea.split(',');
       
       if (partes.length >= 2) {
@@ -117,7 +148,6 @@ export default function Configuracion({ config, setConfig }) {
   };
 
   const confirmarImportacion = () => {
-    // Combinar con productos existentes (evitar duplicados por clave)
     const clavesExistentes = new Set(productosCSV.map(p => p.clave));
     const nuevosProductos = previewCSV.filter(p => !clavesExistentes.has(p.clave));
     const actualizados = previewCSV.filter(p => clavesExistentes.has(p.clave));
@@ -226,14 +256,6 @@ export default function Configuracion({ config, setConfig }) {
     }
   };
 
-  if (!config) {
-    return (
-      <div style={{ color: 'white', padding: '40px', textAlign: 'center' }}>
-        <h2>Cargando configuración...</h2>
-      </div>
-    );
-  }
-
   return (
     <div style={{ animation: 'slideIn 0.4s ease-out' }}>
       <style>{`
@@ -245,11 +267,16 @@ export default function Configuracion({ config, setConfig }) {
           from { opacity: 0; }
           to { opacity: 1; }
         }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
         .card-enter { animation: slideIn 0.4s ease-out forwards; }
         .fade-in { animation: fadeIn 0.3s ease-out; }
         .btn-hover { transition: all 0.2s ease; }
-        .btn-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+        .btn-hover:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
         .drag-active { border-color: #3b82f6 !important; background: rgba(59, 130, 246, 0.1) !important; }
+        .spin { animation: spin 1s linear infinite; }
       `}</style>
 
       {/* Header */}
@@ -280,31 +307,42 @@ export default function Configuracion({ config, setConfig }) {
               Configuración
             </h1>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
-              Gestión de personal y catálogo de productos
+              Gestión de personal y catálogo de productos • Firebase
             </p>
           </div>
         </div>
 
         <button
           onClick={guardarConfiguracion}
+          disabled={guardando}
           className="btn-hover"
           style={{
             padding: '14px 24px',
             borderRadius: '12px',
             border: 'none',
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            background: guardando ? '#9ca3af' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
             color: 'white',
             fontWeight: 800,
             fontSize: '14px',
-            cursor: 'pointer',
+            cursor: guardando ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            boxShadow: '0 8px 20px rgba(16, 185, 129, 0.4)'
+            boxShadow: guardando ? 'none' : '0 8px 20px rgba(16, 185, 129, 0.4)',
+            opacity: guardando ? 0.7 : 1
           }}
         >
-          {Icons.save}
-          Guardar Cambios
+          {guardando ? (
+            <>
+              <span className="spin">{Icons.sync}</span>
+              Guardando...
+            </>
+          ) : (
+            <>
+              {Icons.cloud}
+              Guardar en Firebase
+            </>
+          )}
         </button>
       </div>
 
@@ -315,13 +353,13 @@ export default function Configuracion({ config, setConfig }) {
           borderRadius: '12px',
           marginBottom: '20px',
           background: mensaje.includes('✅') ? 'rgba(16, 185, 129, 0.2)' : 
-                       mensaje.includes('⚠️') ? 'rgba(245, 158, 11, 0.2)' : 
+                       mensaje.includes('⚠️') || mensaje.includes('❌') ? 'rgba(239, 68, 68, 0.2)' : 
                        'rgba(59, 130, 246, 0.2)',
           border: `1px solid ${mensaje.includes('✅') ? 'rgba(16, 185, 129, 0.4)' : 
-                               mensaje.includes('⚠️') ? 'rgba(245, 158, 11, 0.4)' : 
+                               mensaje.includes('⚠️') || mensaje.includes('❌') ? 'rgba(239, 68, 68, 0.4)' : 
                                'rgba(59, 130, 246, 0.4)'}`,
           color: mensaje.includes('✅') ? '#34d399' : 
-                 mensaje.includes('⚠️') ? '#fbbf24' : '#60a5fa',
+                 mensaje.includes('⚠️') || mensaje.includes('❌') ? '#f87171' : '#60a5fa',
           fontWeight: 700,
           display: 'flex',
           alignItems: 'center',
@@ -392,7 +430,7 @@ export default function Configuracion({ config, setConfig }) {
             Personal de Cocina
           </h2>
           <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
-            Gestiona quién puede preparar pedidos
+            Gestiona quién puede preparar pedidos • {cocinaLocal.length} personas registradas
           </p>
 
           <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
@@ -508,7 +546,7 @@ export default function Configuracion({ config, setConfig }) {
             Personal de Transporte
           </h2>
           <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
-            Gestiona quién puede transportar pedidos
+            Gestiona quién puede transportar pedidos • {transporteLocal.length} personas registradas
           </p>
 
           <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
@@ -624,7 +662,7 @@ export default function Configuracion({ config, setConfig }) {
             Catálogo de Productos
           </h2>
           <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
-            Importa productos masivamente desde CSV (Clave, Producto)
+            Importa productos masivamente desde CSV (Clave, Producto) • {productosCSV.length} productos
           </p>
 
           {/* Área de carga de archivo */}
@@ -705,7 +743,7 @@ export default function Configuracion({ config, setConfig }) {
 
               {/* Lista actual de productos */}
               <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 700, color: 'white' }}>
-                Productos cargados: {productosCSV.length}
+                Productos en catálogo: {productosCSV.length}
               </h3>
 
               {productosCSV.length > 0 ? (
@@ -860,12 +898,12 @@ export default function Configuracion({ config, setConfig }) {
         <span style={{ fontSize: '20px' }}>💡</span>
         <div>
           <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd', marginBottom: '4px' }}>
-            Información importante
+            Sincronización con Firebase
           </div>
           <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>
-            El catálogo de productos se usa en el formulario de pedidos para autocompletar. 
-            El CSV debe tener formato: CLAVE,PRODUCTO (ej: BIS-001,BISTEC DE RES). 
-            Puedes arrastrar el archivo o seleccionarlo manualmente.
+            Los datos se guardan automáticamente en Firebase Realtime Database. 
+            Todos los usuarios verán los cambios en tiempo real. 
+            El CSV debe tener formato: CLAVE,PRODUCTO (ej: BIS-001,BISTEC DE RES).
           </div>
         </div>
       </div>
