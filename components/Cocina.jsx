@@ -89,10 +89,11 @@ export default function Cocina({ user, pedidos, personalCocina }) {
               </div>
               
               {p.items.map((it, itIdx) => (
-                <div key={itIdx} className="grid grid-cols-12 items-center border-b border-black/5 last:border-0 p-4">
+                <div key={itIdx} className="grid grid-cols-12 items-center border-b border-black/5 last:border-0 p-4 hover:bg-white/40 transition">
                   <div className="col-span-6">
                     <div className="font-black text-sm text-[#004c5c] uppercase">{it.articulo}</div>
-                    {it.note && <div className="text-[10px] text-red-600 font-bold italic mt-1 leading-none">⚠️ NOTA: {it.note}</div>}
+                    {/* CAMBIO AQUÍ: Usamos it.nota en lugar de it.note */}
+                    {it.nota && <div className="text-[10px] text-red-600 font-bold italic mt-1 leading-none">⚠️ NOTA: {it.nota}</div>}
                   </div>
                   <div className="col-span-2 text-center font-black text-xs text-[#004c5c]/30">
                     {it.peso} LB
