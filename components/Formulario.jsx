@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
 import { db } from '../firebase';
-import { ref, push } from "firebase/database";
+import { ref, push, runTransaction, onValue, off } from "firebase/database";
 
 // Iconos SVG estilo delivery
 const Icons = {
@@ -13,7 +13,8 @@ const Icons = {
   package: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
   alert: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
   search: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
-  key: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+  key: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
+  sync: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
 };
 
 const UNIDADES = [
@@ -39,7 +40,7 @@ const PRODUCTOS_EJEMPLO = [
   { clave: 'MAR-001', nombre: 'CAMARON' }
 ];
 
-export default function Formulario({ user, orderId, setOrderId, setView, sucursales = [], productosCSV = [] }) {
+export default function Formulario({ user, setView, sucursales = [], productosCSV = [] }) {
   const MAX_LINEAS = 25;
   
   // USAR productos del CSV si existen, sino los de ejemplo
@@ -63,21 +64,65 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
   const [cargando, setCargando] = useState(false);
   const [busquedaActiva, setBusquedaActiva] = useState(null);
   
+  // Estado para el número de orden (ahora local, no como prop)
+  const [orderId, setOrderId] = useState(1);
+  const [cargandoId, setCargandoId] = useState(true);
+  
   const hoy = new Date().toISOString().split('T')[0];
   const [fechaPedido, setFechaPedido] = useState(hoy);
   const [fechaEntrega, setFechaEntrega] = useState(hoy);
   
   const inputsRef = useRef([]);
-  const dropdownRefs = useRef({}); // Refs para cada dropdown
+  const dropdownRefs = useRef({});
 
   const esStandby = fechaEntrega > hoy;
+
+  // Cargar el último ID de Firebase al montar el componente
+  useEffect(() => {
+    const contadorRef = ref(db, 'configuracion/contador_pedidos');
+    
+    const unsubscribe = onValue(contadorRef, (snapshot) => {
+      const valor = snapshot.val();
+      if (valor) {
+        // Mostrar el siguiente ID disponible
+        setOrderId(valor + 1);
+      } else {
+        // Si no existe, empezar en 1
+        setOrderId(1);
+      }
+      setCargandoId(false);
+    }, (error) => {
+      console.error("Error cargando contador:", error);
+      setCargandoId(false);
+    });
+
+    return () => off(contadorRef, 'value', unsubscribe);
+  }, []);
+
+  // Función para obtener el siguiente ID atómicamente
+  const obtenerSiguienteId = async () => {
+    const contadorRef = ref(db, 'configuracion/contador_pedidos');
+    
+    try {
+      const resultado = await runTransaction(contadorRef, (valorActual) => {
+        if (valorActual === null || valorActual === undefined) {
+          return 1;
+        }
+        return valorActual + 1;
+      });
+      
+      return resultado.snapshot.val();
+    } catch (error) {
+      console.error("Error en transacción:", error);
+      throw error;
+    }
+  };
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
       let clickedInsideDropdown = false;
       
-      // Verificar si el click fue dentro de algún dropdown
       Object.values(dropdownRefs.current).forEach(ref => {
         if (ref && ref.contains(event.target)) {
           clickedInsideDropdown = true;
@@ -131,7 +176,6 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
     const nuevosItems = [...items];
     nuevosItems[idx][field] = val;
     
-    // Si cambia el producto manualmente, buscar clave
     if (field === 'producto') {
       const productoEncontrado = catalogoProductos.find(
         p => p.nombre.toUpperCase() === val.toUpperCase()
@@ -153,7 +197,6 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
     setItems(nuevosItems);
     setBusquedaActiva(null);
     
-    // Mover foco a cantidad
     setTimeout(() => inputsRef.current[idx * 5 + 2]?.focus(), 50);
   };
 
@@ -164,7 +207,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
     return catalogoProductos.filter(p => 
       p.nombre.toUpperCase().includes(busquedaUpper) ||
       p.clave.toUpperCase().includes(busquedaUpper)
-    ).slice(0, 10); // Mostrar hasta 10 resultados
+    ).slice(0, 10);
   };
 
   const handleKeyDown = (e, idx, field) => {
@@ -173,7 +216,6 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
       const nextIndex = idx + 1;
       
       if (field === 'producto') {
-        // Si hay dropdown abierto y hay resultados, seleccionar el primero
         if (items[idx].mostrarDropdown) {
           const filtrados = filtrarProductos(items[idx].producto);
           if (filtrados.length > 0) {
@@ -181,7 +223,6 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
             return;
           }
         }
-        // Ir a cantidad
         inputsRef.current[idx * 5 + 2]?.focus();
       } else if (field === 'cantidad') {
         inputsRef.current[idx * 5 + 3]?.focus();
@@ -230,44 +271,50 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
 
     setCargando(true);
 
-    let estadoInicial = 'NUEVO';
-    if (esStandby) {
-      estadoInicial = 'STANDBY_ENTREGA';
-    }
-
-    const nuevaOrden = {
-      id: orderId,
-      sucursalOrigen: user,
-      sucursalDestino: destino,
-      fechaPedido: fechaPedido,
-      fechaEntrega: fechaEntrega,
-      esStandby: esStandby,
-      fechaCreacion: new Date().toISOString(),
-      hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-      items: validos.map(i => ({ 
-        clave: i.clave,
-        producto: i.producto, 
-        cantidad: i.cantidad,
-        unidad: i.unidad,
-        nota: i.nota,
-        pesoReal: '',
-        preparadoPor: '',
-        listo: false
-      })),
-      notaGeneral: notaGeneral,
-      estado: estadoInicial,
-      preparadoPor: '',
-      enviadoCon: '',
-      timestamp: Date.now()
-    };
-
     try {
+      // Obtener número de orden atómicamente de Firebase
+      const nuevoId = await obtenerSiguienteId();
+
+      let estadoInicial = 'NUEVO';
+      if (esStandby) {
+        estadoInicial = 'STANDBY_ENTREGA';
+      }
+
+      const nuevaOrden = {
+        id: nuevoId,
+        sucursalOrigen: user,
+        sucursalDestino: destino,
+        fechaPedido: fechaPedido,
+        fechaEntrega: fechaEntrega,
+        esStandby: esStandby,
+        fechaCreacion: new Date().toISOString(),
+        hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+        items: validos.map(i => ({ 
+          clave: i.clave,
+          producto: i.producto, 
+          cantidad: i.cantidad,
+          unidad: i.unidad,
+          nota: i.nota,
+          pesoReal: '',
+          preparadoPor: '',
+          listo: false
+        })),
+        notaGeneral: notaGeneral,
+        estado: estadoInicial,
+        preparadoPor: '',
+        enviadoCon: '',
+        timestamp: Date.now()
+      };
+
       const dbRef = ref(db, 'pedidos_internos');
       await push(dbRef, nuevaOrden);
       
-      alert(`✅ ¡PEDIDO #${orderId} ${esStandby ? 'GUARDADO (STANDBY)' : 'ENVIADO'} CON ÉXITO!`);
+      // Actualizar el ID mostrado para el siguiente pedido
+      setOrderId(nuevoId + 1);
+      
+      alert(`✅ ¡PEDIDO #${nuevoId} ${esStandby ? 'GUARDADO (STANDBY)' : 'ENVIADO'} CON ÉXITO!`);
 
-      setOrderId(prev => (prev >= 999 ? 1 : prev + 1));
+      // Resetear formulario
       setItems([{ 
         clave: '',
         producto: '', 
@@ -300,6 +347,10 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
           0%, 100% { opacity: 1; }
           50% { opacity: 0.7; }
         }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
         .input-focus:focus {
           outline: none;
           border-color: #3b82f6;
@@ -308,7 +359,6 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
         .dropdown-item:hover {
           background: rgba(59, 130, 246, 0.2);
         }
-        /* Scrollbar personalizado para el dropdown */
         .dropdown-scroll::-webkit-scrollbar {
           width: 8px;
         }
@@ -323,6 +373,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
         .dropdown-scroll::-webkit-scrollbar-thumb:hover {
           background: rgba(255,255,255,0.3);
         }
+        .spin { animation: spin 1s linear infinite; }
       `}</style>
 
       {/* Header */}
@@ -410,11 +461,12 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
 
           {/* Número de Orden */}
           <div style={{
-            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+            background: cargandoId ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
             borderRadius: '16px',
             padding: '16px',
             textAlign: 'center',
-            boxShadow: '0 10px 25px rgba(59, 130, 246, 0.3)'
+            boxShadow: cargandoId ? 'none' : '0 10px 25px rgba(59, 130, 246, 0.3)',
+            opacity: cargandoId ? 0.7 : 1
           }}>
             <div style={{
               fontSize: '11px',
@@ -430,10 +482,27 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
               fontSize: '32px',
               fontWeight: 900,
               color: 'white',
-              lineHeight: 1
+              lineHeight: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
             }}>
-              {String(orderId).padStart(3, '0')}
+              {cargandoId ? (
+                <span className="spin">{Icons.sync}</span>
+              ) : (
+                String(orderId).padStart(3, '0')
+              )}
             </div>
+            {cargandoId && (
+              <div style={{
+                fontSize: '10px',
+                color: 'rgba(255,255,255,0.6)',
+                marginTop: '4px'
+              }}>
+                Cargando...
+              </div>
+            )}
           </div>
         </div>
 
@@ -566,7 +635,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
         </span>
       </div>
 
-      {/* Tabla de Productos - SIN overflow:hidden para que el dropdown se vea */}
+      {/* Tabla de Productos */}
       <div style={{
         background: 'rgba(255,255,255,0.03)',
         borderRadius: '24px',
@@ -596,7 +665,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
           <div></div>
         </div>
 
-        {/* Filas - sin maxHeight para evitar corte del dropdown */}
+        {/* Filas */}
         <div style={{ padding: '8px 0' }}>
           {items.map((item, idx) => (
             <div 
@@ -609,7 +678,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
                 borderBottom: idx < items.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
                 alignItems: 'center',
                 background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
-                position: 'relative' // Importante para posicionar el dropdown
+                position: 'relative'
               }}
             >
               {/* Número */}
@@ -622,7 +691,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
                 {String(idx + 1).padStart(2, '0')}
               </div>
 
-              {/* Clave - Automática */}
+              {/* Clave */}
               <div style={{
                 padding: '10px',
                 background: 'rgba(16, 185, 129, 0.1)',
@@ -644,7 +713,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
                 </span>
               </div>
 
-              {/* Producto con Dropdown de búsqueda - POSICIONAMIENTO FIJO */}
+              {/* Producto con Dropdown */}
               <div 
                 style={{ position: 'relative' }}
                 ref={el => dropdownRefs.current[idx] = el}
@@ -693,7 +762,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
                   autoComplete="off"
                 />
                 
-                {/* Dropdown de productos - POSICION ABSOLUTA CON Z-INDEX ALTO */}
+                {/* Dropdown */}
                 {item.mostrarDropdown && (
                   <div style={{
                     position: 'absolute',
@@ -786,7 +855,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
                 }}
               />
 
-              {/* Unidad - Select */}
+              {/* Unidad */}
               <select
                 ref={el => inputsRef.current[idx * 5 + 3] = el}
                 value={item.unidad}
@@ -817,7 +886,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
                 ))}
               </select>
 
-              {/* Nota especial por producto */}
+              {/* Nota */}
               <input
                 ref={el => inputsRef.current[idx * 5 + 4] = el}
                 type="text"
@@ -959,35 +1028,35 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
       {/* Botón Enviar */}
       <button
         onClick={enviar}
-        disabled={cargando}
+        disabled={cargando || cargandoId}
         style={{
           width: '100%',
           padding: '20px',
           borderRadius: '16px',
           border: 'none',
-          background: cargando ? 'rgba(255,255,255,0.1)' : esStandby ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+          background: cargando || cargandoId ? 'rgba(255,255,255,0.1)' : esStandby ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
           color: 'white',
           fontWeight: 800,
           fontSize: '18px',
-          cursor: cargando ? 'wait' : 'pointer',
+          cursor: cargando || cargandoId ? 'wait' : 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '12px',
-          boxShadow: cargando ? 'none' : esStandby ? '0 10px 25px rgba(245, 158, 11, 0.4)' : '0 10px 25px rgba(59, 130, 246, 0.4)',
+          boxShadow: cargando || cargandoId ? 'none' : esStandby ? '0 10px 25px rgba(245, 158, 11, 0.4)' : '0 10px 25px rgba(59, 130, 246, 0.4)',
           transition: 'all 0.2s',
           textTransform: 'uppercase',
           letterSpacing: '0.5px'
         }}
         onMouseEnter={(e) => {
-          if (!cargando) {
+          if (!cargando && !cargandoId) {
             e.currentTarget.style.transform = 'translateY(-2px)';
             e.currentTarget.style.boxShadow = esStandby ? '0 15px 35px rgba(245, 158, 11, 0.5)' : '0 15px 35px rgba(59, 130, 246, 0.5)';
           }
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = cargando ? 'none' : esStandby ? '0 10px 25px rgba(245, 158, 11, 0.4)' : '0 10px 25px rgba(59, 130, 246, 0.4)';
+          e.currentTarget.style.boxShadow = cargando || cargandoId ? 'none' : esStandby ? '0 10px 25px rgba(245, 158, 11, 0.4)' : '0 10px 25px rgba(59, 130, 246, 0.4)';
         }}
       >
         {cargando ? (
@@ -1009,12 +1078,6 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
           </>
         )}
       </button>
-
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

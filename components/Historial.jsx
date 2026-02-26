@@ -1,7 +1,7 @@
 "use client";
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../firebase';
-import { ref, update } from "firebase/database";
+import { ref, onValue } from "firebase/database";
 
 // Iconos SVG
 const Icons = {
@@ -15,7 +15,9 @@ const Icons = {
   check: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>,
   clock: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
   download: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-  fileText: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+  fileText: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+  truck: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>,
+  filter: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
 };
 
 // Configuración de estados
@@ -25,6 +27,7 @@ const STATUS_COLORS = {
   'PREPARACION': '#f97316',
   'LISTO': '#10b981',
   'ENVIADO': '#6366f1',
+  'RECIBIDO_CONFORME': '#059669',
   'ENTREGADO': '#059669'
 };
 
@@ -32,137 +35,217 @@ export default function Historial({ user, pedidos }) {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(
     new Date().toISOString().split('T')[0]
   );
-  const [vista, setVista] = useState('ambos'); // 'recibidos', 'enviados', 'ambos'
+  const [vista, setVista] = useState('ambos');
   const [mostrarConsolidado, setMostrarConsolidado] = useState(false);
+  
+  // 🆕 Filtro de sucursal para el consolidado
+  const [sucursalFiltro, setSucursalFiltro] = useState('todas');
+  
+  // Catálogo de productos
+  const [catalogoProductos, setCatalogoProductos] = useState({});
+  const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
 
-  // Filtrar pedidos por fecha seleccionada
+  // Cargar catálogo
+  useEffect(() => {
+    const configRef = ref(db, 'configuracion/productos');
+    
+    const unsubscribe = onValue(configRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const mapaClaves = {};
+        
+        Object.entries(data).forEach(([key, value]) => {
+          const nombreProducto = value.nombre || value.producto || value.descripcion || key;
+          const claveProducto = value.clave || value.codigo || value.sku || value.id || value.claveProducto;
+          
+          if (nombreProducto && claveProducto) {
+            mapaClaves[nombreProducto.toString().trim().toLowerCase()] = claveProducto.toString().trim();
+          }
+        });
+        
+        setCatalogoProductos(mapaClaves);
+      }
+      setCargandoCatalogo(false);
+    }, (error) => {
+      console.error("Error cargando catálogo:", error);
+      setCargandoCatalogo(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Filtrar pedidos por fecha
   const pedidosDelDia = useMemo(() => {
     return pedidos.filter(p => {
-      // Buscar por fechaPedido o fechaEntrega si es standby
       const fechaPedido = p.fechaPedido || '';
       const fechaEntrega = p.fechaEntrega || '';
       return fechaPedido === fechaSeleccionada || fechaEntrega === fechaSeleccionada;
     });
   }, [pedidos, fechaSeleccionada]);
 
-  // Separar recibidos y enviados
+  // Pedidos recibidos y solicitados
   const pedidosRecibidos = pedidosDelDia.filter(p => p.sucursalDestino === user);
-  const pedidosEnviados = pedidosDelDia.filter(p => p.sucursalOrigen === user);
+  const pedidosSolicitados = pedidosDelDia.filter(p => p.sucursalOrigen === user);
 
-  // CONSOLIDADO: Agrupar productos enviados del día
+  // 🆕 Obtener lista de sucursales únicas para el filtro (solo las que me hicieron pedidos)
+  const sucursalesDisponibles = useMemo(() => {
+    const pedidosEnviadosPorMi = pedidosDelDia.filter(p => 
+      p.sucursalDestino === user && 
+      (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')
+    );
+    
+    const sucursales = [...new Set(pedidosEnviadosPorMi.map(p => p.sucursalOrigen))];
+    return sucursales.sort();
+  }, [pedidosDelDia, user]);
+
+  // 🎯 CONSOLIDADO CON FILTRO DE SUCURSAL
   const consolidadoDia = useMemo(() => {
-    // Solo considerar pedidos ENVIADOS (los que salen de la sucursal)
+    // Pedidos donde yo soy el destino y ya los envié
+    let pedidosEnviadosPorMi = pedidosDelDia.filter(p => 
+      p.sucursalDestino === user && 
+      (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')
+    );
+
+    // 🆕 Aplicar filtro por sucursal si no es "todas"
+    if (sucursalFiltro !== 'todas') {
+      pedidosEnviadosPorMi = pedidosEnviadosPorMi.filter(p => 
+        p.sucursalOrigen === sucursalFiltro
+      );
+    }
+
     const productosMap = new Map();
 
-    pedidosEnviados.forEach(pedido => {
+    pedidosEnviadosPorMi.forEach(pedido => {
       pedido.items.forEach(item => {
         const key = `${item.producto}-${item.unidad}`;
-        const pesoReal = parseFloat(item.pesoReal) || 0;
-        const cantidad = parseFloat(item.cantidad) || 0;
+        const pesoReal = parseFloat(item.pesoReal) || parseFloat(item.cantidad) || 0;
 
         if (productosMap.has(key)) {
           const existente = productosMap.get(key);
           productosMap.set(key, {
             ...existente,
-            cantidad: existente.cantidad + cantidad,
-            pesoReal: existente.pesoReal + pesoReal,
-            cantidadPedidos: existente.cantidadPedidos + 1
+            cantidad: existente.cantidad + pesoReal,
+            cantidadPedidos: existente.cantidadPedidos + 1,
+            sucursales: [...existente.sucursales, pedido.sucursalOrigen]
           });
         } else {
           productosMap.set(key, {
             producto: item.producto,
             unidad: item.unidad,
-            cantidad: cantidad,
-            pesoReal: pesoReal,
-            cantidadPedidos: 1
+            cantidad: pesoReal,
+            cantidadPedidos: 1,
+            sucursales: [pedido.sucursalOrigen]
           });
         }
       });
     });
 
-    // Convertir a array y ordenar por peso real (descendente)
     return Array.from(productosMap.values())
-      .sort((a, b) => b.pesoReal - a.pesoReal);
-  }, [pedidosEnviados]);
+      .sort((a, b) => b.cantidad - a.cantidad);
+  }, [pedidosDelDia, user, sucursalFiltro]);
 
-  // Totales del consolidado
+  // Totales
   const totalesConsolidado = useMemo(() => {
     return consolidadoDia.reduce((acc, item) => ({
-      totalProductos: acc.totalProductos + item.cantidad,
-      totalPeso: acc.totalPeso + item.pesoReal,
+      totalCantidad: acc.totalCantidad + item.cantidad,
       totalLineas: acc.totalLineas + 1
-    }), { totalProductos: 0, totalPeso: 0, totalLineas: 0 });
+    }), { totalCantidad: 0, totalLineas: 0 });
   }, [consolidadoDia]);
 
-  // Función para exportar CSV
-  const exportarCSV = () => {
+  // Contador de pedidos
+  const pedidosFisicamenteEnviados = useMemo(() => {
+    let filtrados = pedidosDelDia.filter(p => 
+      p.sucursalDestino === user && 
+      (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')
+    );
+    
+    if (sucursalFiltro !== 'todas') {
+      filtrados = filtrados.filter(p => p.sucursalOrigen === sucursalFiltro);
+    }
+    
+    return filtrados;
+  }, [pedidosDelDia, user, sucursalFiltro]);
+
+  // Obtener clave del catálogo
+  const obtenerClaveProducto = (nombreProducto) => {
+    if (!nombreProducto) return '';
+    const clave = catalogoProductos[nombreProducto.toString().trim().toLowerCase()];
+    return clave || '';
+  };
+
+  // 📝 Exportar Excel con CLAVE como TEXTO (agregando apostrofo)
+  const exportarExcel = () => {
     if (consolidadoDia.length === 0) return;
 
-    // Headers
-    const headers = ['Producto', 'Unidad', 'Cantidad Total', 'Peso Real Total (lb)', 'Cantidad de Pedidos'];
+    const productosSinClave = consolidadoDia.filter(item => !obtenerClaveProducto(item.producto));
     
-    // Data rows
-    const rows = consolidadoDia.map(item => [
-      `"${item.producto}"`,
-      item.unidad,
-      item.cantidad.toFixed(2),
-      item.pesoReal.toFixed(2),
-      item.cantidadPedidos
-    ]);
+    if (productosSinClave.length > 0) {
+      const nombres = productosSinClave.map(p => p.producto).join(', ');
+      const confirmar = window.confirm(
+        `Los siguientes productos no tienen clave en el catálogo:\n${nombres}\n\n` +
+        `Se exportarán con CLAVE vacía. ¿Deseas continuar?`
+      );
+      if (!confirmar) return;
+    }
 
-    // Totales row
-    const totalRow = [
-      '"TOTALES"',
-      '',
-      totalesConsolidado.totalProductos.toFixed(2),
-      totalesConsolidado.totalPeso.toFixed(2),
-      ''
-    ];
+    const headers = ['CLAVE', 'CANTIDAD'];
+    
+    const rows = consolidadoDia.map(item => {
+      const claveReal = obtenerClaveProducto(item.producto);
+      // 🆕 Forzar formato TEXTO agregando apostrofo al inicio
+      // El apostrofo hace que Excel trate la celda como texto incluso si son solo números
+      const claveComoTexto = claveReal ? `'${claveReal}` : '';
+      
+      return [
+        claveComoTexto, // CLAVE como TEXTO (con apostrofo)
+        item.cantidad.toFixed(2) // CANTIDAD
+      ];
+    });
 
-    // Combine all
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.join(',')),
-      totalRow.join(',')
-    ].join('\n');
+    const xlsContent = [
+      headers.join('\t'),
+      ...rows.map(row => row.join('\t'))
+    ].join('\r\n');
 
-    // Create download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([xlsContent], { 
+      type: 'application/vnd.ms-excel;charset=utf-8;' 
+    });
+    
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     
+    // 🆕 Nombre de archivo incluye sucursal si hay filtro
+    const nombreSucursal = sucursalFiltro === 'todas' ? 'TODAS' : sucursalFiltro;
     link.setAttribute('href', url);
-    link.setAttribute('download', `Consolidado_${fechaSeleccionada}_${user}.csv`);
+    link.setAttribute('download', `Consolidado_${fechaSeleccionada}_${nombreSucursal}_${user}.xls`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // Determinar qué mostrar según la vista seleccionada
+  // Determinar qué mostrar según vista
   const pedidosMostrar = useMemo(() => {
     switch (vista) {
       case 'recibidos':
         return pedidosRecibidos;
       case 'enviados':
-        return pedidosEnviados;
+        return pedidosSolicitados;
       case 'ambos':
       default:
         return pedidosDelDia;
     }
-  }, [vista, pedidosRecibidos, pedidosEnviados, pedidosDelDia]);
+  }, [vista, pedidosRecibidos, pedidosSolicitados, pedidosDelDia]);
 
-  // Estadísticas del día
+  // Estadísticas
   const stats = {
     totalRecibidos: pedidosRecibidos.length,
-    totalEnviados: pedidosEnviados.length,
-    pesoTotalRecibido: pedidosRecibidos.reduce((acc, p) => 
+    totalSolicitados: pedidosSolicitados.length,
+    totalEnviadosPorMi: pedidosFisicamenteEnviados.length,
+    pesoTotalEnviado: pedidosFisicamenteEnviados.reduce((acc, p) => 
       acc + p.items.reduce((sum, item) => sum + (parseFloat(item.pesoReal) || 0), 0), 0
     ),
-    pesoTotalEnviado: pedidosEnviados.reduce((acc, p) => 
-      acc + p.items.reduce((sum, item) => sum + (parseFloat(item.pesoReal) || 0), 0), 0
-    ),
-    completados: pedidosDelDia.filter(p => p.estado === 'ENVIADO' || p.estado === 'ENTREGADO').length,
+    completados: pedidosDelDia.filter(p => p.estado === 'RECIBIDO_CONFORME' || p.estado === 'ENTREGADO').length,
     enProceso: pedidosDelDia.filter(p => ['NUEVO', 'PREPARACION', 'LISTO'].includes(p.estado)).length
   };
 
@@ -184,11 +267,6 @@ export default function Historial({ user, pedidos }) {
         .card-enter { animation: slideIn 0.4s ease-out forwards; }
         .btn-hover { transition: all 0.2s ease; }
         .btn-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.7; }
-        }
-        .pulse-animation { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
       `}</style>
 
       {/* Header */}
@@ -219,12 +297,11 @@ export default function Historial({ user, pedidos }) {
               Historial
             </h1>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
-              Consulta pedidos por fecha
+              {user} • Centro de Distribución
             </p>
           </div>
         </div>
 
-        {/* Botón Consolidado */}
         <button
           onClick={() => setMostrarConsolidado(!mostrarConsolidado)}
           style={{
@@ -249,7 +326,7 @@ export default function Historial({ user, pedidos }) {
           className="btn-hover"
         >
           {Icons.fileText}
-          {mostrarConsolidado ? 'Ocultar Consolidado' : 'Ver Consolidado del Día'}
+          {mostrarConsolidado ? 'Ocultar Consolidado' : 'Ver Consolidado de Envíos'}
           {consolidadoDia.length > 0 && !mostrarConsolidado && (
             <span style={{
               background: 'rgba(255,255,255,0.2)',
@@ -277,7 +354,6 @@ export default function Historial({ user, pedidos }) {
           gap: '20px',
           marginBottom: '20px'
         }}>
-          {/* Selector de Fecha */}
           <div>
             <label style={{
               fontSize: '11px',
@@ -296,7 +372,10 @@ export default function Historial({ user, pedidos }) {
             <input
               type="date"
               value={fechaSeleccionada}
-              onChange={(e) => setFechaSeleccionada(e.target.value)}
+              onChange={(e) => {
+                setFechaSeleccionada(e.target.value);
+                setSucursalFiltro('todas'); // Resetear filtro al cambiar fecha
+              }}
               style={{
                 width: '100%',
                 padding: '14px 16px',
@@ -311,7 +390,6 @@ export default function Historial({ user, pedidos }) {
             />
           </div>
 
-          {/* Selector de Vista */}
           <div>
             <label style={{
               fontSize: '11px',
@@ -332,8 +410,8 @@ export default function Historial({ user, pedidos }) {
               borderRadius: '12px'
             }}>
               {[
-                { key: 'recibidos', label: 'Recibidos', icon: Icons.inbox, color: '#10b981' },
-                { key: 'enviados', label: 'Enviados', icon: Icons.send, color: '#3b82f6' },
+                { key: 'recibidos', label: 'Me pidieron', icon: Icons.inbox, color: '#10b981' },
+                { key: 'enviados', label: 'Yo pedí', icon: Icons.send, color: '#3b82f6' },
                 { key: 'ambos', label: 'Ambos', icon: Icons.package, color: '#8b5cf6' }
               ].map((tab) => (
                 <button
@@ -366,7 +444,6 @@ export default function Historial({ user, pedidos }) {
           </div>
         </div>
 
-        {/* Fecha seleccionada destacada */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -388,7 +465,326 @@ export default function Historial({ user, pedidos }) {
         </div>
       </div>
 
-      {/* SECCIÓN CONSOLIDADO DEL DÍA */}
+      {/* 🎯 SECCIÓN CONSOLIDADO */}
+      {mostrarConsolidado && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)',
+          borderRadius: '24px',
+          padding: '28px',
+          marginBottom: '32px',
+          border: '2px solid rgba(16, 185, 129, 0.3)',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+        }}>
+          {/* Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '24px',
+            flexWrap: 'wrap',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 10px 25px rgba(16, 185, 129, 0.4)',
+                color: 'white'
+              }}>
+                {Icons.truck}
+              </div>
+              <div>
+                <h2 style={{ 
+                  margin: 0, 
+                  fontSize: '22px', 
+                  fontWeight: 800, 
+                  color: '#10b981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}>
+                  Consolidado de Productos Enviados
+                  <span style={{
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    color: '#34d399',
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    fontSize: '12px'
+                  }}>
+                    {pedidosFisicamenteEnviados.length} pedidos
+                  </span>
+                </h2>
+                <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: 'rgba(255,255,255,0.6)' }}>
+                  {sucursalFiltro === 'todas' 
+                    ? `Todos los pedidos recibidos en ${user}` 
+                    : `Solo pedidos de: ${sucursalFiltro}`}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={exportarExcel}
+              disabled={consolidadoDia.length === 0 || cargandoCatalogo}
+              style={{
+                padding: '14px 24px',
+                borderRadius: '12px',
+                border: 'none',
+                background: consolidadoDia.length === 0 || cargandoCatalogo ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                color: 'white',
+                fontWeight: 700,
+                fontSize: '14px',
+                cursor: consolidadoDia.length === 0 || cargandoCatalogo ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                opacity: consolidadoDia.length === 0 || cargandoCatalogo ? 0.5 : 1,
+                transition: 'all 0.3s ease'
+              }}
+              className={consolidadoDia.length > 0 && !cargandoCatalogo ? 'btn-hover' : ''}
+            >
+              {Icons.download}
+              {cargandoCatalogo ? 'Cargando...' : 'Exportar Excel (.xls)'}
+            </button>
+          </div>
+
+          {/* 🆕 FILTRO POR SUCURSAL */}
+          {sucursalesDisponibles.length > 0 && (
+            <div style={{
+              background: 'rgba(0,0,0,0.2)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: 'rgba(255,255,255,0.7)',
+                fontSize: '14px',
+                fontWeight: 600
+              }}>
+                {Icons.filter}
+                Filtrar por sucursal:
+              </div>
+              
+              <select
+                value={sucursalFiltro}
+                onChange={(e) => setSucursalFiltro(e.target.value)}
+                style={{
+                  flex: 1,
+                  minWidth: '200px',
+                  padding: '10px 14px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '2px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontWeight: 700,
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="todas" style={{ background: '#1e293b' }}>
+                  Todas las sucursales ({pedidosDelDia.filter(p => p.sucursalDestino === user && (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')).length} pedidos)
+                </option>
+                {sucursalesDisponibles.map(sucursal => {
+                  const count = pedidosDelDia.filter(p => 
+                    p.sucursalDestino === user && 
+                    (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME') &&
+                    p.sucursalOrigen === sucursal
+                  ).length;
+                  return (
+                    <option key={sucursal} value={sucursal} style={{ background: '#1e293b' }}>
+                      {sucursal} ({count} pedidos)
+                    </option>
+                  );
+                })}
+              </select>
+
+              {sucursalFiltro !== 'todas' && (
+                <button
+                  onClick={() => setSucursalFiltro('todas')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    background: 'transparent',
+                    color: 'rgba(255,255,255,0.7)',
+                    fontSize: '12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Limpiar filtro
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Tabla de Consolidado */}
+          {consolidadoDia.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '40px',
+              background: 'rgba(0,0,0,0.2)',
+              borderRadius: '16px'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📭</div>
+              <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '16px', fontWeight: 600 }}>
+                {sucursalFiltro === 'todas' 
+                  ? 'No has enviado productos en esta fecha' 
+                  : `No hay envíos para ${sucursalFiltro} en esta fecha`}
+              </p>
+              <p style={{ margin: '8px 0 0 0', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
+                Los pedidos deben estar marcados como "Enviado" o "Recibido Conforme"
+              </p>
+            </div>
+          ) : (
+            <>
+              <div style={{
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: '16px',
+                overflow: 'hidden',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                {/* Header de tabla */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                  gap: '16px',
+                  padding: '16px 20px',
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  borderBottom: '2px solid rgba(16, 185, 129, 0.3)',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  color: '#34d399',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  <div>Producto</div>
+                  <div style={{ textAlign: 'center' }}>Unidad</div>
+                  <div style={{ textAlign: 'center' }}>Clave Catálogo</div>
+                  <div style={{ textAlign: 'right' }}>Cantidad (Peso Real)</div>
+                </div>
+
+                {/* Filas */}
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {consolidadoDia.map((item, index) => {
+                    const claveProducto = obtenerClaveProducto(item.producto);
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                          gap: '16px',
+                          padding: '16px 20px',
+                          borderBottom: '1px solid rgba(255,255,255,0.05)',
+                          background: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                          transition: 'all 0.2s',
+                          cursor: 'default'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+                        }}
+                      >
+                        <div style={{ 
+                          fontWeight: 700, 
+                          color: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <span style={{ color: '#10b981', fontSize: '20px' }}>•</span>
+                          {item.producto}
+                        </div>
+                        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.7)' }}>
+                          {item.unidad}
+                        </div>
+                        <div style={{ 
+                          textAlign: 'center', 
+                          color: claveProducto ? '#60a5fa' : '#ef4444',
+                          fontWeight: claveProducto ? 600 : 700,
+                          fontSize: '13px',
+                          fontFamily: 'monospace'
+                        }}>
+                          {claveProducto || '⚠️ Sin clave'}
+                        </div>
+                        <div style={{ 
+                          textAlign: 'right', 
+                          fontWeight: 800, 
+                          color: '#10b981',
+                          fontFamily: 'monospace',
+                          fontSize: '16px'
+                        }}>
+                          {item.cantidad.toFixed(2)} lb
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Footer */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                  gap: '16px',
+                  padding: '20px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  borderTop: '2px solid rgba(16, 185, 129, 0.4)',
+                  fontWeight: 800
+                }}>
+                  <div style={{ color: '#10b981', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {Icons.truck}
+                    TOTALES
+                  </div>
+                  <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                    {totalesConsolidado.totalLineas} productos
+                  </div>
+                  <div></div>
+                  <div style={{ 
+                    textAlign: 'right', 
+                    color: '#10b981',
+                    fontFamily: 'monospace',
+                    fontSize: '18px'
+                  }}>
+                    {totalesConsolidado.totalCantidad.toFixed(2)} lb
+                  </div>
+                </div>
+              </div>
+
+              {/* Info del Excel */}
+              <div style={{
+                marginTop: '16px',
+                padding: '12px 16px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                borderRadius: '10px',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                fontSize: '13px',
+                color: '#93c5fd',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>ℹ️</span>
+                El archivo Excel contendrá CLAVE (formato TEXTO) y CANTIDAD. 
+                La columna CLAVE lleva apostrofo (') para forzar formato texto en Excel.
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {/* 🎯 SECCIÓN CONSOLIDADO: Productos que YO envié (como centro de distribución) */}
       {mostrarConsolidado && (
         <div style={{
           background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)',
@@ -419,7 +815,7 @@ export default function Historial({ user, pedidos }) {
                 boxShadow: '0 10px 25px rgba(16, 185, 129, 0.4)',
                 color: 'white'
               }}>
-                {Icons.scale}
+                {Icons.truck}
               </div>
               <div>
                 <h2 style={{ 
@@ -431,7 +827,7 @@ export default function Historial({ user, pedidos }) {
                   alignItems: 'center',
                   gap: '10px'
                 }}>
-                  Consolidado del Día
+                  Consolidado de Productos Enviados
                   <span style={{
                     background: 'rgba(16, 185, 129, 0.2)',
                     color: '#34d399',
@@ -439,37 +835,37 @@ export default function Historial({ user, pedidos }) {
                     borderRadius: '20px',
                     fontSize: '12px'
                   }}>
-                    {pedidosEnviados.length} pedidos
+                    {pedidosFisicamenteEnviados.length} pedidos
                   </span>
                 </h2>
                 <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: 'rgba(255,255,255,0.6)' }}>
-                  Suma de todos los productos enviados con PESO REAL
+                  Productos que salieron físicamente de {user} hacia otras sucursales
                 </p>
               </div>
             </div>
 
             <button
-              onClick={exportarCSV}
-              disabled={consolidadoDia.length === 0}
+              onClick={exportarExcel}
+              disabled={consolidadoDia.length === 0 || cargandoCatalogo}
               style={{
                 padding: '14px 24px',
                 borderRadius: '12px',
                 border: 'none',
-                background: consolidadoDia.length === 0 ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                background: consolidadoDia.length === 0 || cargandoCatalogo ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
                 color: 'white',
                 fontWeight: 700,
                 fontSize: '14px',
-                cursor: consolidadoDia.length === 0 ? 'not-allowed' : 'pointer',
+                cursor: consolidadoDia.length === 0 || cargandoCatalogo ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
-                opacity: consolidadoDia.length === 0 ? 0.5 : 1,
+                opacity: consolidadoDia.length === 0 || cargandoCatalogo ? 0.5 : 1,
                 transition: 'all 0.3s ease'
               }}
-              className={consolidadoDia.length > 0 ? 'btn-hover' : ''}
+              className={consolidadoDia.length > 0 && !cargandoCatalogo ? 'btn-hover' : ''}
             >
               {Icons.download}
-              Exportar CSV
+              {cargandoCatalogo ? 'Cargando catálogo...' : 'Exportar Excel (.xls)'}
             </button>
           </div>
 
@@ -481,9 +877,12 @@ export default function Historial({ user, pedidos }) {
               background: 'rgba(0,0,0,0.2)',
               borderRadius: '16px'
             }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📊</div>
-              <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '16px' }}>
-                No hay pedidos enviados para consolidar en esta fecha
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📭</div>
+              <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '16px', fontWeight: 600 }}>
+                No has enviado productos en esta fecha
+              </p>
+              <p style={{ margin: '8px 0 0 0', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
+                Los pedidos deben estar marcados como "Enviado" o "Recibido Conforme"
               </p>
             </div>
           ) : (
@@ -497,7 +896,7 @@ export default function Historial({ user, pedidos }) {
                 {/* Header de tabla */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
+                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
                   gap: '16px',
                   padding: '16px 20px',
                   background: 'rgba(16, 185, 129, 0.2)',
@@ -510,156 +909,114 @@ export default function Historial({ user, pedidos }) {
                 }}>
                   <div>Producto</div>
                   <div style={{ textAlign: 'center' }}>Unidad</div>
-                  <div style={{ textAlign: 'right' }}>Cantidad Total</div>
-                  <div style={{ textAlign: 'right' }}>Peso Real Total</div>
-                  <div style={{ textAlign: 'center' }}>En Pedidos</div>
+                  <div style={{ textAlign: 'center' }}>Clave Catálogo</div>
+                  <div style={{ textAlign: 'right' }}>Cantidad (Peso Real)</div>
                 </div>
 
                 {/* Filas de productos */}
                 <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                  {consolidadoDia.map((item, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
-                        gap: '16px',
-                        padding: '16px 20px',
-                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                        background: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                        transition: 'background 0.2s',
-                        ':hover': {
-                          background: 'rgba(255,255,255,0.05)'
-                        }
-                      }}
-                    >
-                      <div style={{ 
-                        fontWeight: 700, 
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                      }}>
-                        <span style={{ color: '#10b981' }}>•</span>
-                        {item.producto}
+                  {consolidadoDia.map((item, index) => {
+                    const claveProducto = obtenerClaveProducto(item.producto);
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                          gap: '16px',
+                          padding: '16px 20px',
+                          borderBottom: '1px solid rgba(255,255,255,0.05)',
+                          background: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                          transition: 'all 0.2s',
+                          cursor: 'default'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+                        }}
+                      >
+                        <div style={{ 
+                          fontWeight: 700, 
+                          color: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <span style={{ color: '#10b981', fontSize: '20px' }}>•</span>
+                          {item.producto}
+                        </div>
+                        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.7)' }}>
+                          {item.unidad}
+                        </div>
+                        <div style={{ 
+                          textAlign: 'center', 
+                          color: claveProducto ? '#60a5fa' : '#ef4444',
+                          fontWeight: claveProducto ? 600 : 700,
+                          fontSize: '13px'
+                        }}>
+                          {claveProducto || '⚠️ Sin clave'}
+                        </div>
+                        <div style={{ 
+                          textAlign: 'right', 
+                          fontWeight: 800, 
+                          color: '#10b981',
+                          fontFamily: 'monospace',
+                          fontSize: '16px'
+                        }}>
+                          {item.cantidad.toFixed(2)} lb
+                        </div>
                       </div>
-                      <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.7)' }}>
-                        {item.unidad}
-                      </div>
-                      <div style={{ 
-                        textAlign: 'right', 
-                        fontWeight: 700, 
-                        color: '#60a5fa',
-                        fontFamily: 'monospace',
-                        fontSize: '15px'
-                      }}>
-                        {item.cantidad.toFixed(2)}
-                      </div>
-                      <div style={{ 
-                        textAlign: 'right', 
-                        fontWeight: 800, 
-                        color: '#10b981',
-                        fontFamily: 'monospace',
-                        fontSize: '16px'
-                      }}>
-                        {item.pesoReal.toFixed(2)} lb
-                      </div>
-                      <div style={{ 
-                        textAlign: 'center', 
-                        color: 'rgba(255,255,255,0.6)',
-                        fontSize: '13px'
-                      }}>
-                        {item.cantidadPedidos} pedido{item.cantidadPedidos > 1 ? 's' : ''}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Footer con totales */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
+                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
                   gap: '16px',
                   padding: '20px',
                   background: 'rgba(16, 185, 129, 0.15)',
                   borderTop: '2px solid rgba(16, 185, 129, 0.4)',
                   fontWeight: 800
                 }}>
-                  <div style={{ color: '#10b981', fontSize: '14px' }}>
-                    TOTALES DEL DÍA
+                  <div style={{ color: '#10b981', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {Icons.truck}
+                    TOTALES
                   </div>
                   <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
                     {totalesConsolidado.totalLineas} productos
                   </div>
-                  <div style={{ 
-                    textAlign: 'right', 
-                    color: '#60a5fa',
-                    fontFamily: 'monospace',
-                    fontSize: '16px'
-                  }}>
-                    {totalesConsolidado.totalProductos.toFixed(2)}
-                  </div>
+                  <div></div>
                   <div style={{ 
                     textAlign: 'right', 
                     color: '#10b981',
                     fontFamily: 'monospace',
                     fontSize: '18px'
                   }}>
-                    {totalesConsolidado.totalPeso.toFixed(2)} lb
+                    {totalesConsolidado.totalCantidad.toFixed(2)} lb
                   </div>
-                  <div></div>
                 </div>
               </div>
 
-              {/* Resumen visual */}
+              {/* Info del Excel */}
               <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '16px',
-                marginTop: '24px'
+                marginTop: '16px',
+                padding: '12px 16px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                borderRadius: '10px',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                fontSize: '13px',
+                color: '#93c5fd',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}>
-                <div style={{
-                  background: 'rgba(16, 185, 129, 0.1)',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  textAlign: 'center',
-                  border: '1px solid rgba(16, 185, 129, 0.2)'
-                }}>
-                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#10b981' }}>
-                    {totalesConsolidado.totalPeso.toFixed(1)}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
-                    Libras Totales Enviadas
-                  </div>
-                </div>
-                <div style={{
-                  background: 'rgba(59, 130, 246, 0.1)',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  textAlign: 'center',
-                  border: '1px solid rgba(59, 130, 246, 0.2)'
-                }}>
-                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#3b82f6' }}>
-                    {totalesConsolidado.totalProductos.toFixed(0)}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
-                    Unidades Totales
-                  </div>
-                </div>
-                <div style={{
-                  background: 'rgba(139, 92, 246, 0.1)',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  textAlign: 'center',
-                  border: '1px solid rgba(139, 92, 246, 0.2)'
-                }}>
-                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#8b5cf6' }}>
-                    {pedidosEnviados.length}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
-                    Pedidos Procesados
-                  </div>
-                </div>
+                <span>ℹ️</span>
+                El archivo Excel exportado contendrá 2 columnas: CLAVE (desde catálogo) y CANTIDAD (peso real). 
+                Los productos sin clave aparecerán con celda vacía.
               </div>
             </>
           )}
@@ -673,7 +1030,7 @@ export default function Historial({ user, pedidos }) {
         gap: '16px',
         marginBottom: '24px'
       }}>
-        {/* Recibidos */}
+        {/* Pedidos que me hicieron a mí */}
         {(vista === 'recibidos' || vista === 'ambos') && (
           <div style={{
             background: 'rgba(16, 185, 129, 0.1)',
@@ -694,7 +1051,7 @@ export default function Historial({ user, pedidos }) {
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              {Icons.trendDown}
+              {Icons.inbox}
             </div>
             <div>
               <div style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>
@@ -704,14 +1061,14 @@ export default function Historial({ user, pedidos }) {
                 Pedidos Recibidos
               </div>
               <div style={{ fontSize: '11px', color: '#34d399', marginTop: '4px' }}>
-                {stats.pesoTotalRecibido.toFixed(2)} lb total
+                Me pidieron {stats.totalRecibidos} pedidos
               </div>
             </div>
           </div>
         )}
 
-        {/* Enviados */}
-        {(vista === 'enviados' || vista === 'ambos') && (
+        {/* Pedidos que yo envié físicamente */}
+        {(vista === 'recibidos' || vista === 'ambos') && (
           <div style={{
             background: 'rgba(59, 130, 246, 0.1)',
             borderRadius: '16px',
@@ -731,17 +1088,54 @@ export default function Historial({ user, pedidos }) {
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              {Icons.trendUp}
+              {Icons.send}
             </div>
             <div>
               <div style={{ fontSize: '28px', fontWeight: 800, color: '#3b82f6' }}>
-                {stats.totalEnviados}
+                {stats.totalEnviadosPorMi}
               </div>
               <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
-                Pedidos Enviados
+                Pedidos Enviados por Mí
               </div>
               <div style={{ fontSize: '11px', color: '#60a5fa', marginTop: '4px' }}>
                 {stats.pesoTotalEnviado.toFixed(2)} lb total
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pedidos que yo hice a otros */}
+        {(vista === 'enviados' || vista === 'ambos') && (
+          <div style={{
+            background: 'rgba(139, 92, 246, 0.1)',
+            borderRadius: '16px',
+            padding: '20px',
+            border: '2px solid rgba(139, 92, 246, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px'
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: 'rgba(139, 92, 246, 0.2)',
+              color: '#8b5cf6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {Icons.package}
+            </div>
+            <div>
+              <div style={{ fontSize: '28px', fontWeight: 800, color: '#8b5cf6' }}>
+                {stats.totalSolicitados}
+              </div>
+              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+                Pedidos que Hice
+              </div>
+              <div style={{ fontSize: '11px', color: '#a78bfa', marginTop: '4px' }}>
+                A otras sucursales
               </div>
             </div>
           </div>
@@ -778,38 +1172,6 @@ export default function Historial({ user, pedidos }) {
             </div>
           </div>
         </div>
-
-        {/* En Proceso */}
-        <div style={{
-          background: 'rgba(245, 158, 11, 0.1)',
-          borderRadius: '16px',
-          padding: '20px',
-          border: '2px solid rgba(245, 158, 11, 0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px'
-        }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '12px',
-            background: 'rgba(245, 158, 11, 0.2)',
-            color: '#f59e0b',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            {Icons.clock}
-          </div>
-          <div>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: '#f59e0b' }}>
-              {stats.enProceso}
-            </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
-              En Proceso
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Lista de Pedidos */}
@@ -826,7 +1188,7 @@ export default function Historial({ user, pedidos }) {
             No hay pedidos para esta fecha
           </h3>
           <p style={{ margin: 0, color: 'rgba(255,255,255,0.5)' }}>
-            Selecciona otra fecha o cambia el tipo de vista
+            No tienes actividad registrada en esta fecha
           </p>
         </div>
       ) : (
@@ -836,8 +1198,8 @@ export default function Historial({ user, pedidos }) {
           gap: '20px'
         }}>
           {pedidosMostrar.map((pedido, index) => {
-            const esRecibido = pedido.sucursalDestino === user;
-            const esEnviado = pedido.sucursalOrigen === user;
+            const meHicieronElPedido = pedido.sucursalDestino === user;
+            const yoHiceElPedido = pedido.sucursalOrigen === user;
             const estadoColor = getEstadoColor(pedido.estado);
             
             return (
@@ -851,27 +1213,58 @@ export default function Historial({ user, pedidos }) {
                   border: '1px solid rgba(255,255,255,0.1)',
                   animationDelay: `${index * 0.05}s`,
                   position: 'relative',
-                  overflow: 'hidden'
+                  overflow: 'hidden',
+                  borderLeft: `4px solid ${meHicieronElPedido ? '#10b981' : '#8b5cf6'}`
                 }}
               >
-                {/* Indicador de tipo */}
+                {/* Badge de rol */}
                 <div style={{
                   position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: '4px',
-                  background: esRecibido 
-                    ? 'linear-gradient(90deg, #10b981, #34d399)' 
-                    : 'linear-gradient(90deg, #3b82f6, #60a5fa)'
-                }} />
+                  top: '12px',
+                  right: '12px',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: meHicieronElPedido ? 'rgba(16, 185, 129, 0.2)' : 'rgba(139, 92, 246, 0.2)',
+                  color: meHicieronElPedido ? '#10b981' : '#8b5cf6',
+                  border: `1px solid ${meHicieronElPedido ? 'rgba(16, 185, 129, 0.4)' : 'rgba(139, 92, 246, 0.4)'}`
+                }}>
+                  {meHicieronElPedido ? '↙ Me pidieron' : '↗ Yo pedí'}
+                </div>
+
+                {/* Badge de enviado físicamente */}
+                {meHicieronElPedido && (pedido.estado === 'ENVIADO' || pedido.estado === 'RECIBIDO_CONFORME') && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: meHicieronElPedido ? '140px' : '12px',
+                    padding: '4px 12px',
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    borderRadius: '20px',
+                    color: '#10b981',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    {Icons.check}
+                    Enviado Físicamente
+                  </div>
+                )}
 
                 {/* Header */}
                 <div style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'flex-start',
-                  marginBottom: '16px'
+                  marginBottom: '16px',
+                  marginTop: '8px'
                 }}>
                   <div>
                     <div style={{
@@ -883,24 +1276,13 @@ export default function Historial({ user, pedidos }) {
                       <span style={{
                         padding: '4px 12px',
                         borderRadius: '20px',
-                        background: esRecibido ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                        color: esRecibido ? '#10b981' : '#3b82f6',
-                        fontSize: '11px',
-                        fontWeight: 800,
-                        textTransform: 'uppercase'
-                      }}>
-                        {esRecibido ? '↙ Recibido' : '↗ Enviado'}
-                      </span>
-                      <span style={{
-                        padding: '4px 12px',
-                        borderRadius: '20px',
                         background: `${estadoColor}20`,
                         color: estadoColor,
                         fontSize: '11px',
                         fontWeight: 800,
                         textTransform: 'uppercase'
                       }}>
-                        {pedido.estado}
+                        {pedido.estado === 'RECIBIDO_CONFORME' ? 'Recibido Conf.' : pedido.estado}
                       </span>
                     </div>
                     <h3 style={{
@@ -916,7 +1298,11 @@ export default function Historial({ user, pedidos }) {
                       fontSize: '13px',
                       color: 'rgba(255,255,255,0.6)'
                     }}>
-                      {pedido.sucursalOrigen} → {pedido.sucursalDestino}
+                      {meHicieronElPedido ? (
+                        <><strong>{pedido.sucursalOrigen}</strong> me pidió → Yo ({user}) preparé y envié</>
+                      ) : (
+                        <>Yo ({user}) pedí → <strong>{pedido.sucursalDestino}</strong> me enviará</>
+                      )}
                     </p>
                   </div>
                   <div style={{
@@ -967,7 +1353,7 @@ export default function Historial({ user, pedidos }) {
                         </span>
                         <span style={{ color: '#60a5fa', fontWeight: 700 }}>
                           {item.cantidad} {item.unidad}
-                          {item.pesoReal && (
+                          {item.pesoReal && meHicieronElPedido && (
                             <span style={{ color: '#10b981', marginLeft: '8px' }}>
                               (Real: {item.pesoReal} lb)
                             </span>
@@ -996,7 +1382,7 @@ export default function Historial({ user, pedidos }) {
                   gap: '12px',
                   fontSize: '12px'
                 }}>
-                  {pedido.preparadoPor && (
+                  {meHicieronElPedido && pedido.preparadoPor && (
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1007,10 +1393,10 @@ export default function Historial({ user, pedidos }) {
                       color: '#fbbf24'
                     }}>
                       <span>👨‍🍳</span>
-                      {pedido.preparadoPor}
+                      Preparado: {pedido.preparadoPor}
                     </div>
                   )}
-                  {pedido.enviadoCon && (
+                  {meHicieronElPedido && pedido.enviadoCon && (
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1021,7 +1407,7 @@ export default function Historial({ user, pedidos }) {
                       color: '#a78bfa'
                     }}>
                       <span>🛵</span>
-                      {pedido.enviadoCon}
+                      Enviado con: {pedido.enviadoCon}
                     </div>
                   )}
                   {pedido.esStandby && (

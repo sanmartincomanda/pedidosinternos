@@ -713,28 +713,28 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                     {modoEdicion ? (
                       <div style={{ position: 'relative' }}>
                         <input
-  type="number"
-  step="0.01"
-  value={pesosEditados[idx]}
-  onChange={(e) => {
-    setPesosEditados(prev => ({
-      ...prev,
-      [idx]: e.target.value
-    }));
-  }}
-  className={`input-edit ${hayCambio ? 'changed' : ''}`}
-  style={{
-    width: '100%',
-    padding: '10px',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: 700,
-    textAlign: 'center',
-    color: '#1e293b',        // ← TEXTO OSCURO (slate-800)
-    backgroundColor: '#ffffff', // ← FONDO BLANCO DEFINIDO
-    border: '2px solid #e2e8f0'
-  }}
-/>
+                          type="number"
+                          step="0.01"
+                          value={pesosEditados[idx]}
+                          onChange={(e) => {
+                            setPesosEditados(prev => ({
+                              ...prev,
+                              [idx]: e.target.value
+                            }));
+                          }}
+                          className={`input-edit ${hayCambio ? 'changed' : ''}`}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            borderRadius: '8px',
+                            fontSize: '14px',
+                            fontWeight: 700,
+                            textAlign: 'center',
+                            color: '#1e293b',
+                            backgroundColor: '#ffffff',
+                            border: '2px solid #e2e8f0'
+                          }}
+                        />
                         <span style={{ 
                           position: 'absolute', 
                           right: '8px', 
@@ -1279,7 +1279,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                       )}
                     </div>
 
-                    {/* Botón Ver Pesos Reales (solo si está listo, enviado o recibido) */}
+                    {/* Botón Ver Pesos Reales */}
                     {(status === 'LISTO' || status === 'ENVIADO' || status === 'RECIBIDO_CONFORME') && (
                       <button
                         onClick={() => toggleMostrarPesos(pedido.firebaseId)}
@@ -1421,7 +1421,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                         </button>
                       )}
 
-                      {/* Botón Cambiar Repartidor (solo si es ENVIADO) */}
+                      {/* Botón Cambiar Repartidor (solo si es ENVIADO y soy el destino) */}
                       {status === 'ENVIADO' && esDestino && (
                         <div style={{ display: 'flex', gap: '12px' }}>
                           <button
@@ -1452,8 +1452,8 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                         </div>
                       )}
 
-                      {/* Botón Recibir Conforme (solo si es ENVIADO y soy el destino) */}
-                      {status === 'ENVIADO' && esDestino && (
+                      {/* ✅ CORREGIDO: Botón Recibir Conforme (solo si es ENVIADO y soy el ORIGEN) */}
+                      {status === 'ENVIADO' && esOrigen && (
                         <button
                           onClick={() => abrirModalRecepcion(pedido)}
                           className="btn-hover"
@@ -1480,8 +1480,8 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                         </button>
                       )}
 
-                      {/* Info para el origen */}
-                      {esOrigen && status !== 'ENVIADO' && status !== 'RECIBIDO_CONFORME' && (
+                      {/* Info para el destino (quien prepara y envía) */}
+                      {esDestino && status !== 'ENVIADO' && status !== 'RECIBIDO_CONFORME' && (
                         <div style={{
                           padding: '14px 18px',
                           background: 'rgba(59, 130, 246, 0.1)',
@@ -1492,12 +1492,12 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           fontWeight: 700,
                           textAlign: 'center'
                         }}>
-                          📦 Pedido enviado a {pedido.sucursalDestino} • Estado: {config.label}
+                          📦 Pedido recibido de {pedido.sucursalOrigen} • Preparar y enviar
                         </div>
                       )}
 
-                      {/* Info enviado para origen */}
-                      {esOrigen && status === 'ENVIADO' && (
+                      {/* Info enviado para destino (quien envió) */}
+                      {esDestino && status === 'ENVIADO' && (
                         <div style={{
                           padding: '14px 18px',
                           background: 'rgba(99, 102, 241, 0.1)',
@@ -1513,12 +1513,12 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           gap: '8px'
                         }}>
                           {Icons.check}
-                          Pedido enviado con {pedido.enviadoCon} - Esperando recepción
+                          Pedido enviado con {pedido.enviadoCon} - Esperando confirmación de {pedido.sucursalOrigen}
                         </div>
                       )}
 
-                      {/* Info recibido para origen */}
-                      {esOrigen && status === 'RECIBIDO_CONFORME' && (
+                      {/* Info recibido para destino (quien envió) */}
+                      {esDestino && status === 'RECIBIDO_CONFORME' && (
                         <div style={{
                           padding: '14px 18px',
                           background: 'rgba(5, 150, 105, 0.1)',
@@ -1550,8 +1550,8 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                         </div>
                       )}
 
-                      {/* Info para destino cuando ya recibió */}
-                      {esDestino && status === 'RECIBIDO_CONFORME' && (
+                      {/* Info para origen (quien hizo el pedido) cuando ya recibió */}
+                      {esOrigen && status === 'RECIBIDO_CONFORME' && (
                         <div style={{
                           padding: '14px 18px',
                           background: 'rgba(5, 150, 105, 0.1)',
@@ -1567,7 +1567,23 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           gap: '8px'
                         }}>
                           {Icons.checkCircle}
-                          Has recibido este pedido el {pedido.fechaRecepcion} a las {pedido.horaRecepcion}
+                          Has confirmado la recepción el {pedido.fechaRecepcion} a las {pedido.horaRecepcion}
+                        </div>
+                      )}
+
+                      {/* Info para origen (quien hizo el pedido) esperando envío */}
+                      {esOrigen && status === 'NUEVO' && (
+                        <div style={{
+                          padding: '14px 18px',
+                          background: 'rgba(59, 130, 246, 0.1)',
+                          borderRadius: '12px',
+                          border: '2px solid rgba(59, 130, 246, 0.2)',
+                          color: '#2563eb',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          textAlign: 'center'
+                        }}>
+                          ⏳ Pedido enviado a {pedido.sucursalDestino} - Esperando preparación
                         </div>
                       )}
                     </div>
