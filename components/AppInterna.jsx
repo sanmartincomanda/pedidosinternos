@@ -464,6 +464,7 @@ export default function AppInterna() {
               setOrderId={setOrderId} 
               setView={setView}
               sucursales={sucursalesRegistradas.map(s => s.nombre).filter(n => n !== user)}
+              productosCSV={config.productos || []}  // <-- AGREGAR ESTA LÍNEA
             />
           )}
           {view === 'cocina' && (

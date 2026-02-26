@@ -13,7 +13,9 @@ const Icons = {
   package: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
   scale: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>,
   check: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>,
-  clock: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+  clock: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
+  download: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  fileText: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
 };
 
 // Configuración de estados
@@ -31,6 +33,7 @@ export default function Historial({ user, pedidos }) {
     new Date().toISOString().split('T')[0]
   );
   const [vista, setVista] = useState('ambos'); // 'recibidos', 'enviados', 'ambos'
+  const [mostrarConsolidado, setMostrarConsolidado] = useState(false);
 
   // Filtrar pedidos por fecha seleccionada
   const pedidosDelDia = useMemo(() => {
@@ -45,6 +48,96 @@ export default function Historial({ user, pedidos }) {
   // Separar recibidos y enviados
   const pedidosRecibidos = pedidosDelDia.filter(p => p.sucursalDestino === user);
   const pedidosEnviados = pedidosDelDia.filter(p => p.sucursalOrigen === user);
+
+  // CONSOLIDADO: Agrupar productos enviados del día
+  const consolidadoDia = useMemo(() => {
+    // Solo considerar pedidos ENVIADOS (los que salen de la sucursal)
+    const productosMap = new Map();
+
+    pedidosEnviados.forEach(pedido => {
+      pedido.items.forEach(item => {
+        const key = `${item.producto}-${item.unidad}`;
+        const pesoReal = parseFloat(item.pesoReal) || 0;
+        const cantidad = parseFloat(item.cantidad) || 0;
+
+        if (productosMap.has(key)) {
+          const existente = productosMap.get(key);
+          productosMap.set(key, {
+            ...existente,
+            cantidad: existente.cantidad + cantidad,
+            pesoReal: existente.pesoReal + pesoReal,
+            cantidadPedidos: existente.cantidadPedidos + 1
+          });
+        } else {
+          productosMap.set(key, {
+            producto: item.producto,
+            unidad: item.unidad,
+            cantidad: cantidad,
+            pesoReal: pesoReal,
+            cantidadPedidos: 1
+          });
+        }
+      });
+    });
+
+    // Convertir a array y ordenar por peso real (descendente)
+    return Array.from(productosMap.values())
+      .sort((a, b) => b.pesoReal - a.pesoReal);
+  }, [pedidosEnviados]);
+
+  // Totales del consolidado
+  const totalesConsolidado = useMemo(() => {
+    return consolidadoDia.reduce((acc, item) => ({
+      totalProductos: acc.totalProductos + item.cantidad,
+      totalPeso: acc.totalPeso + item.pesoReal,
+      totalLineas: acc.totalLineas + 1
+    }), { totalProductos: 0, totalPeso: 0, totalLineas: 0 });
+  }, [consolidadoDia]);
+
+  // Función para exportar CSV
+  const exportarCSV = () => {
+    if (consolidadoDia.length === 0) return;
+
+    // Headers
+    const headers = ['Producto', 'Unidad', 'Cantidad Total', 'Peso Real Total (lb)', 'Cantidad de Pedidos'];
+    
+    // Data rows
+    const rows = consolidadoDia.map(item => [
+      `"${item.producto}"`,
+      item.unidad,
+      item.cantidad.toFixed(2),
+      item.pesoReal.toFixed(2),
+      item.cantidadPedidos
+    ]);
+
+    // Totales row
+    const totalRow = [
+      '"TOTALES"',
+      '',
+      totalesConsolidado.totalProductos.toFixed(2),
+      totalesConsolidado.totalPeso.toFixed(2),
+      ''
+    ];
+
+    // Combine all
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(',')),
+      totalRow.join(',')
+    ].join('\n');
+
+    // Create download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Consolidado_${fechaSeleccionada}_${user}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Determinar qué mostrar según la vista seleccionada
   const pedidosMostrar = useMemo(() => {
@@ -91,6 +184,11 @@ export default function Historial({ user, pedidos }) {
         .card-enter { animation: slideIn 0.4s ease-out forwards; }
         .btn-hover { transition: all 0.2s ease; }
         .btn-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
+        }
+        .pulse-animation { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
       `}</style>
 
       {/* Header */}
@@ -125,6 +223,44 @@ export default function Historial({ user, pedidos }) {
             </p>
           </div>
         </div>
+
+        {/* Botón Consolidado */}
+        <button
+          onClick={() => setMostrarConsolidado(!mostrarConsolidado)}
+          style={{
+            padding: '14px 24px',
+            borderRadius: '14px',
+            border: 'none',
+            background: mostrarConsolidado 
+              ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' 
+              : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            color: 'white',
+            fontWeight: 700,
+            fontSize: '14px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            boxShadow: mostrarConsolidado 
+              ? '0 10px 25px rgba(245, 158, 11, 0.4)' 
+              : '0 10px 25px rgba(16, 185, 129, 0.4)',
+            transition: 'all 0.3s ease'
+          }}
+          className="btn-hover"
+        >
+          {Icons.fileText}
+          {mostrarConsolidado ? 'Ocultar Consolidado' : 'Ver Consolidado del Día'}
+          {consolidadoDia.length > 0 && !mostrarConsolidado && (
+            <span style={{
+              background: 'rgba(255,255,255,0.2)',
+              padding: '2px 8px',
+              borderRadius: '10px',
+              fontSize: '12px'
+            }}>
+              {consolidadoDia.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Selector de Fecha y Vista */}
@@ -251,6 +387,284 @@ export default function Historial({ user, pedidos }) {
           </span>
         </div>
       </div>
+
+      {/* SECCIÓN CONSOLIDADO DEL DÍA */}
+      {mostrarConsolidado && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)',
+          borderRadius: '24px',
+          padding: '28px',
+          marginBottom: '32px',
+          border: '2px solid rgba(16, 185, 129, 0.3)',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+        }}>
+          {/* Header del Consolidado */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '24px',
+            flexWrap: 'wrap',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 10px 25px rgba(16, 185, 129, 0.4)',
+                color: 'white'
+              }}>
+                {Icons.scale}
+              </div>
+              <div>
+                <h2 style={{ 
+                  margin: 0, 
+                  fontSize: '22px', 
+                  fontWeight: 800, 
+                  color: '#10b981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}>
+                  Consolidado del Día
+                  <span style={{
+                    background: 'rgba(16, 185, 129, 0.2)',
+                    color: '#34d399',
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    fontSize: '12px'
+                  }}>
+                    {pedidosEnviados.length} pedidos
+                  </span>
+                </h2>
+                <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: 'rgba(255,255,255,0.6)' }}>
+                  Suma de todos los productos enviados con PESO REAL
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={exportarCSV}
+              disabled={consolidadoDia.length === 0}
+              style={{
+                padding: '14px 24px',
+                borderRadius: '12px',
+                border: 'none',
+                background: consolidadoDia.length === 0 ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                color: 'white',
+                fontWeight: 700,
+                fontSize: '14px',
+                cursor: consolidadoDia.length === 0 ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                opacity: consolidadoDia.length === 0 ? 0.5 : 1,
+                transition: 'all 0.3s ease'
+              }}
+              className={consolidadoDia.length > 0 ? 'btn-hover' : ''}
+            >
+              {Icons.download}
+              Exportar CSV
+            </button>
+          </div>
+
+          {/* Tabla de Consolidado */}
+          {consolidadoDia.length === 0 ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '40px',
+              background: 'rgba(0,0,0,0.2)',
+              borderRadius: '16px'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📊</div>
+              <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '16px' }}>
+                No hay pedidos enviados para consolidar en esta fecha
+              </p>
+            </div>
+          ) : (
+            <>
+              <div style={{
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: '16px',
+                overflow: 'hidden',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                {/* Header de tabla */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
+                  gap: '16px',
+                  padding: '16px 20px',
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  borderBottom: '2px solid rgba(16, 185, 129, 0.3)',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  color: '#34d399',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  <div>Producto</div>
+                  <div style={{ textAlign: 'center' }}>Unidad</div>
+                  <div style={{ textAlign: 'right' }}>Cantidad Total</div>
+                  <div style={{ textAlign: 'right' }}>Peso Real Total</div>
+                  <div style={{ textAlign: 'center' }}>En Pedidos</div>
+                </div>
+
+                {/* Filas de productos */}
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {consolidadoDia.map((item, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
+                        gap: '16px',
+                        padding: '16px 20px',
+                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                        background: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                        transition: 'background 0.2s',
+                        ':hover': {
+                          background: 'rgba(255,255,255,0.05)'
+                        }
+                      }}
+                    >
+                      <div style={{ 
+                        fontWeight: 700, 
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        <span style={{ color: '#10b981' }}>•</span>
+                        {item.producto}
+                      </div>
+                      <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.7)' }}>
+                        {item.unidad}
+                      </div>
+                      <div style={{ 
+                        textAlign: 'right', 
+                        fontWeight: 700, 
+                        color: '#60a5fa',
+                        fontFamily: 'monospace',
+                        fontSize: '15px'
+                      }}>
+                        {item.cantidad.toFixed(2)}
+                      </div>
+                      <div style={{ 
+                        textAlign: 'right', 
+                        fontWeight: 800, 
+                        color: '#10b981',
+                        fontFamily: 'monospace',
+                        fontSize: '16px'
+                      }}>
+                        {item.pesoReal.toFixed(2)} lb
+                      </div>
+                      <div style={{ 
+                        textAlign: 'center', 
+                        color: 'rgba(255,255,255,0.6)',
+                        fontSize: '13px'
+                      }}>
+                        {item.cantidadPedidos} pedido{item.cantidadPedidos > 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Footer con totales */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
+                  gap: '16px',
+                  padding: '20px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  borderTop: '2px solid rgba(16, 185, 129, 0.4)',
+                  fontWeight: 800
+                }}>
+                  <div style={{ color: '#10b981', fontSize: '14px' }}>
+                    TOTALES DEL DÍA
+                  </div>
+                  <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                    {totalesConsolidado.totalLineas} productos
+                  </div>
+                  <div style={{ 
+                    textAlign: 'right', 
+                    color: '#60a5fa',
+                    fontFamily: 'monospace',
+                    fontSize: '16px'
+                  }}>
+                    {totalesConsolidado.totalProductos.toFixed(2)}
+                  </div>
+                  <div style={{ 
+                    textAlign: 'right', 
+                    color: '#10b981',
+                    fontFamily: 'monospace',
+                    fontSize: '18px'
+                  }}>
+                    {totalesConsolidado.totalPeso.toFixed(2)} lb
+                  </div>
+                  <div></div>
+                </div>
+              </div>
+
+              {/* Resumen visual */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '16px',
+                marginTop: '24px'
+              }}>
+                <div style={{
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  textAlign: 'center',
+                  border: '1px solid rgba(16, 185, 129, 0.2)'
+                }}>
+                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#10b981' }}>
+                    {totalesConsolidado.totalPeso.toFixed(1)}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
+                    Libras Totales Enviadas
+                  </div>
+                </div>
+                <div style={{
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  textAlign: 'center',
+                  border: '1px solid rgba(59, 130, 246, 0.2)'
+                }}>
+                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#3b82f6' }}>
+                    {totalesConsolidado.totalProductos.toFixed(0)}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
+                    Unidades Totales
+                  </div>
+                </div>
+                <div style={{
+                  background: 'rgba(139, 92, 246, 0.1)',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  textAlign: 'center',
+                  border: '1px solid rgba(139, 92, 246, 0.2)'
+                }}>
+                  <div style={{ fontSize: '32px', fontWeight: 800, color: '#8b5cf6' }}>
+                    {pedidosEnviados.length}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
+                    Pedidos Procesados
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Estadísticas del Día */}
       <div style={{

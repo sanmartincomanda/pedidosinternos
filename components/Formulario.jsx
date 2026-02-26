@@ -11,66 +11,160 @@ const Icons = {
   note: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
   send: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
   package: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
-  alert: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+  alert: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+  search: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  key: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
 };
 
 const UNIDADES = [
-  { value: 'lb', label: 'lb - Libras', icon: '⚖️' },
+  { value: 'lb', label: 'lb', icon: '⚖️' },
   { value: 'cajas', label: 'Cajas', icon: '📦' },
   { value: 'paquetes_vp', label: 'Paquetes VP', icon: '📋' },
   { value: 'unidades', label: 'Unidades', icon: '🔢' },
-  { value: 'kg', label: 'Kg - Kilogramos', icon: '⚖️' },
+  { value: 'kg', label: 'Kg', icon: '⚖️' },
   { value: 'sacos', label: 'Sacos', icon: '🎯' }
 ];
 
-export default function Formulario({ user, orderId, setOrderId, setView, sucursales = [] }) {
-  // Estado inicial con máximo 25 líneas
+// Productos por defecto (fallback si no hay CSV)
+const PRODUCTOS_EJEMPLO = [
+  { clave: 'BIS-001', nombre: 'BISTEC DE RES' },
+  { clave: 'BIS-002', nombre: 'BISTEC DE CERDO' },
+  { clave: 'POL-001', nombre: 'POLLO ENTERO' },
+  { clave: 'POL-002', nombre: 'PECHUGA DE POLLO' },
+  { clave: 'CAR-001', nombre: 'CARNE MOLIDA' },
+  { clave: 'CER-001', nombre: 'COSTILLA DE CERDO' },
+  { clave: 'RES-001', nombre: 'CHULETA DE RES' },
+  { clave: 'EMB-001', nombre: 'JAMON EMBUTIDO' },
+  { clave: 'EMB-002', nombre: 'SALCHICHAS' },
+  { clave: 'MAR-001', nombre: 'CAMARON' }
+];
+
+export default function Formulario({ user, orderId, setOrderId, setView, sucursales = [], productosCSV = [] }) {
   const MAX_LINEAS = 25;
+  
+  // USAR productos del CSV si existen, sino los de ejemplo
+  const catalogoProductos = productosCSV && productosCSV.length > 0 ? productosCSV : PRODUCTOS_EJEMPLO;
+  
+  // Debug: mostrar en consola qué catálogo se está usando
+  console.log('Catálogo usado:', catalogoProductos.length, 'productos');
+  console.log('ProductosCSV recibidos:', productosCSV?.length || 0);
+  
   const [items, setItems] = useState([{ 
+    clave: '',
     producto: '', 
     cantidad: '', 
     unidad: 'lb', 
-    nota: '' 
+    nota: '',
+    mostrarDropdown: false
   }]);
   
   const [destino, setDestino] = useState(sucursales[0] || 'Cedi');
   const [notaGeneral, setNotaGeneral] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [busquedaActiva, setBusquedaActiva] = useState(null);
   
-  // Fechas
   const hoy = new Date().toISOString().split('T')[0];
   const [fechaPedido, setFechaPedido] = useState(hoy);
   const [fechaEntrega, setFechaEntrega] = useState(hoy);
   
   const inputsRef = useRef([]);
+  const dropdownRefs = useRef({}); // Refs para cada dropdown
 
-  // Detectar si es standby (entrega futura)
   const esStandby = fechaEntrega > hoy;
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      let clickedInsideDropdown = false;
+      
+      // Verificar si el click fue dentro de algún dropdown
+      Object.values(dropdownRefs.current).forEach(ref => {
+        if (ref && ref.contains(event.target)) {
+          clickedInsideDropdown = true;
+        }
+      });
+      
+      if (!clickedInsideDropdown) {
+        setBusquedaActiva(null);
+        setItems(prev => prev.map((item) => ({
+          ...item,
+          mostrarDropdown: false
+        })));
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const agregarFila = () => {
     if (items.length >= MAX_LINEAS) {
       alert(`Máximo ${MAX_LINEAS} líneas permitidas`);
       return;
     }
-    setItems([...items, { producto: '', cantidad: '', unidad: 'lb', nota: '' }]);
+    setItems([...items, { 
+      clave: '',
+      producto: '', 
+      cantidad: '', 
+      unidad: 'lb', 
+      nota: '',
+      mostrarDropdown: false
+    }]);
   };
 
   const eliminarFila = (idx) => {
     if (items.length > 1) {
       setItems(items.filter((_, i) => i !== idx));
     } else {
-      setItems([{ producto: '', cantidad: '', unidad: 'lb', nota: '' }]);
+      setItems([{ 
+        clave: '',
+        producto: '', 
+        cantidad: '', 
+        unidad: 'lb', 
+        nota: '',
+        mostrarDropdown: false
+      }]);
     }
   };
 
   const handleInputChange = (idx, field, val) => {
     const nuevosItems = [...items];
-    if (field === 'producto' || field === 'nota') {
-      nuevosItems[idx][field] = val.toUpperCase();
-    } else {
-      nuevosItems[idx][field] = val;
+    nuevosItems[idx][field] = val;
+    
+    // Si cambia el producto manualmente, buscar clave
+    if (field === 'producto') {
+      const productoEncontrado = catalogoProductos.find(
+        p => p.nombre.toUpperCase() === val.toUpperCase()
+      );
+      if (productoEncontrado) {
+        nuevosItems[idx].clave = productoEncontrado.clave;
+        nuevosItems[idx].mostrarDropdown = false;
+      }
     }
+    
     setItems(nuevosItems);
+  };
+
+  const seleccionarProducto = (idx, producto) => {
+    const nuevosItems = [...items];
+    nuevosItems[idx].producto = producto.nombre;
+    nuevosItems[idx].clave = producto.clave;
+    nuevosItems[idx].mostrarDropdown = false;
+    setItems(nuevosItems);
+    setBusquedaActiva(null);
+    
+    // Mover foco a cantidad
+    setTimeout(() => inputsRef.current[idx * 5 + 2]?.focus(), 50);
+  };
+
+  const filtrarProductos = (busqueda) => {
+    if (!busqueda) return catalogoProductos.slice(0, 8);
+    
+    const busquedaUpper = busqueda.toUpperCase();
+    return catalogoProductos.filter(p => 
+      p.nombre.toUpperCase().includes(busquedaUpper) ||
+      p.clave.toUpperCase().includes(busquedaUpper)
+    ).slice(0, 10); // Mostrar hasta 10 resultados
   };
 
   const handleKeyDown = (e, idx, field) => {
@@ -79,26 +173,44 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
       const nextIndex = idx + 1;
       
       if (field === 'producto') {
+        // Si hay dropdown abierto y hay resultados, seleccionar el primero
+        if (items[idx].mostrarDropdown) {
+          const filtrados = filtrarProductos(items[idx].producto);
+          if (filtrados.length > 0) {
+            seleccionarProducto(idx, filtrados[0]);
+            return;
+          }
+        }
         // Ir a cantidad
-        inputsRef.current[idx * 4 + 1]?.focus();
+        inputsRef.current[idx * 5 + 2]?.focus();
       } else if (field === 'cantidad') {
-        // Ir a unidad (select)
-        inputsRef.current[idx * 4 + 2]?.focus();
+        inputsRef.current[idx * 5 + 3]?.focus();
       } else if (field === 'unidad') {
-        // Ir a nota
-        inputsRef.current[idx * 4 + 3]?.focus();
+        inputsRef.current[idx * 5 + 4]?.focus();
       } else if (field === 'nota') {
-        // Si es la última línea y tiene producto, agregar nueva
         if (idx === items.length - 1 && items[idx].producto.trim() !== '') {
           if (items.length < MAX_LINEAS) {
             agregarFila();
-            setTimeout(() => inputsRef.current[nextIndex * 4]?.focus(), 50);
+            setTimeout(() => {
+              const nuevoInput = inputsRef.current[(idx + 1) * 5 + 1];
+              if (nuevoInput) {
+                nuevoInput.focus();
+                const nuevosItems = [...items];
+                nuevosItems[idx + 1] = { ...nuevosItems[idx + 1], mostrarDropdown: true };
+                setItems(nuevosItems);
+                setBusquedaActiva(idx + 1);
+              }
+            }, 50);
           }
         } else if (nextIndex < items.length) {
-          // Ir a siguiente línea
-          inputsRef.current[nextIndex * 4]?.focus();
+          inputsRef.current[nextIndex * 5 + 1]?.focus();
         }
       }
+    } else if (e.key === 'Escape') {
+      const nuevosItems = [...items];
+      nuevosItems[idx].mostrarDropdown = false;
+      setItems(nuevosItems);
+      setBusquedaActiva(null);
     }
   };
 
@@ -118,7 +230,6 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
 
     setCargando(true);
 
-    // Determinar estado inicial
     let estadoInicial = 'NUEVO';
     if (esStandby) {
       estadoInicial = 'STANDBY_ENTREGA';
@@ -134,7 +245,11 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
       fechaCreacion: new Date().toISOString(),
       hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
       items: validos.map(i => ({ 
-        ...i, 
+        clave: i.clave,
+        producto: i.producto, 
+        cantidad: i.cantidad,
+        unidad: i.unidad,
+        nota: i.nota,
         pesoReal: '',
         preparadoPor: '',
         listo: false
@@ -153,7 +268,14 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
       alert(`✅ ¡PEDIDO #${orderId} ${esStandby ? 'GUARDADO (STANDBY)' : 'ENVIADO'} CON ÉXITO!`);
 
       setOrderId(prev => (prev >= 999 ? 1 : prev + 1));
-      setItems([{ producto: '', cantidad: '', unidad: 'lb', nota: '' }]);
+      setItems([{ 
+        clave: '',
+        producto: '', 
+        cantidad: '', 
+        unidad: 'lb', 
+        nota: '',
+        mostrarDropdown: false
+      }]);
       setNotaGeneral('');
       setFechaEntrega(hoy);
       setCargando(false);
@@ -183,16 +305,27 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
           border-color: #3b82f6;
           box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
         }
-        .select-styled {
-          appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-          background-repeat: no-repeat;
-          background-position: right 12px center;
-          padding-right: 36px;
+        .dropdown-item:hover {
+          background: rgba(59, 130, 246, 0.2);
+        }
+        /* Scrollbar personalizado para el dropdown */
+        .dropdown-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+        .dropdown-scroll::-webkit-scrollbar-track {
+          background: rgba(255,255,255,0.05);
+          border-radius: 4px;
+        }
+        .dropdown-scroll::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.2);
+          border-radius: 4px;
+        }
+        .dropdown-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(255,255,255,0.3);
         }
       `}</style>
 
-      {/* Header con info principal */}
+      {/* Header */}
       <div style={{
         background: 'rgba(255,255,255,0.05)',
         borderRadius: '24px',
@@ -249,7 +382,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
             <select 
               value={destino}
               onChange={(e) => setDestino(e.target.value)}
-              className="select-styled input-focus"
+              className="input-focus"
               style={{
                 width: '100%',
                 padding: '14px 16px',
@@ -259,7 +392,12 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
                 color: '#fbbf24',
                 fontWeight: 800,
                 fontSize: '15px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                appearance: 'none',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23fbbf24' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 12px center',
+                paddingRight: '36px'
               }}
             >
               {sucursales.filter(s => s !== user).map(s => (
@@ -408,49 +546,70 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
         </div>
       </div>
 
-      {/* Tabla de Productos */}
+      {/* Info de catálogo */}
+      <div style={{
+        padding: '12px 16px',
+        background: 'rgba(59, 130, 246, 0.1)',
+        borderRadius: '10px',
+        marginBottom: '16px',
+        border: '1px solid rgba(59, 130, 246, 0.2)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        fontSize: '13px',
+        color: '#60a5fa'
+      }}>
+        {Icons.package}
+        <span>
+          <strong>{catalogoProductos.length}</strong> productos en catálogo 
+          {productosCSV.length > 0 ? ' (desde CSV)' : ' (por defecto)'}
+        </span>
+      </div>
+
+      {/* Tabla de Productos - SIN overflow:hidden para que el dropdown se vea */}
       <div style={{
         background: 'rgba(255,255,255,0.03)',
         borderRadius: '24px',
-        overflow: 'hidden',
         border: '1px solid rgba(255,255,255,0.1)',
         marginBottom: '24px'
       }}>
         {/* Header de tabla */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '50px 1fr 100px 140px 1fr 50px',
-          gap: '12px',
+          gridTemplateColumns: '50px 100px 1fr 100px 140px 1fr 50px',
+          gap: '8px',
           padding: '16px 20px',
           background: 'rgba(59, 130, 246, 0.2)',
           borderBottom: '1px solid rgba(255,255,255,0.1)',
-          fontSize: '11px',
+          fontSize: '10px',
           fontWeight: 800,
           color: 'rgba(255,255,255,0.6)',
           textTransform: 'uppercase',
           letterSpacing: '0.5px'
         }}>
           <div>#</div>
+          <div>Clave</div>
           <div>Producto</div>
           <div style={{ textAlign: 'center' }}>Cant.</div>
           <div style={{ textAlign: 'center' }}>Unidad</div>
-          <div>Nota Especial</div>
+          <div>Nota</div>
           <div></div>
         </div>
 
-        {/* Filas */}
-        <div style={{ maxHeight: '50vh', overflowY: 'auto' }}>
+        {/* Filas - sin maxHeight para evitar corte del dropdown */}
+        <div style={{ padding: '8px 0' }}>
           {items.map((item, idx) => (
             <div 
               key={idx}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '50px 1fr 100px 140px 1fr 50px',
-                gap: '12px',
-                padding: '12px 20px',
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                gridTemplateColumns: '50px 100px 1fr 100px 140px 1fr 50px',
+                gap: '8px',
+                padding: '8px 20px',
+                borderBottom: idx < items.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
                 alignItems: 'center',
-                background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)'
+                background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                position: 'relative' // Importante para posicionar el dropdown
               }}
             >
               {/* Número */}
@@ -463,31 +622,149 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
                 {String(idx + 1).padStart(2, '0')}
               </div>
 
-              {/* Producto */}
-              <input
-                ref={el => inputsRef.current[idx * 4] = el}
-                type="text"
-                value={item.producto}
-                onChange={(e) => handleInputChange(idx, 'producto', e.target.value)}
-                onKeyDown={(e) => handleKeyDown(e, idx, 'producto')}
-                placeholder="Nombre del producto..."
-                className="input-focus"
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '2px solid rgba(255,255,255,0.1)',
-                  borderRadius: '10px',
-                  color: 'white',
-                  fontWeight: 700,
-                  fontSize: '14px',
-                  textTransform: 'uppercase'
-                }}
-              />
+              {/* Clave - Automática */}
+              <div style={{
+                padding: '10px',
+                background: 'rgba(16, 185, 129, 0.1)',
+                borderRadius: '8px',
+                border: '1px solid rgba(16, 185, 129, 0.2)',
+                textAlign: 'center',
+                fontSize: '12px',
+                fontWeight: 700,
+                color: item.clave ? '#10b981' : 'rgba(255,255,255,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                minHeight: '44px'
+              }}>
+                {Icons.key}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.clave || '-'}
+                </span>
+              </div>
+
+              {/* Producto con Dropdown de búsqueda - POSICIONAMIENTO FIJO */}
+              <div 
+                style={{ position: 'relative' }}
+                ref={el => dropdownRefs.current[idx] = el}
+              >
+                <div style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#9ca3af',
+                  zIndex: 1
+                }}>
+                  {Icons.search}
+                </div>
+                <input
+                  ref={el => inputsRef.current[idx * 5 + 1] = el}
+                  type="text"
+                  value={item.producto}
+                  onChange={(e) => {
+                    handleInputChange(idx, 'producto', e.target.value);
+                    const nuevosItems = [...items];
+                    nuevosItems[idx].mostrarDropdown = true;
+                    setItems(nuevosItems);
+                    setBusquedaActiva(idx);
+                  }}
+                  onFocus={() => {
+                    const nuevosItems = [...items];
+                    nuevosItems[idx].mostrarDropdown = true;
+                    setItems(nuevosItems);
+                    setBusquedaActiva(idx);
+                  }}
+                  onKeyDown={(e) => handleKeyDown(e, idx, 'producto')}
+                  placeholder="Buscar producto..."
+                  className="input-focus"
+                  style={{
+                    width: '100%',
+                    padding: '12px 12px 12px 40px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '2px solid rgba(255,255,255,0.1)',
+                    borderRadius: '10px',
+                    color: 'white',
+                    fontWeight: 700,
+                    fontSize: '14px',
+                    textTransform: 'uppercase'
+                  }}
+                  autoComplete="off"
+                />
+                
+                {/* Dropdown de productos - POSICION ABSOLUTA CON Z-INDEX ALTO */}
+                {item.mostrarDropdown && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    left: 0,
+                    right: 0,
+                    background: '#1e293b',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+                    zIndex: 9999,
+                    maxHeight: '280px',
+                    overflowY: 'auto'
+                  }} className="dropdown-scroll">
+                    {filtrarProductos(item.producto).length === 0 ? (
+                      <div style={{
+                        padding: '16px',
+                        textAlign: 'center',
+                        color: 'rgba(255,255,255,0.5)',
+                        fontSize: '13px'
+                      }}>
+                        No se encontraron productos
+                      </div>
+                    ) : (
+                      filtrarProductos(item.producto).map((prod, pidx) => (
+                        <div
+                          key={pidx}
+                          onClick={() => seleccionarProducto(idx, prod)}
+                          className="dropdown-item"
+                          style={{
+                            padding: '14px 16px',
+                            cursor: 'pointer',
+                            borderBottom: pidx < filtrarProductos(item.producto).length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            transition: 'background 0.15s'
+                          }}
+                        >
+                          <span style={{
+                            padding: '6px 10px',
+                            background: 'rgba(59, 130, 246, 0.2)',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            color: '#60a5fa',
+                            minWidth: '70px',
+                            textAlign: 'center',
+                            flexShrink: 0
+                          }}>
+                            {prod.clave}
+                          </span>
+                          <span style={{
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            color: 'white',
+                            textTransform: 'uppercase',
+                            lineHeight: '1.3'
+                          }}>
+                            {prod.nombre}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Cantidad */}
               <input
-                ref={el => inputsRef.current[idx * 4 + 1] = el}
+                ref={el => inputsRef.current[idx * 5 + 2] = el}
                 type="number"
                 value={item.cantidad}
                 onChange={(e) => handleInputChange(idx, 'cantidad', e.target.value)}
@@ -511,11 +788,11 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
 
               {/* Unidad - Select */}
               <select
-                ref={el => inputsRef.current[idx * 4 + 2] = el}
+                ref={el => inputsRef.current[idx * 5 + 3] = el}
                 value={item.unidad}
                 onChange={(e) => handleInputChange(idx, 'unidad', e.target.value)}
                 onKeyDown={(e) => handleKeyDown(e, idx, 'unidad')}
-                className="select-styled input-focus"
+                className="input-focus"
                 style={{
                   width: '100%',
                   padding: '12px',
@@ -525,7 +802,12 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
                   color: '#60a5fa',
                   fontWeight: 700,
                   fontSize: '13px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  appearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 8px center',
+                  paddingRight: '28px'
                 }}
               >
                 {UNIDADES.map(u => (
@@ -537,12 +819,12 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
 
               {/* Nota especial por producto */}
               <input
-                ref={el => inputsRef.current[idx * 4 + 3] = el}
+                ref={el => inputsRef.current[idx * 5 + 4] = el}
                 type="text"
                 value={item.nota}
                 onChange={(e) => handleInputChange(idx, 'nota', e.target.value)}
                 onKeyDown={(e) => handleKeyDown(e, idx, 'nota')}
-                placeholder="Nota especial..."
+                placeholder="Nota..."
                 className="input-focus"
                 style={{
                   width: '100%',
@@ -588,7 +870,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
           ))}
         </div>
 
-        {/* Footer de tabla - Agregar línea */}
+        {/* Footer de tabla */}
         <div style={{
           padding: '16px 20px',
           borderTop: '1px solid rgba(255,255,255,0.1)',
@@ -601,7 +883,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
             color: 'rgba(255,255,255,0.4)',
             fontWeight: 600
           }}>
-            {items.length} de {MAX_LINEAS} líneas usadas
+            {items.length} de {MAX_LINEAS} líneas
           </div>
           
           <button
@@ -705,7 +987,7 @@ export default function Formulario({ user, orderId, setOrderId, setView, sucursa
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = cargando ? 'none' : esStandby ? '0 10px 25px rgba(245, 158, 11, 0.4)' : '0 10px 25px rgba(59, 246, 246, 0.4)';
+          e.currentTarget.style.boxShadow = cargando ? 'none' : esStandby ? '0 10px 25px rgba(245, 158, 11, 0.4)' : '0 10px 25px rgba(59, 130, 246, 0.4)';
         }}
       >
         {cargando ? (

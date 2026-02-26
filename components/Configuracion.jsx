@@ -9,7 +9,11 @@ const Icons = {
   plus: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
   trash: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
   save: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
-  user: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+  user: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  upload: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+  file: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+  download: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  table: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/></svg>
 };
 
 export default function Configuracion({ config, setConfig }) {
@@ -18,25 +22,31 @@ export default function Configuracion({ config, setConfig }) {
   const [mensaje, setMensaje] = useState('');
   const [cocinaLocal, setCocinaLocal] = useState(config?.personalCocina || []);
   const [transporteLocal, setTransporteLocal] = useState(config?.personalTransporte || []);
+  
+  // Estados para CSV de productos
+  const [productosCSV, setProductosCSV] = useState(config?.productos || []);
+  const [previewCSV, setPreviewCSV] = useState([]);
+  const [mostrarPreview, setMostrarPreview] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
 
   // Sincronizar con props cuando cambien
   useEffect(() => {
     if (config) {
       setCocinaLocal(config.personalCocina || []);
       setTransporteLocal(config.personalTransporte || []);
+      setProductosCSV(config.productos || []);
     }
   }, [config]);
 
   const guardarConfiguracion = () => {
     const nuevaConfig = {
       personalCocina: cocinaLocal,
-      personalTransporte: transporteLocal
+      personalTransporte: transporteLocal,
+      productos: productosCSV
     };
     
-    // Guardar en localStorage
     localStorage.setItem('appConfig', JSON.stringify(nuevaConfig));
     
-    // Actualizar estado padre
     if (setConfig) {
       setConfig(nuevaConfig);
     }
@@ -44,6 +54,137 @@ export default function Configuracion({ config, setConfig }) {
     setMensaje('✅ Configuración guardada exitosamente');
     setTimeout(() => setMensaje(''), 3000);
   };
+
+  // ========== FUNCIONES CSV DE PRODUCTOS ==========
+
+  const procesarCSV = (contenido) => {
+    const lineas = contenido.split('\n').filter(l => l.trim() !== '');
+    const productos = [];
+    
+    // Detectar si tiene encabezado
+    let inicio = 0;
+    const primeraLinea = lineas[0].toUpperCase();
+    if (primeraLinea.includes('CLAVE') || primeraLinea.includes('PRODUCTO') || primeraLinea.includes('NOMBRE')) {
+      inicio = 1;
+    }
+    
+    for (let i = inicio; i < lineas.length; i++) {
+      const linea = lineas[i].trim();
+      if (!linea) continue;
+      
+      // Separar por coma o punto y coma
+      const partes = linea.includes(';') ? linea.split(';') : linea.split(',');
+      
+      if (partes.length >= 2) {
+        const clave = partes[0].trim().toUpperCase();
+        const nombre = partes[1].trim().toUpperCase();
+        
+        if (clave && nombre) {
+          productos.push({ clave, nombre });
+        }
+      }
+    }
+    
+    return productos;
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
+      setMensaje('⚠️ El archivo debe ser .csv o .txt');
+      setTimeout(() => setMensaje(''), 3000);
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const contenido = event.target.result;
+      const productos = procesarCSV(contenido);
+      
+      if (productos.length === 0) {
+        setMensaje('⚠️ No se encontraron productos válidos en el archivo');
+        setTimeout(() => setMensaje(''), 3000);
+        return;
+      }
+      
+      setPreviewCSV(productos);
+      setMostrarPreview(true);
+      setMensaje(`📄 Archivo cargado: ${productos.length} productos encontrados`);
+    };
+    reader.readAsText(file);
+  };
+
+  const confirmarImportacion = () => {
+    // Combinar con productos existentes (evitar duplicados por clave)
+    const clavesExistentes = new Set(productosCSV.map(p => p.clave));
+    const nuevosProductos = previewCSV.filter(p => !clavesExistentes.has(p.clave));
+    const actualizados = previewCSV.filter(p => clavesExistentes.has(p.clave));
+    
+    const productosCombinados = [
+      ...productosCSV.map(p => {
+        const actualizado = actualizados.find(a => a.clave === p.clave);
+        return actualizado || p;
+      }),
+      ...nuevosProductos
+    ].sort((a, b) => a.nombre.localeCompare(b.nombre));
+    
+    setProductosCSV(productosCombinados);
+    setMostrarPreview(false);
+    setPreviewCSV([]);
+    
+    const msg = nuevosProductos.length > 0 || actualizados.length > 0
+      ? `✅ Importados: ${nuevosProductos.length} nuevos, ${actualizados.length} actualizados`
+      : 'ℹ️ No hay cambios (todos los productos ya existían)';
+    
+    setMensaje(msg);
+    setTimeout(() => setMensaje(''), 4000);
+  };
+
+  const cancelarImportacion = () => {
+    setMostrarPreview(false);
+    setPreviewCSV([]);
+  };
+
+  const descargarPlantilla = () => {
+    const contenido = 'CLAVE,PRODUCTO\nBIS-001,BISTEC DE RES\nBIS-002,BISTEC DE CERDO\nPOL-001,POLLO ENTERO\n';
+    const blob = new Blob([contenido], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'plantilla_productos.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const eliminarProducto = (index) => {
+    setProductosCSV(productosCSV.filter((_, i) => i !== index));
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      const input = { target: { files: [file] } };
+      handleFileUpload(input);
+    }
+  };
+
+  // ========== FUNCIONES PERSONAL ==========
 
   const agregarPersona = (tipo) => {
     if (!nuevoNombre.trim()) return;
@@ -85,7 +226,6 @@ export default function Configuracion({ config, setConfig }) {
     }
   };
 
-  // Si no hay config, mostrar mensaje
   if (!config) {
     return (
       <div style={{ color: 'white', padding: '40px', textAlign: 'center' }}>
@@ -109,6 +249,7 @@ export default function Configuracion({ config, setConfig }) {
         .fade-in { animation: fadeIn 0.3s ease-out; }
         .btn-hover { transition: all 0.2s ease; }
         .btn-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+        .drag-active { border-color: #3b82f6 !important; background: rgba(59, 130, 246, 0.1) !important; }
       `}</style>
 
       {/* Header */}
@@ -139,12 +280,11 @@ export default function Configuracion({ config, setConfig }) {
               Configuración
             </h1>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
-              Gestión de personal y ajustes
+              Gestión de personal y catálogo de productos
             </p>
           </div>
         </div>
 
-        {/* Botón Guardar */}
         <button
           onClick={guardarConfiguracion}
           className="btn-hover"
@@ -168,15 +308,20 @@ export default function Configuracion({ config, setConfig }) {
         </button>
       </div>
 
-      {/* Mensaje de confirmación */}
+      {/* Mensaje */}
       {mensaje && (
         <div className="fade-in" style={{
           padding: '16px 20px',
           borderRadius: '12px',
           marginBottom: '20px',
-          background: mensaje.includes('✅') ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-          border: `1px solid ${mensaje.includes('✅') ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
-          color: mensaje.includes('✅') ? '#34d399' : '#fbbf24',
+          background: mensaje.includes('✅') ? 'rgba(16, 185, 129, 0.2)' : 
+                       mensaje.includes('⚠️') ? 'rgba(245, 158, 11, 0.2)' : 
+                       'rgba(59, 130, 246, 0.2)',
+          border: `1px solid ${mensaje.includes('✅') ? 'rgba(16, 185, 129, 0.4)' : 
+                               mensaje.includes('⚠️') ? 'rgba(245, 158, 11, 0.4)' : 
+                               'rgba(59, 130, 246, 0.4)'}`,
+          color: mensaje.includes('✅') ? '#34d399' : 
+                 mensaje.includes('⚠️') ? '#fbbf24' : '#60a5fa',
           fontWeight: 700,
           display: 'flex',
           alignItems: 'center',
@@ -193,8 +338,9 @@ export default function Configuracion({ config, setConfig }) {
         marginBottom: '24px'
       }}>
         {[
-          { key: 'cocina', label: 'Personal de Cocina', icon: Icons.chef, color: '#f97316' },
-          { key: 'transporte', label: 'Personal de Transporte', icon: Icons.truck, color: '#6366f1' }
+          { key: 'cocina', label: 'Cocina', icon: Icons.chef, color: '#f97316' },
+          { key: 'transporte', label: 'Transporte', icon: Icons.truck, color: '#6366f1' },
+          { key: 'productos', label: 'Catálogo Productos', icon: Icons.table, color: '#3b82f6' }
         ].map((tab) => (
           <button
             key={tab.key}
@@ -225,313 +371,480 @@ export default function Configuracion({ config, setConfig }) {
         ))}
       </div>
 
-      {/* Contenido según tab activa */}
-      <div className="card-enter" style={{
-        background: 'rgba(255,255,255,0.05)',
-        borderRadius: '24px',
-        padding: '32px',
-        border: '1px solid rgba(255,255,255,0.1)'
-      }}>
-        {activeTab === 'cocina' && (
-          <div>
-            <h2 style={{
-              margin: '0 0 8px 0',
-              fontSize: '20px',
-              fontWeight: 800,
-              color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}>
-              <span style={{ color: '#f97316' }}>{Icons.chef}</span>
-              Personal de Cocina
-            </h2>
-            <p style={{
-              margin: '0 0 24px 0',
-              fontSize: '14px',
-              color: 'rgba(255,255,255,0.5)'
-            }}>
-              Gestiona quién puede preparar pedidos en tu sucursal
-            </p>
+      {/* CONTENIDO: COCINA */}
+      {activeTab === 'cocina' && (
+        <div className="card-enter" style={{
+          background: 'rgba(255,255,255,0.05)',
+          borderRadius: '24px',
+          padding: '32px',
+          border: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <h2 style={{
+            margin: '0 0 8px 0',
+            fontSize: '20px',
+            fontWeight: 800,
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <span style={{ color: '#f97316' }}>{Icons.chef}</span>
+            Personal de Cocina
+          </h2>
+          <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
+            Gestiona quién puede preparar pedidos
+          </p>
 
-            {/* Agregar nuevo */}
-            <div style={{
-              display: 'flex',
-              gap: '12px',
-              marginBottom: '24px'
-            }}>
-              <div style={{ flex: 1, position: 'relative' }}>
-                <div style={{
-                  position: 'absolute',
-                  left: '16px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#9ca3af'
-                }}>
-                  {Icons.user}
-                </div>
-                <input
-                  type="text"
-                  value={nuevoNombre}
-                  onChange={(e) => setNuevoNombre(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, 'cocina')}
-                  placeholder="Nombre del preparador..."
-                  style={{
-                    width: '100%',
-                    padding: '14px 16px 14px 48px',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '2px solid rgba(255,255,255,0.2)',
-                    borderRadius: '12px',
-                    color: 'white',
-                    fontSize: '15px',
-                    fontWeight: 600
-                  }}
-                />
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
+                {Icons.user}
               </div>
-              <button
-                onClick={() => agregarPersona('cocina')}
-                className="btn-hover"
+              <input
+                type="text"
+                value={nuevoNombre}
+                onChange={(e) => setNuevoNombre(e.target.value)}
+                onKeyDown={(e) => handleKeyDown(e, 'cocina')}
+                placeholder="Nombre del preparador..."
                 style={{
-                  padding: '14px 24px',
+                  width: '100%',
+                  padding: '14px 16px 14px 48px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '2px solid rgba(255,255,255,0.2)',
                   borderRadius: '12px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
                   color: 'white',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                  fontSize: '15px',
+                  fontWeight: 600
                 }}
-              >
-                {Icons.plus}
-                Agregar
-              </button>
+              />
             </div>
+            <button
+              onClick={() => agregarPersona('cocina')}
+              className="btn-hover"
+              style={{
+                padding: '14px 24px',
+                borderRadius: '12px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                color: 'white',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              {Icons.plus}
+              Agregar
+            </button>
+          </div>
 
-            {/* Lista de personal */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-              gap: '12px'
-            }}>
-              {cocinaLocal.map((nombre, index) => (
-                <div
-                  key={index}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+            gap: '12px'
+          }}>
+            {cocinaLocal.map((nombre, index) => (
+              <div key={index} style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '16px 20px',
+                background: 'rgba(249, 115, 22, 0.1)',
+                borderRadius: '12px',
+                border: '2px solid rgba(249, 115, 22, 0.2)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, color: '#fdba74', fontSize: '15px' }}>
+                  <span style={{ fontSize: '24px' }}>👨‍🍳</span>
+                  {nombre}
+                </div>
+                <button
+                  onClick={() => eliminarPersona('cocina', index)}
                   style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    color: '#ef4444',
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '16px 20px',
-                    background: 'rgba(249, 115, 22, 0.1)',
-                    borderRadius: '12px',
-                    border: '2px solid rgba(249, 115, 22, 0.2)'
+                    justifyContent: 'center'
                   }}
                 >
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    fontWeight: 700,
-                    color: '#fdba74',
-                    fontSize: '15px'
-                  }}>
-                    <span style={{ fontSize: '24px' }}>👨‍🍳</span>
-                    {nombre}
-                  </div>
-                  <button
-                    onClick={() => eliminarPersona('cocina', index)}
-                    style={{
-                      width: '36px',
-                      height: '36px',
-                      borderRadius: '10px',
-                      border: 'none',
-                      background: 'rgba(239, 68, 68, 0.2)',
-                      color: '#ef4444',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)';
-                      e.currentTarget.style.transform = 'scale(1.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-                      e.currentTarget.style.transform = 'scale(1)';
-                    }}
-                  >
-                    {Icons.trash}
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {cocinaLocal.length === 0 && (
-              <div style={{
-                textAlign: 'center',
-                padding: '40px',
-                color: 'rgba(255,255,255,0.4)',
-                fontStyle: 'italic'
-              }}>
-                No hay personal de cocina registrado
+                  {Icons.trash}
+                </button>
               </div>
-            )}
+            ))}
           </div>
-        )}
 
-        {activeTab === 'transporte' && (
-          <div>
-            <h2 style={{
-              margin: '0 0 8px 0',
-              fontSize: '20px',
-              fontWeight: 800,
-              color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}>
-              <span style={{ color: '#6366f1' }}>{Icons.truck}</span>
-              Personal de Transporte
-            </h2>
-            <p style={{
-              margin: '0 0 24px 0',
-              fontSize: '14px',
-              color: 'rgba(255,255,255,0.5)'
-            }}>
-              Gestiona quién puede transportar pedidos entre sucursales
-            </p>
-
-            {/* Agregar nuevo */}
-            <div style={{
-              display: 'flex',
-              gap: '12px',
-              marginBottom: '24px'
-            }}>
-              <div style={{ flex: 1, position: 'relative' }}>
-                <div style={{
-                  position: 'absolute',
-                  left: '16px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#9ca3af'
-                }}>
-                  {Icons.user}
-                </div>
-                <input
-                  type="text"
-                  value={nuevoNombre}
-                  onChange={(e) => setNuevoNombre(e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(e, 'transporte')}
-                  placeholder="Nombre del transportista..."
-                  style={{
-                    width: '100%',
-                    padding: '14px 16px 14px 48px',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '2px solid rgba(255,255,255,0.2)',
-                    borderRadius: '12px',
-                    color: 'white',
-                    fontSize: '15px',
-                    fontWeight: 600
-                  }}
-                />
-              </div>
-              <button
-                onClick={() => agregarPersona('transporte')}
-                className="btn-hover"
-                style={{
-                  padding: '14px 24px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                  color: 'white',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                {Icons.plus}
-                Agregar
-              </button>
+          {cocinaLocal.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
+              No hay personal de cocina registrado
             </div>
+          )}
+        </div>
+      )}
 
-            {/* Lista de personal */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-              gap: '12px'
-            }}>
-              {transporteLocal.map((nombre, index) => (
-                <div
-                  key={index}
+      {/* CONTENIDO: TRANSPORTE */}
+      {activeTab === 'transporte' && (
+        <div className="card-enter" style={{
+          background: 'rgba(255,255,255,0.05)',
+          borderRadius: '24px',
+          padding: '32px',
+          border: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <h2 style={{
+            margin: '0 0 8px 0',
+            fontSize: '20px',
+            fontWeight: 800,
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <span style={{ color: '#6366f1' }}>{Icons.truck}</span>
+            Personal de Transporte
+          </h2>
+          <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
+            Gestiona quién puede transportar pedidos
+          </p>
+
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
+                {Icons.user}
+              </div>
+              <input
+                type="text"
+                value={nuevoNombre}
+                onChange={(e) => setNuevoNombre(e.target.value)}
+                onKeyDown={(e) => handleKeyDown(e, 'transporte')}
+                placeholder="Nombre del transportista..."
+                style={{
+                  width: '100%',
+                  padding: '14px 16px 14px 48px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '2px solid rgba(255,255,255,0.2)',
+                  borderRadius: '12px',
+                  color: 'white',
+                  fontSize: '15px',
+                  fontWeight: 600
+                }}
+              />
+            </div>
+            <button
+              onClick={() => agregarPersona('transporte')}
+              className="btn-hover"
+              style={{
+                padding: '14px 24px',
+                borderRadius: '12px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                color: 'white',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              {Icons.plus}
+              Agregar
+            </button>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+            gap: '12px'
+          }}>
+            {transporteLocal.map((nombre, index) => (
+              <div key={index} style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '16px 20px',
+                background: 'rgba(99, 102, 241, 0.1)',
+                borderRadius: '12px',
+                border: '2px solid rgba(99, 102, 241, 0.2)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, color: '#a5b4fc', fontSize: '15px' }}>
+                  <span style={{ fontSize: '24px' }}>🛵</span>
+                  {nombre}
+                </div>
+                <button
+                  onClick={() => eliminarPersona('transporte', index)}
                   style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    color: '#ef4444',
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '16px 20px',
-                    background: 'rgba(99, 102, 241, 0.1)',
-                    borderRadius: '12px',
-                    border: '2px solid rgba(99, 102, 241, 0.2)'
+                    justifyContent: 'center'
                   }}
                 >
-                  <div style={{
-                    display: 'flex',
+                  {Icons.trash}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {transporteLocal.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
+              No hay personal de transporte registrado
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CONTENIDO: PRODUCTOS (CSV) */}
+      {activeTab === 'productos' && (
+        <div className="card-enter" style={{
+          background: 'rgba(255,255,255,0.05)',
+          borderRadius: '24px',
+          padding: '32px',
+          border: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <h2 style={{
+            margin: '0 0 8px 0',
+            fontSize: '20px',
+            fontWeight: 800,
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <span style={{ color: '#3b82f6' }}>{Icons.table}</span>
+            Catálogo de Productos
+          </h2>
+          <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
+            Importa productos masivamente desde CSV (Clave, Producto)
+          </p>
+
+          {/* Área de carga de archivo */}
+          {!mostrarPreview && (
+            <>
+              <div
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+                style={{
+                  border: `2px dashed ${dragActive ? '#3b82f6' : 'rgba(255,255,255,0.3)'}`,
+                  borderRadius: '16px',
+                  padding: '40px',
+                  textAlign: 'center',
+                  background: dragActive ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255,255,255,0.02)',
+                  transition: 'all 0.2s',
+                  marginBottom: '24px'
+                }}
+              >
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📁</div>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 700, color: 'white' }}>
+                  Arrastra tu archivo CSV aquí
+                </h3>
+                <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
+                  o haz clic para seleccionar archivo
+                </p>
+                <input
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={handleFileUpload}
+                  style={{ display: 'none' }}
+                  id="csv-upload"
+                />
+                <label
+                  htmlFor="csv-upload"
+                  style={{
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '12px',
-                    fontWeight: 700,
-                    color: '#a5b4fc',
-                    fontSize: '15px'
-                  }}>
-                    <span style={{ fontSize: '24px' }}>🛵</span>
-                    {nombre}
+                    gap: '8px',
+                    padding: '14px 28px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 20px rgba(59, 130, 246, 0.4)'
+                  }}
+                >
+                  {Icons.upload}
+                  Seleccionar Archivo
+                </label>
+              </div>
+
+              {/* Botón descargar plantilla */}
+              <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                <button
+                  onClick={descargarPlantilla}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 20px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    background: 'transparent',
+                    color: 'rgba(255,255,255,0.7)',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {Icons.download}
+                  Descargar plantilla CSV
+                </button>
+              </div>
+
+              {/* Lista actual de productos */}
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 700, color: 'white' }}>
+                Productos cargados: {productosCSV.length}
+              </h3>
+
+              {productosCSV.length > 0 ? (
+                <div style={{
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  background: 'rgba(0,0,0,0.2)',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ position: 'sticky', top: 0, background: 'rgba(59, 130, 246, 0.2)' }}>
+                      <tr>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>Clave</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>Producto</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', width: '60px' }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productosCSV.map((prod, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                          <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 700, color: '#60a5fa' }}>{prod.clave}</td>
+                          <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: 'white' }}>{prod.nombre}</td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <button
+                              onClick={() => eliminarProducto(idx)}
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                background: 'rgba(239, 68, 68, 0.2)',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              {Icons.trash}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
+                  No hay productos en el catálogo. Importa un CSV para comenzar.
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Preview de importación */}
+          {mostrarPreview && (
+            <div className="fade-in">
+              <div style={{
+                background: 'rgba(245, 158, 11, 0.1)',
+                borderRadius: '12px',
+                padding: '16px 20px',
+                marginBottom: '20px',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#fbbf24', marginBottom: '4px' }}>
+                    📋 Vista previa de importación
                   </div>
+                  <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>
+                    {previewCSV.length} productos listos para importar
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '12px' }}>
                   <button
-                    onClick={() => eliminarPersona('transporte', index)}
+                    onClick={cancelarImportacion}
                     style={{
-                      width: '36px',
-                      height: '36px',
+                      padding: '12px 20px',
                       borderRadius: '10px',
-                      border: 'none',
-                      background: 'rgba(239, 68, 68, 0.2)',
-                      color: '#ef4444',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)';
-                      e.currentTarget.style.transform = 'scale(1.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-                      e.currentTarget.style.transform = 'scale(1)';
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      background: 'transparent',
+                      color: 'rgba(255,255,255,0.7)',
+                      fontWeight: 700,
+                      cursor: 'pointer'
                     }}
                   >
-                    {Icons.trash}
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={confirmarImportacion}
+                    className="btn-hover"
+                    style={{
+                      padding: '12px 24px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: 'white',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 8px 20px rgba(16, 185, 129, 0.4)'
+                    }}
+                  >
+                    {Icons.save}
+                    Confirmar Importación
                   </button>
                 </div>
-              ))}
-            </div>
-
-            {transporteLocal.length === 0 && (
-              <div style={{
-                textAlign: 'center',
-                padding: '40px',
-                color: 'rgba(255,255,255,0.4)',
-                fontStyle: 'italic'
-              }}>
-                No hay personal de transporte registrado
               </div>
-            )}
-          </div>
-        )}
-      </div>
+
+              <div style={{
+                maxHeight: '400px',
+                overflowY: 'auto',
+                background: 'rgba(0,0,0,0.2)',
+                borderRadius: '12px',
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'rgba(245, 158, 11, 0.2)' }}>
+                    <tr>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>Clave</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>Producto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewCSV.map((prod, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 700, color: '#fbbf24' }}>{prod.clave}</td>
+                        <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: 'white' }}>{prod.nombre}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Info adicional */}
       <div style={{
@@ -547,11 +860,12 @@ export default function Configuracion({ config, setConfig }) {
         <span style={{ fontSize: '20px' }}>💡</span>
         <div>
           <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd', marginBottom: '4px' }}>
-            Tip de configuración
+            Información importante
           </div>
           <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>
-            Los cambios se guardan localmente en este dispositivo. Cada sucursal puede tener su propia configuración de personal. 
-            Presiona "Guardar Cambios" para aplicar los ajustes.
+            El catálogo de productos se usa en el formulario de pedidos para autocompletar. 
+            El CSV debe tener formato: CLAVE,PRODUCTO (ej: BIS-001,BISTEC DE RES). 
+            Puedes arrastrar el archivo o seleccionarlo manualmente.
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { ref, update } from "firebase/database";
+import { ref, update, push, set } from "firebase/database";
 
 // Iconos SVG estilo delivery
 const Icons = {
@@ -14,7 +14,11 @@ const Icons = {
   scale: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>,
   close: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   calendar: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
-  arrowRight: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+  arrowRight: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>,
+  checkCircle: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+  edit: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  bell: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>,
+  warning: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
 };
 
 // Configuración de estados visuales
@@ -58,6 +62,14 @@ const STATUS_CONFIG = {
     icon: Icons.truck,
     label: 'Enviado',
     pulse: false
+  },
+  'RECIBIDO_CONFORME': {
+    color: '#059669',
+    bg: 'linear-gradient(135deg, #d1fae5 0%, #6ee7b7 100%)',
+    border: '#10b981',
+    icon: Icons.checkCircle,
+    label: 'Recibido Conforme',
+    pulse: false
   }
 };
 
@@ -66,7 +78,32 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
   const [modalRepartidor, setModalRepartidor] = useState(null);
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState(null);
   const [animatingCards, setAnimatingCards] = useState(new Set());
-  const [mostrarPesos, setMostrarPesos] = useState({}); // firebaseId: boolean
+  const [mostrarPesos, setMostrarPesos] = useState({});
+  
+  // Estados para Recibido Conforme
+  const [modalRecepcion, setModalRecepcion] = useState(null);
+  const [pesosEditados, setPesosEditados] = useState({});
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [notificaciones, setNotificaciones] = useState([]);
+  const [modalNotificacion, setModalNotificacion] = useState(null);
+
+  // Escuchar notificaciones para esta sucursal
+  useEffect(() => {
+    const notifRef = ref(db, `notificaciones/${user}`);
+    // Aquí iría la lógica de onValue para escuchar notificaciones en tiempo real
+    // Por simplicidad, simulamos con un intervalo que chequee
+    const interval = setInterval(() => {
+      // En producción: onValue(notifRef, (snapshot) => { ... })
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Agregar notificación al estado local
+  const agregarNotificacion = (notif) => {
+    const id = Date.now();
+    setNotificaciones(prev => [...prev, { ...notif, id, leida: false }]);
+    setModalNotificacion({ ...notif, id });
+  };
 
   // Filtrar pedidos relevantes para el usuario
   const pedidosRelevantes = pedidos.filter(p => 
@@ -78,10 +115,12 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
     switch (filtro) {
       case 'activos':
         return pedidosRelevantes.filter(p => 
-          p.estado !== 'ENVIADO' && p.estado !== 'ENTREGADO'
+          !['RECIBIDO_CONFORME', 'ENTREGADO'].includes(p.estado)
         );
       case 'enviados':
         return pedidosRelevantes.filter(p => p.estado === 'ENVIADO');
+      case 'recibidos':
+        return pedidosRelevantes.filter(p => p.estado === 'RECIBIDO_CONFORME');
       case 'standby':
         return pedidosRelevantes.filter(p => p.estado === 'STANDBY_ENTREGA');
       case 'todos':
@@ -126,6 +165,117 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
     setRepartidorSeleccionado(null);
   };
 
+  // Abrir modal de recepción
+  const abrirModalRecepcion = (pedido) => {
+    setModalRecepcion(pedido);
+    // Inicializar pesos editados con los valores actuales
+    const pesosIniciales = {};
+    pedido.items.forEach((item, idx) => {
+      pesosIniciales[idx] = item.pesoReal || item.cantidad;
+    });
+    setPesosEditados(pesosIniciales);
+    setModoEdicion(false);
+  };
+
+  // Confirmar recepción conforme (sin cambios)
+  const confirmarRecepcionConforme = () => {
+    if (!modalRecepcion) return;
+    
+    setAnimatingCards(prev => new Set([...prev, modalRecepcion.firebaseId]));
+    
+    update(ref(db, `pedidos_internos/${modalRecepcion.firebaseId}`), {
+      estado: 'RECIBIDO_CONFORME',
+      fechaRecepcion: new Date().toISOString().split('T')[0],
+      horaRecepcion: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      recibidoPor: user,
+      timestamp: Date.now()
+    });
+
+    setTimeout(() => {
+      setAnimatingCards(prev => {
+        const next = new Set(prev);
+        next.delete(modalRecepcion.firebaseId);
+        return next;
+      });
+    }, 300);
+
+    setModalRecepcion(null);
+  };
+
+  // Reportar diferencia y enviar notificación
+  const reportarDiferencia = async () => {
+    if (!modalRecepcion) return;
+
+    // Calcular diferencias
+    const diferencias = [];
+    modalRecepcion.items.forEach((item, idx) => {
+      const pesoOriginal = parseFloat(item.pesoReal) || 0;
+      const pesoNuevo = parseFloat(pesosEditados[idx]) || 0;
+      if (pesoOriginal !== pesoNuevo) {
+        diferencias.push({
+          producto: item.producto,
+          pesoOriginal,
+          pesoNuevo,
+          diferencia: pesoNuevo - pesoOriginal
+        });
+      }
+    });
+
+    // Actualizar pedido con nuevos pesos
+    const itemsActualizados = modalRecepcion.items.map((item, idx) => ({
+      ...item,
+      pesoReal: pesosEditados[idx],
+      pesoCorregido: true,
+      fechaCorreccion: new Date().toISOString()
+    }));
+
+    setAnimatingCards(prev => new Set([...prev, modalRecepcion.firebaseId]));
+
+    await update(ref(db, `pedidos_internos/${modalRecepcion.firebaseId}`), {
+      estado: 'RECIBIDO_CONFORME',
+      items: itemsActualizados,
+      fechaRecepcion: new Date().toISOString().split('T')[0],
+      horaRecepcion: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      recibidoPor: user,
+      pesosCorregidos: true,
+      timestamp: Date.now()
+    });
+
+    // Enviar notificación a la sucursal origen
+    const notificacion = {
+      tipo: 'DIFERENCIA_PESO',
+      pedidoId: modalRecepcion.id,
+      pedidoFirebaseId: modalRecepcion.firebaseId,
+      sucursalOrigen: modalRecepcion.sucursalOrigen,
+      sucursalDestino: user,
+      fecha: new Date().toISOString(),
+      mensaje: `La sucursal ${user} reportó diferencias en el pedido #${modalRecepcion.id}`,
+      diferencias: diferencias,
+      leida: false
+    };
+
+    // Guardar notificación en Firebase
+    const notifRef = push(ref(db, `notificaciones/${modalRecepcion.sucursalOrigen}`));
+    await set(notifRef, notificacion);
+
+    // Mostrar confirmación local
+    agregarNotificacion({
+      tipo: 'EXITO',
+      mensaje: `Notificación enviada a ${modalRecepcion.sucursalOrigen} sobre las diferencias encontradas`
+    });
+
+    setTimeout(() => {
+      setAnimatingCards(prev => {
+        const next = new Set(prev);
+        next.delete(modalRecepcion.firebaseId);
+        return next;
+      });
+    }, 300);
+
+    setModalRecepcion(null);
+    setModoEdicion(false);
+  };
+
   const toggleMostrarPesos = (firebaseId) => {
     setMostrarPesos(prev => ({
       ...prev,
@@ -143,8 +293,9 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
 
   // Contadores para tabs
   const contadores = {
-    activos: pedidosRelevantes.filter(p => p.estado !== 'ENVIADO' && p.estado !== 'ENTREGADO').length,
+    activos: pedidosRelevantes.filter(p => !['RECIBIDO_CONFORME', 'ENTREGADO'].includes(p.estado)).length,
     enviados: pedidosRelevantes.filter(p => p.estado === 'ENVIADO').length,
+    recibidos: pedidosRelevantes.filter(p => p.estado === 'RECIBIDO_CONFORME').length,
     standby: pedidosRelevantes.filter(p => p.estado === 'STANDBY_ENTREGA').length,
     todos: pedidosRelevantes.length
   };
@@ -164,6 +315,11 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
         @keyframes modalIn {
           from { opacity: 0; transform: scale(0.9); }
           to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          75% { transform: translateX(5px); }
         }
         .card-enter { animation: slideIn 0.4s ease-out forwards; }
         .pulse-bg { animation: pulse-ring 2s ease-in-out infinite; }
@@ -200,6 +356,26 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
+        }
+        .input-edit {
+          transition: all 0.2s;
+          border: 2px solid #e2e8f0;
+        }
+        .input-edit:focus {
+          border-color: #3b82f6;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+          outline: none;
+        }
+        .input-edit.changed {
+          border-color: #f59e0b;
+          background: #fffbeb;
+        }
+        .toast {
+          animation: slideInRight 0.3s ease;
+        }
+        @keyframes slideInRight {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
         }
       `}</style>
 
@@ -248,6 +424,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
         {[
           { key: 'activos', label: 'En Proceso', count: contadores.activos, color: '#3b82f6' },
           { key: 'enviados', label: 'Enviados', count: contadores.enviados, color: '#6366f1' },
+          { key: 'recibidos', label: 'Recibidos', count: contadores.recibidos, color: '#059669' },
           { key: 'standby', label: 'Standby', count: contadores.standby, color: '#f59e0b' },
           { key: 'todos', label: 'Todos', count: contadores.todos, color: '#10b981' }
         ].map((tab) => (
@@ -287,6 +464,398 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
           </button>
         ))}
       </div>
+
+      {/* Modal de Notificación Emergente */}
+      {modalNotificacion && (
+        <div 
+          className="modal-overlay"
+          style={{ zIndex: 2000 }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setModalNotificacion(null);
+            }
+          }}
+        >
+          <div className="modal-content" style={{
+            background: 'white',
+            borderRadius: '24px',
+            padding: '32px',
+            width: '90%',
+            maxWidth: '500px',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
+            border: modalNotificacion.tipo === 'DIFERENCIA_PESO' ? '4px solid #ef4444' : '4px solid #10b981'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{
+                width: '80px',
+                height: '80px',
+                borderRadius: '50%',
+                background: modalNotificacion.tipo === 'DIFERENCIA_PESO' ? '#fef2f2' : '#f0fdf4',
+                color: modalNotificacion.tipo === 'DIFERENCIA_PESO' ? '#dc2626' : '#059669',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+                fontSize: '40px'
+              }}>
+                {modalNotificacion.tipo === 'DIFERENCIA_PESO' ? Icons.warning : Icons.checkCircle}
+              </div>
+              
+              <h2 style={{ 
+                margin: '0 0 8px 0', 
+                fontSize: '24px', 
+                fontWeight: 800, 
+                color: '#1e293b' 
+              }}>
+                {modalNotificacion.tipo === 'DIFERENCIA_PESO' ? '¡Atención!' : 'Éxito'}
+              </h2>
+              
+              <p style={{ margin: 0, color: '#64748b', fontSize: '16px', lineHeight: 1.5 }}>
+                {modalNotificacion.mensaje}
+              </p>
+            </div>
+
+            {modalNotificacion.diferencias && modalNotificacion.diferencias.length > 0 && (
+              <div style={{
+                background: '#fef2f2',
+                borderRadius: '16px',
+                padding: '20px',
+                marginBottom: '24px',
+                border: '2px solid #fecaca'
+              }}>
+                <h4 style={{ margin: '0 0 12px 0', color: '#dc2626', fontSize: '14px', fontWeight: 800 }}>
+                  Diferencias encontradas:
+                </h4>
+                {modalNotificacion.diferencias.map((diff, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '8px 0',
+                    borderBottom: idx < modalNotificacion.diferencias.length - 1 ? '1px solid #fecaca' : 'none'
+                  }}>
+                    <span style={{ fontWeight: 700, color: '#1e293b' }}>{diff.producto}</span>
+                    <span style={{ 
+                      color: diff.diferencia > 0 ? '#059669' : '#dc2626',
+                      fontWeight: 800,
+                      fontFamily: 'monospace'
+                    }}>
+                      {diff.pesoOriginal} → {diff.pesoNuevo} lb
+                      ({diff.diferencia > 0 ? '+' : ''}{diff.diferencia.toFixed(2)})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button
+              onClick={() => setModalNotificacion(null)}
+              style={{
+                width: '100%',
+                padding: '16px 24px',
+                borderRadius: '12px',
+                border: 'none',
+                background: modalNotificacion.tipo === 'DIFERENCIA_PESO' 
+                  ? 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)' 
+                  : 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                color: 'white',
+                fontWeight: 800,
+                fontSize: '16px',
+                cursor: 'pointer',
+                boxShadow: '0 8px 25px rgba(0,0,0,0.2)'
+              }}
+            >
+              {modalNotificacion.tipo === 'DIFERENCIA_PESO' ? 'Entendido, revisaré el pedido' : 'Aceptar'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Recepción (Recibido Conforme) */}
+      {modalRecepcion && (
+        <div 
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setModalRecepcion(null);
+              setModoEdicion(false);
+            }
+          }}
+        >
+          <div className="modal-content" style={{
+            background: 'white',
+            borderRadius: '24px',
+            padding: '32px',
+            width: '90%',
+            maxWidth: '600px',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '24px'
+            }}>
+              <div>
+                <h2 style={{ margin: '0 0 4px 0', fontSize: '22px', fontWeight: 800, color: '#1e293b' }}>
+                  {modoEdicion ? 'Reportar Diferencia' : 'Recibir Pedido'}
+                </h2>
+                <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+                  Pedido #{modalRecepcion.id} de {modalRecepcion.sucursalOrigen}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setModalRecepcion(null);
+                  setModoEdicion(false);
+                }}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: '#f1f5f9',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                {Icons.close}
+              </button>
+            </div>
+
+            {/* Alerta si está en modo edición */}
+            {modoEdicion && (
+              <div style={{
+                background: '#fef3c7',
+                border: '2px solid #fbbf24',
+                borderRadius: '12px',
+                padding: '16px',
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                {Icons.alert}
+                <div>
+                  <div style={{ fontWeight: 800, color: '#92400e', fontSize: '14px' }}>
+                    Modo Corrección
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#a16207' }}>
+                    Los cambios realizados notificarán a {modalRecepcion.sucursalOrigen}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tabla de productos */}
+            <div style={{
+              background: '#f8fafc',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              marginBottom: '24px',
+              border: '2px solid #e2e8f0'
+            }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: modoEdicion ? '1fr 100px 120px' : '1fr 100px 100px',
+                gap: '12px',
+                padding: '16px',
+                background: '#f1f5f9',
+                fontSize: '11px',
+                fontWeight: 800,
+                color: '#64748b',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                <div>Producto</div>
+                <div style={{ textAlign: 'center' }}>Enviado</div>
+                <div style={{ textAlign: 'center' }}>
+                  {modoEdicion ? 'Peso Real Recibido' : 'Peso Real'}
+                </div>
+              </div>
+              
+              {modalRecepcion.items.map((item, idx) => {
+                const pesoOriginal = item.pesoReal || item.cantidad;
+                const pesoEditado = pesosEditados[idx];
+                const hayCambio = modoEdicion && parseFloat(pesoEditado) !== parseFloat(pesoOriginal);
+
+                return (
+                  <div 
+                    key={idx}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: modoEdicion ? '1fr 100px 120px' : '1fr 100px 100px',
+                      gap: '12px',
+                      padding: '16px',
+                      borderBottom: idx < modalRecepcion.items.length - 1 ? '1px solid #e2e8f0' : 'none',
+                      alignItems: 'center',
+                      background: hayCambio ? '#fffbeb' : 'transparent'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>
+                        {item.producto}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>
+                        {item.cantidad} {item.unidad} solicitados
+                      </div>
+                    </div>
+                    
+                    <div style={{ textAlign: 'center', fontSize: '14px', fontWeight: 700, color: '#6366f1' }}>
+                      {pesoOriginal} lb
+                    </div>
+
+                    {modoEdicion ? (
+                      <div style={{ position: 'relative' }}>
+                        <input
+  type="number"
+  step="0.01"
+  value={pesosEditados[idx]}
+  onChange={(e) => {
+    setPesosEditados(prev => ({
+      ...prev,
+      [idx]: e.target.value
+    }));
+  }}
+  className={`input-edit ${hayCambio ? 'changed' : ''}`}
+  style={{
+    width: '100%',
+    padding: '10px',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: 700,
+    textAlign: 'center',
+    color: '#1e293b',        // ← TEXTO OSCURO (slate-800)
+    backgroundColor: '#ffffff', // ← FONDO BLANCO DEFINIDO
+    border: '2px solid #e2e8f0'
+  }}
+/>
+                        <span style={{ 
+                          position: 'absolute', 
+                          right: '8px', 
+                          top: '50%', 
+                          transform: 'translateY(-50%)',
+                          fontSize: '11px',
+                          color: '#64748b'
+                        }}>
+                          lb
+                        </span>
+                      </div>
+                    ) : (
+                      <div style={{ 
+                        textAlign: 'center', 
+                        fontSize: '16px', 
+                        fontWeight: 800, 
+                        color: '#059669',
+                        fontFamily: 'monospace'
+                      }}>
+                        {pesoOriginal} lb
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Botones de acción */}
+            {!modoEdicion ? (
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={() => setModoEdicion(true)}
+                  style={{
+                    flex: 1,
+                    padding: '16px 24px',
+                    borderRadius: '12px',
+                    border: '2px solid #f59e0b',
+                    background: 'white',
+                    color: '#d97706',
+                    fontWeight: 800,
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {Icons.edit}
+                  Reportar Diferencia
+                </button>
+                
+                <button
+                  onClick={confirmarRecepcionConforme}
+                  style={{
+                    flex: 2,
+                    padding: '16px 24px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 8px 25px rgba(5, 150, 105, 0.4)'
+                  }}
+                >
+                  {Icons.checkCircle}
+                  Todo Correcto
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={() => setModoEdicion(false)}
+                  style={{
+                    flex: 1,
+                    padding: '16px 24px',
+                    borderRadius: '12px',
+                    border: '2px solid #e2e8f0',
+                    background: 'white',
+                    color: '#64748b',
+                    fontWeight: 800,
+                    fontSize: '15px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancelar
+                </button>
+                
+                <button
+                  onClick={reportarDiferencia}
+                  style={{
+                    flex: 2,
+                    padding: '16px 24px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 8px 25px rgba(220, 38, 38, 0.4)'
+                  }}
+                >
+                  {Icons.bell}
+                  Enviar Corrección y Notificar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modal Seleccionar Repartidor */}
       {modalRepartidor && (
@@ -682,10 +1251,36 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           </div>
                         </div>
                       )}
+
+                      {pedido.recibidoPor && (
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '10px 16px',
+                          background: 'white',
+                          borderRadius: '12px',
+                          border: '2px solid rgba(5, 150, 105, 0.3)',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                        }}>
+                          <span style={{ fontSize: '20px' }}>✅</span>
+                          <div>
+                            <div style={{ fontSize: '10px', color: '#047857', fontWeight: 700, textTransform: 'uppercase' }}>
+                              Recibido por
+                            </div>
+                            <div style={{ fontSize: '14px', fontWeight: 800, color: '#1e293b' }}>
+                              {pedido.recibidoPor}
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#64748b' }}>
+                              {pedido.horaRecepcion}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Botón Ver Pesos Reales (solo si está listo o enviado) */}
-                    {(status === 'LISTO' || status === 'ENVIADO') && (
+                    {/* Botón Ver Pesos Reales (solo si está listo, enviado o recibido) */}
+                    {(status === 'LISTO' || status === 'ENVIADO' || status === 'RECIBIDO_CONFORME') && (
                       <button
                         onClick={() => toggleMostrarPesos(pedido.firebaseId)}
                         className="btn-hover"
@@ -708,6 +1303,18 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                       >
                         {Icons.scale}
                         {mostrarPeso ? 'Ocultar Pesos Reales' : 'Ver Pesos Reales'}
+                        {pedido.pesosCorregidos && (
+                          <span style={{
+                            background: '#fef3c7',
+                            color: '#92400e',
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                            fontSize: '11px',
+                            marginLeft: '8px'
+                          }}>
+                            Corregido
+                          </span>
+                        )}
                       </button>
                     )}
 
@@ -746,7 +1353,8 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                               gap: '12px',
                               padding: '12px 16px',
                               borderBottom: idx < pedido.items.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
-                              alignItems: 'center'
+                              alignItems: 'center',
+                              background: item.pesoCorregido ? '#fffbeb' : 'transparent'
                             }}
                           >
                             <div>
@@ -762,8 +1370,19 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                             <div style={{ textAlign: 'center', fontSize: '13px', fontWeight: 600, color: '#3b82f6' }}>
                               {item.cantidad} {item.unidad}
                             </div>
-                            <div style={{ textAlign: 'center', fontSize: '14px', fontWeight: 800, color: '#16a34a' }}>
+                            <div style={{ 
+                              textAlign: 'center', 
+                              fontSize: '14px', 
+                              fontWeight: 800, 
+                              color: item.pesoCorregido ? '#d97706' : '#16a34a',
+                              fontFamily: 'monospace'
+                            }}>
                               {item.pesoReal || '-'} lb
+                              {item.pesoCorregido && (
+                                <span style={{ fontSize: '10px', display: 'block', color: '#d97706' }}>
+                                  (corregido)
+                                </span>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -833,8 +1452,36 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                         </div>
                       )}
 
+                      {/* Botón Recibir Conforme (solo si es ENVIADO y soy el destino) */}
+                      {status === 'ENVIADO' && esDestino && (
+                        <button
+                          onClick={() => abrirModalRecepcion(pedido)}
+                          className="btn-hover"
+                          style={{
+                            width: '100%',
+                            padding: '18px 24px',
+                            borderRadius: '14px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                            color: 'white',
+                            fontWeight: 800,
+                            fontSize: '16px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '12px',
+                            boxShadow: '0 10px 25px rgba(5, 150, 105, 0.4)',
+                            marginTop: '12px'
+                          }}
+                        >
+                          {Icons.checkCircle}
+                          Recibir Conforme
+                        </button>
+                      )}
+
                       {/* Info para el origen */}
-                      {esOrigen && status !== 'ENVIADO' && (
+                      {esOrigen && status !== 'ENVIADO' && status !== 'RECIBIDO_CONFORME' && (
                         <div style={{
                           padding: '14px 18px',
                           background: 'rgba(59, 130, 246, 0.1)',
@@ -866,7 +1513,61 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           gap: '8px'
                         }}>
                           {Icons.check}
-                          Pedido enviado con {pedido.enviadoCon}
+                          Pedido enviado con {pedido.enviadoCon} - Esperando recepción
+                        </div>
+                      )}
+
+                      {/* Info recibido para origen */}
+                      {esOrigen && status === 'RECIBIDO_CONFORME' && (
+                        <div style={{
+                          padding: '14px 18px',
+                          background: 'rgba(5, 150, 105, 0.1)',
+                          borderRadius: '12px',
+                          border: '2px solid rgba(5, 150, 105, 0.2)',
+                          color: '#059669',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px'
+                        }}>
+                          {Icons.checkCircle}
+                          Pedido recibido conforme por {pedido.recibidoPor} a las {pedido.horaRecepcion}
+                          {pedido.pesosCorregidos && (
+                            <span style={{ 
+                              background: '#fef3c7', 
+                              color: '#92400e', 
+                              padding: '2px 8px', 
+                              borderRadius: '8px',
+                              fontSize: '11px',
+                              marginLeft: '8px'
+                            }}>
+                              ⚠️ Con correcciones
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Info para destino cuando ya recibió */}
+                      {esDestino && status === 'RECIBIDO_CONFORME' && (
+                        <div style={{
+                          padding: '14px 18px',
+                          background: 'rgba(5, 150, 105, 0.1)',
+                          borderRadius: '12px',
+                          border: '2px solid rgba(5, 150, 105, 0.2)',
+                          color: '#059669',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px'
+                        }}>
+                          {Icons.checkCircle}
+                          Has recibido este pedido el {pedido.fechaRecepcion} a las {pedido.horaRecepcion}
                         </div>
                       )}
                     </div>
