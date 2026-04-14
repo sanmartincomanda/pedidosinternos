@@ -149,6 +149,8 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
   const [fechaEntrega, setFechaEntrega] = useState(hoy);
   const [unitPickerIndex, setUnitPickerIndex] = useState(null);
   const [showNoteModal, setShowNoteModal] = useState(false);
+  const [itemNoteModalIndex, setItemNoteModalIndex] = useState(null);
+  const [itemNoteTemporal, setItemNoteTemporal] = useState("");
 
   const productInputRefs = useRef([]);
   const quantityInputRefs = useRef([]);
@@ -305,6 +307,12 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
   };
 
   const eliminarFila = (idx) => {
+    setItemNoteModalIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === idx) return null;
+      return prev > idx ? prev - 1 : prev;
+    });
+
     if (items.length === 1) {
       setItems([createEmptyItem()]);
       return;
@@ -449,6 +457,30 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
     setShowNoteModal(true);
   };
 
+  const abrirNotaArticulo = (idx) => {
+    setItemNoteTemporal(items[idx]?.nota || "");
+    setItemNoteModalIndex(idx);
+  };
+
+  const cerrarNotaArticulo = () => {
+    setItemNoteModalIndex(null);
+    setItemNoteTemporal("");
+  };
+
+  const guardarNotaArticulo = () => {
+    if (itemNoteModalIndex === null) return;
+
+    setItems((prev) =>
+      prev.map((item, idx) =>
+        idx === itemNoteModalIndex
+          ? { ...item, nota: itemNoteTemporal.toUpperCase().trim() }
+          : item,
+      ),
+    );
+
+    cerrarNotaArticulo();
+  };
+
   const guardarNotaGeneral = () => {
     setNotaGeneral(notaTemporal.toUpperCase());
     setShowNoteModal(false);
@@ -524,6 +556,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
       setNotaGeneral("");
       setNotaTemporal("");
       setShowNoteModal(false);
+      cerrarNotaArticulo();
       setUnitPickerIndex(null);
       setFechaEntrega(hoy);
       setView("estados");
@@ -684,6 +717,28 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
                     </button>
                   </div>
                 </div>
+
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => abrirNotaArticulo(idx)}
+                    className="app-button-ghost w-full justify-between px-4 text-sm"
+                  >
+                    <span className="flex items-center gap-2">
+                      {Icons.note}
+                      {item.nota ? "Editar nota especial" : "Nota especial"}
+                    </span>
+                    <span className={item.nota ? "text-amber-300" : "text-slate-400"}>
+                      {item.nota ? "Guardada" : "Agregar"}
+                    </span>
+                  </button>
+
+                  {item.nota ? (
+                    <div className="mt-2 rounded-[18px] border border-amber-300/25 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100">
+                      {item.nota}
+                    </div>
+                  ) : null}
+                </div>
               </article>
             );
           })}
@@ -796,6 +851,50 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
                 Cerrar
               </button>
               <button type="button" onClick={guardarNotaGeneral} className="app-button-primary">
+                Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {itemNoteModalIndex !== null ? (
+        <div
+          className="app-modal"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              cerrarNotaArticulo();
+            }
+          }}
+        >
+          <div className="app-modal-panel w-full max-w-[520px] p-5 sm:p-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="app-title text-2xl font-black text-slate-900">Nota especial</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {items[itemNoteModalIndex]?.producto || `Linea ${itemNoteModalIndex + 1}`}
+                </p>
+              </div>
+
+              <button type="button" onClick={cerrarNotaArticulo} className="app-icon-button text-slate-700">
+                {Icons.close}
+              </button>
+            </div>
+
+            <textarea
+              value={itemNoteTemporal}
+              onChange={(event) => setItemNoteTemporal(event.target.value.toUpperCase())}
+              placeholder="Escribe la nota especial"
+              className="app-textarea"
+              autoCorrect="off"
+              autoCapitalize="characters"
+            />
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={cerrarNotaArticulo} className="app-button-ghost">
+                Cerrar
+              </button>
+              <button type="button" onClick={guardarNotaArticulo} className="app-button-primary">
                 Aceptar
               </button>
             </div>

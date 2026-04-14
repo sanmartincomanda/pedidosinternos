@@ -357,7 +357,10 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                               <div className="text-base font-black uppercase text-slate-900">{item.producto}</div>
                               {item.nota ? (
                                 <div className="mt-2 rounded-[16px] border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-                                  {item.nota}
+                                  <div className="mb-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-amber-700">
+                                    Nota especial
+                                  </div>
+                                  <div>{item.nota}</div>
                                 </div>
                               ) : null}
                             </div>
