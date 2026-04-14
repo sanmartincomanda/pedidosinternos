@@ -1,0 +1,9 @@
+{
+  "appId": "com.pedidosinternos.app",
+  "appName": "Pedidos Internos",
+  "webDir": "out",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}

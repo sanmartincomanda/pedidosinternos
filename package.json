@@ -5,10 +5,16 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:web": "next build",
+    "android:sync": "npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:build": "npm run build:web && npm run android:sync",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3",
     "firebase": "^12.9.0",
     "next": "16.1.6",
     "react": "19.2.3",
@@ -16,9 +22,11 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.4.3",
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4",
+    "typescript": "^6.0.2"
   }
 }

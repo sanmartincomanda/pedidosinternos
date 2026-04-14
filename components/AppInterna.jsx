@@ -182,6 +182,39 @@ export default function AppInterna() {
   }, [config]);
 
   useEffect(() => {
+    const configRef = ref(db, "configuracion");
+
+    const unsubscribe = onValue(
+      configRef,
+      (snapshot) => {
+        const data = snapshot.val();
+
+        if (!data) {
+          setConfig(INITIAL_CONFIG);
+          return;
+        }
+
+        setConfig({
+          ...INITIAL_CONFIG,
+          ...data,
+          personalCocina: data.personalCocina || INITIAL_CONFIG.personalCocina,
+          personalTransporte: data.personalTransporte || INITIAL_CONFIG.personalTransporte,
+          productos: data.productos || [],
+        });
+      },
+      (error) => {
+        console.error("Error cargando configuracion global:", error);
+      },
+    );
+
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!user) return;
 
     const pedidosRef = ref(db, "pedidos_internos");
@@ -261,6 +294,7 @@ export default function AppInterna() {
     pedidos,
     config,
   };
+  const isFormularioView = view === "formulario";
 
   if (!user) {
     return (
@@ -387,46 +421,72 @@ export default function AppInterna() {
         />
 
         <div className="relative flex flex-col gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex items-start gap-4">
-              <div
-                className="flex h-14 w-14 items-center justify-center rounded-[20px] text-white shadow-[0_18px_40px_rgba(15,23,42,0.28)]"
-                style={{ background: `linear-gradient(135deg, ${navMeta.color} 0%, #1d4ed8 100%)` }}
-              >
-                {navMeta.icon}
-              </div>
-              <div>
-                <div className="app-chip mb-2 border-white/10 bg-white/5 text-slate-200">{fechaActual}</div>
-                <h1 className="app-title text-3xl font-black text-white">{navMeta.title}</h1>
-                <p className="mt-1 max-w-2xl text-sm text-slate-300 sm:text-base">{navMeta.subtitle}</p>
+          {isFormularioView ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="app-chip w-fit border-white/10 bg-white/5 text-slate-200">{fechaActual}</div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="rounded-[22px] border border-white/10 bg-white/5 px-4 py-3">
+                  <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-400">Sesion</div>
+                  <div className="mt-1 text-lg font-black text-white">{user}</div>
+                </div>
+                <button
+                  onClick={() => {
+                    setUser(null);
+                    setPassword("");
+                    setView("formulario");
+                  }}
+                  className="app-button-ghost whitespace-nowrap text-sm"
+                >
+                  {Icons.logout}
+                  Salir
+                </button>
               </div>
             </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex items-start gap-4">
+                  <div
+                    className="flex h-14 w-14 items-center justify-center rounded-[20px] text-white shadow-[0_18px_40px_rgba(15,23,42,0.28)]"
+                    style={{ background: `linear-gradient(135deg, ${navMeta.color} 0%, #1d4ed8 100%)` }}
+                  >
+                    {navMeta.icon}
+                  </div>
+                  <div>
+                    <div className="app-chip mb-2 border-white/10 bg-white/5 text-slate-200">{fechaActual}</div>
+                    <h1 className="app-title text-3xl font-black text-white">{navMeta.title}</h1>
+                    <p className="mt-1 max-w-2xl text-sm text-slate-300 sm:text-base">{navMeta.subtitle}</p>
+                  </div>
+                </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="rounded-[22px] border border-white/10 bg-white/5 px-4 py-3">
-                <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-400">Sesion</div>
-                <div className="mt-1 text-lg font-black text-white">{user}</div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="rounded-[22px] border border-white/10 bg-white/5 px-4 py-3">
+                    <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-400">Sesion</div>
+                    <div className="mt-1 text-lg font-black text-white">{user}</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setUser(null);
+                      setPassword("");
+                      setView("formulario");
+                    }}
+                    className="app-button-ghost whitespace-nowrap text-sm"
+                  >
+                    {Icons.logout}
+                    Salir
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={() => {
-                  setUser(null);
-                  setPassword("");
-                  setView("formulario");
-                }}
-                className="app-button-ghost whitespace-nowrap text-sm"
-              >
-                {Icons.logout}
-                Salir
-              </button>
-            </div>
-          </div>
 
-          <div className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-4 ${view === "formulario" ? "hidden sm:grid" : ""}`}>
-            <MetricCard label="Pedidos visibles" value={stats.total} accent="#38bdf8" helper="Todo lo relacionado contigo" />
-            <MetricCard label="Activos" value={stats.activos} accent="#818cf8" helper="Pendientes de cerrar" />
-            <MetricCard label="Standby" value={stats.standby} accent="#f59e0b" helper="Entrega programada" />
-            <MetricCard label="Listos" value={stats.listos} accent="#22c55e" helper="Esperando despacho" />
-          </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label="Pedidos visibles" value={stats.total} accent="#38bdf8" helper="Todo lo relacionado contigo" />
+                <MetricCard label="Activos" value={stats.activos} accent="#818cf8" helper="Pendientes de cerrar" />
+                <MetricCard label="Standby" value={stats.standby} accent="#f59e0b" helper="Entrega programada" />
+                <MetricCard label="Listos" value={stats.listos} accent="#22c55e" helper="Esperando despacho" />
+              </div>
+            </>
+          )}
         </div>
       </header>
 
