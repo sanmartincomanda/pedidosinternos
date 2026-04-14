@@ -378,7 +378,7 @@ export default function AppInterna() {
 
   return (
     <div className="app-shell page-enter">
-      <header className="app-panel sticky top-4 z-40 overflow-hidden px-4 py-4 sm:px-6">
+      <header className="app-panel overflow-hidden px-4 py-4 sm:px-6">
         <div
           className="absolute inset-0 opacity-40"
           style={{
@@ -421,7 +421,7 @@ export default function AppInterna() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className={`grid gap-3 sm:grid-cols-2 xl:grid-cols-4 ${view === "formulario" ? "hidden sm:grid" : ""}`}>
             <MetricCard label="Pedidos visibles" value={stats.total} accent="#38bdf8" helper="Todo lo relacionado contigo" />
             <MetricCard label="Activos" value={stats.activos} accent="#818cf8" helper="Pendientes de cerrar" />
             <MetricCard label="Standby" value={stats.standby} accent="#f59e0b" helper="Entrega programada" />
@@ -455,6 +455,7 @@ export default function AppInterna() {
           {view === "formulario" ? (
             <Formulario
               user={sharedProps.user}
+              pedidos={sharedProps.pedidos}
               setView={setView}
               sucursales={SUCURSALES_REGISTRADAS.map((item) => item.nombre).filter((name) => name !== user)}
               productosCSV={config.productos || []}
