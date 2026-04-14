@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../firebase';
 import { ref, onValue } from "firebase/database";
+import { formatOrderNumber } from "@/lib/orderUtils";
 
 // Iconos SVG
 const Icons = {
@@ -267,6 +268,18 @@ export default function Historial({ user, pedidos }) {
         .card-enter { animation: slideIn 0.4s ease-out forwards; }
         .btn-hover { transition: all 0.2s ease; }
         .btn-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+        @media (max-width: 768px) {
+          .history-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .history-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+          }
+          .history-table {
+            min-width: 620px;
+          }
+        }
       `}</style>
 
       {/* Header */}
@@ -643,7 +656,7 @@ export default function Historial({ user, pedidos }) {
                   : `No hay envíos para ${sucursalFiltro} en esta fecha`}
               </p>
               <p style={{ margin: '8px 0 0 0', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
-                Los pedidos deben estar marcados como "Enviado" o "Recibido Conforme"
+                Los pedidos deben estar marcados como Enviado o Recibido Conforme
               </p>
             </div>
           ) : (
@@ -651,13 +664,14 @@ export default function Historial({ user, pedidos }) {
               <div style={{
                 background: 'rgba(0,0,0,0.3)',
                 borderRadius: '16px',
-                overflow: 'hidden',
+                overflowX: 'auto',
+                overflowY: 'hidden',
                 border: '1px solid rgba(255,255,255,0.1)'
               }}>
                 {/* Header de tabla */}
-                <div style={{
+                <div className="history-table" style={{
                   display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                  gridTemplateColumns: 'minmax(220px, 2fr) minmax(80px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)',
                   gap: '16px',
                   padding: '16px 20px',
                   background: 'rgba(16, 185, 129, 0.2)',
@@ -681,9 +695,10 @@ export default function Historial({ user, pedidos }) {
                     return (
                       <div
                         key={index}
+                        className="history-table"
                         style={{
                           display: 'grid',
-                          gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                          gridTemplateColumns: 'minmax(220px, 2fr) minmax(80px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)',
                           gap: '16px',
                           padding: '16px 20px',
                           borderBottom: '1px solid rgba(255,255,255,0.05)',
@@ -735,9 +750,9 @@ export default function Historial({ user, pedidos }) {
                 </div>
 
                 {/* Footer */}
-                <div style={{
+                <div className="history-table" style={{
                   display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                  gridTemplateColumns: 'minmax(220px, 2fr) minmax(80px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)',
                   gap: '16px',
                   padding: '20px',
                   background: 'rgba(16, 185, 129, 0.15)',
@@ -778,7 +793,7 @@ export default function Historial({ user, pedidos }) {
               }}>
                 <span>ℹ️</span>
                 El archivo Excel contendrá CLAVE (formato TEXTO) y CANTIDAD. 
-                La columna CLAVE lleva apostrofo (') para forzar formato texto en Excel.
+                La columna CLAVE lleva un prefijo para forzar formato texto en Excel.
               </div>
             </>
           )}
@@ -882,7 +897,7 @@ export default function Historial({ user, pedidos }) {
                 No has enviado productos en esta fecha
               </p>
               <p style={{ margin: '8px 0 0 0', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
-                Los pedidos deben estar marcados como "Enviado" o "Recibido Conforme"
+                Los pedidos deben estar marcados como Enviado o Recibido Conforme
               </p>
             </div>
           ) : (
@@ -1192,9 +1207,9 @@ export default function Historial({ user, pedidos }) {
           </p>
         </div>
       ) : (
-        <div style={{
+        <div className="history-grid" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(500px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
           gap: '20px'
         }}>
           {pedidosMostrar.map((pedido, index) => {
@@ -1259,7 +1274,7 @@ export default function Historial({ user, pedidos }) {
                 )}
 
                 {/* Header */}
-                <div style={{
+                <div className="history-header" style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'flex-start',
@@ -1291,7 +1306,7 @@ export default function Historial({ user, pedidos }) {
                       fontWeight: 800,
                       color: 'white'
                     }}>
-                      Pedido #{pedido.id}
+                      Pedido {formatOrderNumber(pedido)}
                     </h3>
                     <p style={{
                       margin: '4px 0 0 0',

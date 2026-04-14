@@ -1,29 +1,147 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { ref, set, onValue, off } from "firebase/database";
 
-// Iconos SVG
+import React, { useEffect, useState } from "react";
+import { db } from "../firebase";
+import { off, onValue, ref, set } from "firebase/database";
+
 const Icons = {
-  settings: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
-  chef: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 4h12M6 4v16a2 2 0 002 2h8a2 2 0 002-2V4M6 4L4 2m16 2l2-2M12 14v6m-4-4l4 4 4-4"/></svg>,
-  truck: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>,
-  plus: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
-  trash: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
-  save: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
-  user: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-  upload: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-  file: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
-  download: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-  table: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/><line x1="15" y1="9" x2="15" y2="21"/></svg>,
-  cloud: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>,
-  sync: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+  settings: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" />
+    </svg>
+  ),
+  chef: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M7 10h10v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V10Z" />
+      <path d="M6 10a4 4 0 1 1 2-7 4.6 4.6 0 0 1 8 2 3.5 3.5 0 1 1 1 6" />
+    </svg>
+  ),
+  truck: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 7h11v8H3z" />
+      <path d="M14 10h4l3 3v2h-7z" />
+      <circle cx="7.5" cy="18" r="2" />
+      <circle cx="17.5" cy="18" r="2" />
+    </svg>
+  ),
+  plus: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+  trash: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  ),
+  save: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M4 4h12l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4Z" />
+      <path d="M8 4v5h8V4M8 22v-7h8v7" />
+    </svg>
+  ),
+  user: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20 21a8 8 0 0 0-16 0" />
+      <circle cx="12" cy="8" r="4" />
+    </svg>
+  ),
+  upload: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 3v12M7 8l5-5 5 5" />
+      <path d="M5 21h14" />
+    </svg>
+  ),
+  file: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" />
+      <path d="M14 3v6h6M8 13h8M8 17h5" />
+    </svg>
+  ),
+  download: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 3v12M7 10l5 5 5-5" />
+      <path d="M5 21h14" />
+    </svg>
+  ),
+  table: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18M3 15h18M9 9v12M15 9v12" />
+    </svg>
+  ),
+  cloud: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20 17.5a4.5 4.5 0 0 0-.8-8.9A6 6 0 0 0 7.3 7.1 4 4 0 0 0 6 15h14Z" />
+    </svg>
+  ),
+  sync: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 2v6h-6M3 22v-6h6" />
+      <path d="M20 8A8 8 0 0 0 6.3 5.3L3 8M4 16a8 8 0 0 0 13.7 2.7L21 16" />
+    </svg>
+  ),
 };
 
-export default function Configuracion({ config, setConfig }) {
-  const [activeTab, setActiveTab] = useState('cocina');
-  const [nuevoNombre, setNuevoNombre] = useState('');
-  const [mensaje, setMensaje] = useState('');
+function FieldLabel({ icon, label }) {
+  return (
+    <label className="app-label flex items-center gap-2">
+      <span className="text-slate-400">{icon}</span>
+      <span>{label}</span>
+    </label>
+  );
+}
+
+function StatCard({ label, value, helper, accent }) {
+  return (
+    <div
+      className="app-card-soft p-4"
+      style={{
+        borderColor: `${accent}38`,
+        background: `linear-gradient(135deg, ${accent}16 0%, rgba(8,24,46,0.72) 100%)`,
+      }}
+    >
+      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-300">{label}</div>
+      <div className="mt-2 text-2xl font-black text-white">{value}</div>
+      {helper ? <div className="mt-1 text-sm text-slate-300/80">{helper}</div> : null}
+    </div>
+  );
+}
+
+function PersonCard({ name, accent, icon, onDelete }) {
+  return (
+    <div
+      className="app-card-soft flex items-center justify-between gap-3 p-4"
+      style={{
+        borderColor: `${accent}38`,
+        background: `linear-gradient(135deg, ${accent}12 0%, rgba(15,30,53,0.58) 100%)`,
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <div
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+          style={{ background: `linear-gradient(135deg, ${accent} 0%, rgba(15,23,42,0.85) 100%)` }}
+        >
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-black text-white">{name}</div>
+        </div>
+      </div>
+
+      <button type="button" onClick={onDelete} className="app-icon-button text-rose-200">
+        {Icons.trash}
+      </button>
+    </div>
+  );
+}
+
+export default function Configuracion({ setConfig }) {
+  const [activeTab, setActiveTab] = useState("cocina");
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [mensaje, setMensaje] = useState(null);
   const [cocinaLocal, setCocinaLocal] = useState([]);
   const [transporteLocal, setTransporteLocal] = useState([]);
   const [productosCSV, setProductosCSV] = useState([]);
@@ -32,144 +150,144 @@ export default function Configuracion({ config, setConfig }) {
   const [dragActive, setDragActive] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Cargar configuración desde Firebase al montar
-  useEffect(() => {
-    const configRef = ref(db, 'configuracion');
-    
-    const unsubscribe = onValue(configRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        setCocinaLocal(data.personalCocina || []);
-        setTransporteLocal(data.personalTransporte || []);
-        setProductosCSV(data.productos || []);
-        
-        // Actualizar también el prop config si existe
-        if (setConfig) {
-          setConfig(data);
-        }
-      } else {
-        // Si no hay datos en Firebase, inicializar vacío
-        setCocinaLocal([]);
-        setTransporteLocal([]);
-        setProductosCSV([]);
-      }
-    }, (error) => {
-      console.error("Error cargando configuración:", error);
-      setMensaje('⚠️ Error al cargar configuración de Firebase');
-      setTimeout(() => setMensaje(''), 3000);
-    });
+  const mostrarMensaje = (type, text, duration = 3200) => {
+    setMensaje({ type, text });
+    if (duration > 0) {
+      setTimeout(() => setMensaje(null), duration);
+    }
+  };
 
-    return () => off(configRef, 'value', unsubscribe);
+  useEffect(() => {
+    const configRef = ref(db, "configuracion");
+
+    const unsubscribe = onValue(
+      configRef,
+      (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          setCocinaLocal(data.personalCocina || []);
+          setTransporteLocal(data.personalTransporte || []);
+          setProductosCSV(data.productos || []);
+          if (setConfig) setConfig(data);
+        } else {
+          setCocinaLocal([]);
+          setTransporteLocal([]);
+          setProductosCSV([]);
+        }
+      },
+      (error) => {
+        console.error("Error cargando configuracion:", error);
+        mostrarMensaje("error", "Error al cargar configuracion desde Firebase.", 4000);
+      },
+    );
+
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      } else {
+        off(configRef);
+      }
+    };
   }, [setConfig]);
 
-  // Guardar configuración en Firebase
   const guardarConfiguracion = async () => {
     setGuardando(true);
-    
+
     try {
       const nuevaConfig = {
         personalCocina: cocinaLocal,
         personalTransporte: transporteLocal,
         productos: productosCSV,
-        ultimaActualizacion: new Date().toISOString()
+        ultimaActualizacion: new Date().toISOString(),
       };
-      
-      // Guardar en Firebase
-      await set(ref(db, 'configuracion'), nuevaConfig);
-      
-      setMensaje('✅ Configuración guardada en Firebase');
-      setTimeout(() => setMensaje(''), 3000);
+
+      await set(ref(db, "configuracion"), nuevaConfig);
+      mostrarMensaje("success", "Configuracion guardada en Firebase.");
     } catch (error) {
       console.error("Error guardando:", error);
-      setMensaje('❌ Error al guardar: ' + error.message);
-      setTimeout(() => setMensaje(''), 5000);
+      mostrarMensaje("error", `No se pudo guardar: ${error.message}`, 5000);
     } finally {
       setGuardando(false);
     }
   };
 
-  // ========== FUNCIONES CSV DE PRODUCTOS ==========
-
   const procesarCSV = (contenido) => {
-    const lineas = contenido.split('\n').filter(l => l.trim() !== '');
+    const lineas = contenido.split("\n").filter((linea) => linea.trim() !== "");
     const productos = [];
-    
+
     let inicio = 0;
-    const primeraLinea = lineas[0].toUpperCase();
-    if (primeraLinea.includes('CLAVE') || primeraLinea.includes('PRODUCTO') || primeraLinea.includes('NOMBRE')) {
+    const primeraLinea = (lineas[0] || "").toUpperCase();
+    if (primeraLinea.includes("CLAVE") || primeraLinea.includes("PRODUCTO") || primeraLinea.includes("NOMBRE")) {
       inicio = 1;
     }
-    
-    for (let i = inicio; i < lineas.length; i++) {
+
+    for (let i = inicio; i < lineas.length; i += 1) {
       const linea = lineas[i].trim();
       if (!linea) continue;
-      
-      const partes = linea.includes(';') ? linea.split(';') : linea.split(',');
-      
-      if (partes.length >= 2) {
-        const clave = partes[0].trim().toUpperCase();
-        const nombre = partes[1].trim().toUpperCase();
-        
-        if (clave && nombre) {
-          productos.push({ clave, nombre });
-        }
+
+      const partes = linea.includes(";") ? linea.split(";") : linea.split(",");
+      if (partes.length < 2) continue;
+
+      const clave = partes[0].trim().toUpperCase();
+      const nombre = partes[1].trim().toUpperCase();
+
+      if (clave && nombre) {
+        productos.push({ clave, nombre });
       }
     }
-    
+
     return productos;
   };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
+  const handleFileUpload = (event) => {
+    const file = event.target.files?.[0];
     if (!file) return;
-    
-    if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
-      setMensaje('⚠️ El archivo debe ser .csv o .txt');
-      setTimeout(() => setMensaje(''), 3000);
+
+    if (!file.name.endsWith(".csv") && !file.name.endsWith(".txt")) {
+      mostrarMensaje("error", "El archivo debe ser .csv o .txt.");
       return;
     }
-    
+
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const contenido = event.target.result;
-      const productos = procesarCSV(contenido);
-      
+    reader.onload = (loadEvent) => {
+      const contenido = loadEvent.target?.result;
+      const productos = procesarCSV(contenido || "");
+
       if (productos.length === 0) {
-        setMensaje('⚠️ No se encontraron productos válidos en el archivo');
-        setTimeout(() => setMensaje(''), 3000);
+        mostrarMensaje("error", "No se encontraron productos validos en el archivo.");
         return;
       }
-      
+
       setPreviewCSV(productos);
       setMostrarPreview(true);
-      setMensaje(`📄 Archivo cargado: ${productos.length} productos encontrados`);
+      mostrarMensaje("info", `${productos.length} productos listos para importar.`);
     };
     reader.readAsText(file);
   };
 
   const confirmarImportacion = () => {
-    const clavesExistentes = new Set(productosCSV.map(p => p.clave));
-    const nuevosProductos = previewCSV.filter(p => !clavesExistentes.has(p.clave));
-    const actualizados = previewCSV.filter(p => clavesExistentes.has(p.clave));
-    
+    const clavesExistentes = new Set(productosCSV.map((producto) => producto.clave));
+    const nuevosProductos = previewCSV.filter((producto) => !clavesExistentes.has(producto.clave));
+    const actualizados = previewCSV.filter((producto) => clavesExistentes.has(producto.clave));
+
     const productosCombinados = [
-      ...productosCSV.map(p => {
-        const actualizado = actualizados.find(a => a.clave === p.clave);
-        return actualizado || p;
-      }),
-      ...nuevosProductos
+      ...productosCSV.map((producto) => actualizados.find((item) => item.clave === producto.clave) || producto),
+      ...nuevosProductos,
     ].sort((a, b) => a.nombre.localeCompare(b.nombre));
-    
+
     setProductosCSV(productosCombinados);
     setMostrarPreview(false);
     setPreviewCSV([]);
-    
-    const msg = nuevosProductos.length > 0 || actualizados.length > 0
-      ? `✅ Importados: ${nuevosProductos.length} nuevos, ${actualizados.length} actualizados`
-      : 'ℹ️ No hay cambios (todos los productos ya existían)';
-    
-    setMensaje(msg);
-    setTimeout(() => setMensaje(''), 4000);
+
+    if (nuevosProductos.length > 0 || actualizados.length > 0) {
+      mostrarMensaje(
+        "success",
+        `Importacion completada: ${nuevosProductos.length} nuevos y ${actualizados.length} actualizados.`,
+        4000,
+      );
+    } else {
+      mostrarMensaje("info", "No hubo cambios porque todos los productos ya existian.", 4000);
+    }
   };
 
   const cancelarImportacion = () => {
@@ -178,735 +296,334 @@ export default function Configuracion({ config, setConfig }) {
   };
 
   const descargarPlantilla = () => {
-    const contenido = 'CLAVE,PRODUCTO\nBIS-001,BISTEC DE RES\nBIS-002,BISTEC DE CERDO\nPOL-001,POLLO ENTERO\n';
-    const blob = new Blob([contenido], { type: 'text/csv' });
+    const contenido = "CLAVE,PRODUCTO\nBIS-001,BISTEC DE RES\nBIS-002,BISTEC DE CERDO\nPOL-001,POLLO ENTERO\n";
+    const blob = new Blob([contenido], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'plantilla_productos.csv';
-    a.click();
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "plantilla_productos.csv";
+    link.click();
     window.URL.revokeObjectURL(url);
   };
 
   const eliminarProducto = (index) => {
-    setProductosCSV(productosCSV.filter((_, i) => i !== index));
+    setProductosCSV((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
+  const handleDrag = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.type === "dragenter" || event.type === "dragover") {
       setDragActive(true);
-    } else if (e.type === 'dragleave') {
+    } else if (event.type === "dragleave") {
       setDragActive(false);
     }
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
     setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      const input = { target: { files: [file] } };
-      handleFileUpload(input);
+
+    if (event.dataTransfer.files && event.dataTransfer.files[0]) {
+      handleFileUpload({ target: { files: [event.dataTransfer.files[0]] } });
     }
   };
 
-  // ========== FUNCIONES PERSONAL ==========
-
   const agregarPersona = (tipo) => {
-    if (!nuevoNombre.trim()) return;
-    
-    const nombreFormateado = nuevoNombre.trim();
-    
-    if (tipo === 'cocina') {
-      if (cocinaLocal.includes(nombreFormateado)) {
-        setMensaje('⚠️ Esta persona ya existe en cocina');
-        setTimeout(() => setMensaje(''), 3000);
+    const nombre = nuevoNombre.trim();
+    if (!nombre) return;
+
+    if (tipo === "cocina") {
+      if (cocinaLocal.includes(nombre)) {
+        mostrarMensaje("error", "Esa persona ya existe en cocina.");
         return;
       }
-      setCocinaLocal([...cocinaLocal, nombreFormateado]);
+      setCocinaLocal((prev) => [...prev, nombre]);
     } else {
-      if (transporteLocal.includes(nombreFormateado)) {
-        setMensaje('⚠️ Esta persona ya existe en transporte');
-        setTimeout(() => setMensaje(''), 3000);
+      if (transporteLocal.includes(nombre)) {
+        mostrarMensaje("error", "Esa persona ya existe en transporte.");
         return;
       }
-      setTransporteLocal([...transporteLocal, nombreFormateado]);
+      setTransporteLocal((prev) => [...prev, nombre]);
     }
-    
-    setNuevoNombre('');
-    setMensaje('');
+
+    setNuevoNombre("");
   };
 
   const eliminarPersona = (tipo, index) => {
-    if (tipo === 'cocina') {
-      setCocinaLocal(cocinaLocal.filter((_, i) => i !== index));
+    if (tipo === "cocina") {
+      setCocinaLocal((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
     } else {
-      setTransporteLocal(transporteLocal.filter((_, i) => i !== index));
+      setTransporteLocal((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
     }
   };
 
-  const handleKeyDown = (e, tipo) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
+  const handleKeyDown = (event, tipo) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
       agregarPersona(tipo);
     }
   };
 
-  return (
-    <div style={{ animation: 'slideIn 0.4s ease-out' }}>
-      <style>{`
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .card-enter { animation: slideIn 0.4s ease-out forwards; }
-        .fade-in { animation: fadeIn 0.3s ease-out; }
-        .btn-hover { transition: all 0.2s ease; }
-        .btn-hover:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
-        .drag-active { border-color: #3b82f6 !important; background: rgba(59, 130, 246, 0.1) !important; }
-        .spin { animation: spin 1s linear infinite; }
-      `}</style>
+  const messageStyles =
+    mensaje?.type === "success"
+      ? "border-emerald-400/35 bg-emerald-400/12 text-emerald-100"
+      : mensaje?.type === "error"
+        ? "border-rose-400/35 bg-rose-500/12 text-rose-100"
+        : "border-sky-400/30 bg-sky-400/12 text-sky-100";
 
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '24px',
-        flexWrap: 'wrap',
-        gap: '16px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #64748b 0%, #475569 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 10px 25px rgba(100, 116, 139, 0.4)',
-            color: 'white'
-          }}>
-            {Icons.settings}
-          </div>
+  return (
+    <div className="page-enter space-y-5">
+      <section className="app-panel p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: 'white' }}>
-              Configuración
-            </h1>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
-              Gestión de personal y catálogo de productos • Firebase
+            <div className="app-chip mb-3 border-white/10 bg-white/5 text-slate-200">
+              {Icons.settings}
+              Panel administrativo
+            </div>
+            <h2 className="app-title text-3xl font-black text-white">Configuracion lista para usar en movil</h2>
+            <p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">
+              Administra personal y catalogo con bloques mas comodos, manteniendo sincronizacion en tiempo real con Firebase.
             </p>
           </div>
-        </div>
 
-        <button
-          onClick={guardarConfiguracion}
-          disabled={guardando}
-          className="btn-hover"
-          style={{
-            padding: '14px 24px',
-            borderRadius: '12px',
-            border: 'none',
-            background: guardando ? '#9ca3af' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            color: 'white',
-            fontWeight: 800,
-            fontSize: '14px',
-            cursor: guardando ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            boxShadow: guardando ? 'none' : '0 8px 20px rgba(16, 185, 129, 0.4)',
-            opacity: guardando ? 0.7 : 1
-          }}
-        >
-          {guardando ? (
-            <>
-              <span className="spin">{Icons.sync}</span>
-              Guardando...
-            </>
-          ) : (
-            <>
-              {Icons.cloud}
-              Guardar en Firebase
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Mensaje */}
-      {mensaje && (
-        <div className="fade-in" style={{
-          padding: '16px 20px',
-          borderRadius: '12px',
-          marginBottom: '20px',
-          background: mensaje.includes('✅') ? 'rgba(16, 185, 129, 0.2)' : 
-                       mensaje.includes('⚠️') || mensaje.includes('❌') ? 'rgba(239, 68, 68, 0.2)' : 
-                       'rgba(59, 130, 246, 0.2)',
-          border: `1px solid ${mensaje.includes('✅') ? 'rgba(16, 185, 129, 0.4)' : 
-                               mensaje.includes('⚠️') || mensaje.includes('❌') ? 'rgba(239, 68, 68, 0.4)' : 
-                               'rgba(59, 130, 246, 0.4)'}`,
-          color: mensaje.includes('✅') ? '#34d399' : 
-                 mensaje.includes('⚠️') || mensaje.includes('❌') ? '#f87171' : '#60a5fa',
-          fontWeight: 700,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          {mensaje}
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        marginBottom: '24px'
-      }}>
-        {[
-          { key: 'cocina', label: 'Cocina', icon: Icons.chef, color: '#f97316' },
-          { key: 'transporte', label: 'Transporte', icon: Icons.truck, color: '#6366f1' },
-          { key: 'productos', label: 'Catálogo Productos', icon: Icons.table, color: '#3b82f6' }
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            style={{
-              flex: 1,
-              padding: '16px 20px',
-              borderRadius: '12px',
-              border: 'none',
-              background: activeTab === tab.key 
-                ? `linear-gradient(135deg, ${tab.color} 0%, ${tab.color}dd 100%)` 
-                : 'rgba(255,255,255,0.05)',
-              color: activeTab === tab.key ? 'white' : 'rgba(255,255,255,0.6)',
-              fontWeight: 700,
-              fontSize: '14px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              transition: 'all 0.2s',
-              boxShadow: activeTab === tab.key ? `0 8px 20px ${tab.color}40` : 'none'
-            }}
-          >
-            {tab.icon}
-            {tab.label}
+          <button type="button" onClick={guardarConfiguracion} disabled={guardando} className="app-button-primary whitespace-nowrap sm:w-auto">
+            {guardando ? Icons.sync : Icons.cloud}
+            {guardando ? "Guardando..." : "Guardar en Firebase"}
           </button>
-        ))}
-      </div>
+        </div>
 
-      {/* CONTENIDO: COCINA */}
-      {activeTab === 'cocina' && (
-        <div className="card-enter" style={{
-          background: 'rgba(255,255,255,0.05)',
-          borderRadius: '24px',
-          padding: '32px',
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>
-          <h2 style={{
-            margin: '0 0 8px 0',
-            fontSize: '20px',
-            fontWeight: 800,
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px'
-          }}>
-            <span style={{ color: '#f97316' }}>{Icons.chef}</span>
-            Personal de Cocina
-          </h2>
-          <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
-            Gestiona quién puede preparar pedidos • {cocinaLocal.length} personas registradas
-          </p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Cocina" value={cocinaLocal.length} helper="Personas registradas" accent="#fb923c" />
+          <StatCard label="Transporte" value={transporteLocal.length} helper="Repartidores activos" accent="#818cf8" />
+          <StatCard label="Catalogo" value={productosCSV.length} helper="Productos cargados" accent="#38bdf8" />
+          <StatCard label="Estado" value={guardando ? "Sync" : "Listo"} helper="Firebase conectado" accent="#22c55e" />
+        </div>
 
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
-            <div style={{ flex: 1, position: 'relative' }}>
-              <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
-                {Icons.user}
-              </div>
+        {mensaje ? (
+          <div className={`mt-5 rounded-[22px] border px-4 py-4 text-sm font-semibold ${messageStyles}`}>{mensaje.text}</div>
+        ) : null}
+      </section>
+
+      <section className="app-panel p-3 sm:p-4">
+        <div className="app-tab-row">
+          {[
+            { key: "cocina", label: "Cocina", icon: Icons.chef, color: "#fb923c" },
+            { key: "transporte", label: "Transporte", icon: Icons.truck, color: "#818cf8" },
+            { key: "productos", label: "Catalogo", icon: Icons.table, color: "#38bdf8" },
+          ].map((tab) => (
+            <button
+              type="button"
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className="app-chip min-h-[50px] whitespace-nowrap px-4 transition-all"
+              style={{
+                borderColor: activeTab === tab.key ? `${tab.color}55` : "rgba(255,255,255,0.08)",
+                background: activeTab === tab.key ? `${tab.color}1a` : "rgba(255,255,255,0.04)",
+                color: activeTab === tab.key ? "#ffffff" : "#cbd5e1",
+              }}
+            >
+              <span style={{ color: tab.color }}>{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {activeTab === "cocina" ? (
+        <section className="app-panel space-y-5 p-5 sm:p-6">
+          <div>
+            <h3 className="app-title text-2xl font-black text-white">Personal de cocina</h3>
+            <p className="mt-1 text-sm text-slate-300">Quienes pueden tomar un pedido y pasarlo a preparacion.</p>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div>
+              <FieldLabel icon={Icons.user} label="Nombre del preparador" />
               <input
                 type="text"
                 value={nuevoNombre}
-                onChange={(e) => setNuevoNombre(e.target.value)}
-                onKeyDown={(e) => handleKeyDown(e, 'cocina')}
-                placeholder="Nombre del preparador..."
-                style={{
-                  width: '100%',
-                  padding: '14px 16px 14px 48px',
-                  background: 'rgba(255,255,255,0.1)',
-                  border: '2px solid rgba(255,255,255,0.2)',
-                  borderRadius: '12px',
-                  color: 'white',
-                  fontSize: '15px',
-                  fontWeight: 600
-                }}
+                onChange={(event) => setNuevoNombre(event.target.value)}
+                onKeyDown={(event) => handleKeyDown(event, "cocina")}
+                placeholder="Ej. Juan Perez"
+                className="app-input"
               />
             </div>
-            <button
-              onClick={() => agregarPersona('cocina')}
-              className="btn-hover"
-              style={{
-                padding: '14px 24px',
-                borderRadius: '12px',
-                border: 'none',
-                background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                color: 'white',
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              {Icons.plus}
-              Agregar
-            </button>
+
+            <div className="flex items-end">
+              <button type="button" onClick={() => agregarPersona("cocina")} className="app-button-secondary sm:w-auto">
+                {Icons.plus}
+                Agregar
+              </button>
+            </div>
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-            gap: '12px'
-          }}>
-            {cocinaLocal.map((nombre, index) => (
-              <div key={index} style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '16px 20px',
-                background: 'rgba(249, 115, 22, 0.1)',
-                borderRadius: '12px',
-                border: '2px solid rgba(249, 115, 22, 0.2)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, color: '#fdba74', fontSize: '15px' }}>
-                  <span style={{ fontSize: '24px' }}>👨‍🍳</span>
-                  {nombre}
-                </div>
-                <button
-                  onClick={() => eliminarPersona('cocina', index)}
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '10px',
-                    border: 'none',
-                    background: 'rgba(239, 68, 68, 0.2)',
-                    color: '#ef4444',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  {Icons.trash}
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {cocinaLocal.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
-              No hay personal de cocina registrado
+          {cocinaLocal.length === 0 ? (
+            <div className="app-empty px-4 py-10 text-center text-sm">Todavia no hay personal de cocina registrado.</div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {cocinaLocal.map((nombre, index) => (
+                <PersonCard
+                  key={nombre}
+                  name={nombre}
+                  accent="#fb923c"
+                  icon={Icons.chef}
+                  onDelete={() => eliminarPersona("cocina", index)}
+                />
+              ))}
             </div>
           )}
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      {/* CONTENIDO: TRANSPORTE */}
-      {activeTab === 'transporte' && (
-        <div className="card-enter" style={{
-          background: 'rgba(255,255,255,0.05)',
-          borderRadius: '24px',
-          padding: '32px',
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>
-          <h2 style={{
-            margin: '0 0 8px 0',
-            fontSize: '20px',
-            fontWeight: 800,
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px'
-          }}>
-            <span style={{ color: '#6366f1' }}>{Icons.truck}</span>
-            Personal de Transporte
-          </h2>
-          <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
-            Gestiona quién puede transportar pedidos • {transporteLocal.length} personas registradas
-          </p>
+      {activeTab === "transporte" ? (
+        <section className="app-panel space-y-5 p-5 sm:p-6">
+          <div>
+            <h3 className="app-title text-2xl font-black text-white">Personal de transporte</h3>
+            <p className="mt-1 text-sm text-slate-300">Quienes pueden despachar y mover pedidos entre sucursales.</p>
+          </div>
 
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
-            <div style={{ flex: 1, position: 'relative' }}>
-              <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }}>
-                {Icons.user}
-              </div>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div>
+              <FieldLabel icon={Icons.user} label="Nombre del repartidor" />
               <input
                 type="text"
                 value={nuevoNombre}
-                onChange={(e) => setNuevoNombre(e.target.value)}
-                onKeyDown={(e) => handleKeyDown(e, 'transporte')}
-                placeholder="Nombre del transportista..."
-                style={{
-                  width: '100%',
-                  padding: '14px 16px 14px 48px',
-                  background: 'rgba(255,255,255,0.1)',
-                  border: '2px solid rgba(255,255,255,0.2)',
-                  borderRadius: '12px',
-                  color: 'white',
-                  fontSize: '15px',
-                  fontWeight: 600
-                }}
+                onChange={(event) => setNuevoNombre(event.target.value)}
+                onKeyDown={(event) => handleKeyDown(event, "transporte")}
+                placeholder="Ej. Carlos Lopez"
+                className="app-input"
               />
             </div>
-            <button
-              onClick={() => agregarPersona('transporte')}
-              className="btn-hover"
-              style={{
-                padding: '14px 24px',
-                borderRadius: '12px',
-                border: 'none',
-                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
-                color: 'white',
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              {Icons.plus}
-              Agregar
-            </button>
+
+            <div className="flex items-end">
+              <button type="button" onClick={() => agregarPersona("transporte")} className="app-button-secondary sm:w-auto">
+                {Icons.plus}
+                Agregar
+              </button>
+            </div>
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
-            gap: '12px'
-          }}>
-            {transporteLocal.map((nombre, index) => (
-              <div key={index} style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '16px 20px',
-                background: 'rgba(99, 102, 241, 0.1)',
-                borderRadius: '12px',
-                border: '2px solid rgba(99, 102, 241, 0.2)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, color: '#a5b4fc', fontSize: '15px' }}>
-                  <span style={{ fontSize: '24px' }}>🛵</span>
-                  {nombre}
-                </div>
-                <button
-                  onClick={() => eliminarPersona('transporte', index)}
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '10px',
-                    border: 'none',
-                    background: 'rgba(239, 68, 68, 0.2)',
-                    color: '#ef4444',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                >
-                  {Icons.trash}
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {transporteLocal.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
-              No hay personal de transporte registrado
+          {transporteLocal.length === 0 ? (
+            <div className="app-empty px-4 py-10 text-center text-sm">Todavia no hay personal de transporte registrado.</div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {transporteLocal.map((nombre, index) => (
+                <PersonCard
+                  key={nombre}
+                  name={nombre}
+                  accent="#818cf8"
+                  icon={Icons.truck}
+                  onDelete={() => eliminarPersona("transporte", index)}
+                />
+              ))}
             </div>
           )}
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      {/* CONTENIDO: PRODUCTOS (CSV) */}
-      {activeTab === 'productos' && (
-        <div className="card-enter" style={{
-          background: 'rgba(255,255,255,0.05)',
-          borderRadius: '24px',
-          padding: '32px',
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>
-          <h2 style={{
-            margin: '0 0 8px 0',
-            fontSize: '20px',
-            fontWeight: 800,
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px'
-          }}>
-            <span style={{ color: '#3b82f6' }}>{Icons.table}</span>
-            Catálogo de Productos
-          </h2>
-          <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
-            Importa productos masivamente desde CSV (Clave, Producto) • {productosCSV.length} productos
-          </p>
+      {activeTab === "productos" ? (
+        <section className="app-panel space-y-5 p-5 sm:p-6">
+          <div>
+            <h3 className="app-title text-2xl font-black text-white">Catalogo de productos</h3>
+            <p className="mt-1 text-sm text-slate-300">Importa claves y nombres desde CSV o administra el listado actual desde el telefono.</p>
+          </div>
 
-          {/* Área de carga de archivo */}
-          {!mostrarPreview && (
+          {!mostrarPreview ? (
             <>
               <div
                 onDragEnter={handleDrag}
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
+                className="rounded-[28px] border-2 border-dashed p-6 text-center transition-all sm:p-8"
                 style={{
-                  border: `2px dashed ${dragActive ? '#3b82f6' : 'rgba(255,255,255,0.3)'}`,
-                  borderRadius: '16px',
-                  padding: '40px',
-                  textAlign: 'center',
-                  background: dragActive ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255,255,255,0.02)',
-                  transition: 'all 0.2s',
-                  marginBottom: '24px'
+                  borderColor: dragActive ? "rgba(56,189,248,0.68)" : "rgba(148,163,184,0.26)",
+                  background: dragActive ? "rgba(56,189,248,0.10)" : "rgba(255,255,255,0.03)",
                 }}
               >
-                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📁</div>
-                <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 700, color: 'white' }}>
-                  Arrastra tu archivo CSV aquí
-                </h3>
-                <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>
-                  o haz clic para seleccionar archivo
-                </p>
-                <input
-                  type="file"
-                  accept=".csv,.txt"
-                  onChange={handleFileUpload}
-                  style={{ display: 'none' }}
-                  id="csv-upload"
-                />
-                <label
-                  htmlFor="csv-upload"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '14px 28px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                    color: 'white',
-                    fontWeight: 800,
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    boxShadow: '0 8px 20px rgba(59, 130, 246, 0.4)'
-                  }}
-                >
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-sky-400/12 text-sky-200">
                   {Icons.upload}
-                  Seleccionar Archivo
+                </div>
+                <h4 className="mt-4 text-xl font-black text-white">Arrastra el archivo aqui</h4>
+                <p className="mt-2 text-sm text-slate-300">Acepta .csv y .txt con formato CLAVE,PRODUCTO.</p>
+
+                <input id="csv-upload" type="file" accept=".csv,.txt" onChange={handleFileUpload} className="hidden" />
+                <label htmlFor="csv-upload" className="app-button-primary mt-5 inline-flex sm:w-auto">
+                  {Icons.file}
+                  Seleccionar archivo
                 </label>
               </div>
 
-              {/* Botón descargar plantilla */}
-              <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                <button
-                  onClick={descargarPlantilla}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '12px 20px',
-                    borderRadius: '10px',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    background: 'transparent',
-                    color: 'rgba(255,255,255,0.7)',
-                    fontWeight: 600,
-                    fontSize: '13px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {Icons.download}
-                  Descargar plantilla CSV
-                </button>
-              </div>
+              <button type="button" onClick={descargarPlantilla} className="app-button-ghost sm:w-auto">
+                {Icons.download}
+                Descargar plantilla
+              </button>
 
-              {/* Lista actual de productos */}
-              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 700, color: 'white' }}>
-                Productos en catálogo: {productosCSV.length}
-              </h3>
-
-              {productosCSV.length > 0 ? (
-                <div style={{
-                  maxHeight: '300px',
-                  overflowY: 'auto',
-                  background: 'rgba(0,0,0,0.2)',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(255,255,255,0.1)'
-                }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{ position: 'sticky', top: 0, background: 'rgba(59, 130, 246, 0.2)' }}>
-                      <tr>
-                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>Clave</th>
-                        <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>Producto</th>
-                        <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', width: '60px' }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {productosCSV.map((prod, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                          <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 700, color: '#60a5fa' }}>{prod.clave}</td>
-                          <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: 'white' }}>{prod.nombre}</td>
-                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                            <button
-                              onClick={() => eliminarProducto(idx)}
-                              style={{
-                                width: '28px',
-                                height: '28px',
-                                borderRadius: '6px',
-                                border: 'none',
-                                background: 'rgba(239, 68, 68, 0.2)',
-                                color: '#ef4444',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                            >
-                              {Icons.trash}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              {productosCSV.length === 0 ? (
+                <div className="app-empty px-4 py-10 text-center text-sm">
+                  No hay productos cargados. Importa un archivo para comenzar.
                 </div>
               ) : (
-                <div style={{ textAlign: 'center', padding: '40px', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
-                  No hay productos en el catálogo. Importa un CSV para comenzar.
+                <div className="space-y-3">
+                  {productosCSV.map((producto, index) => (
+                    <div key={`${producto.clave}-${index}`} className="app-card-soft flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="app-chip mb-2 w-fit border-sky-400/25 bg-sky-400/10 text-sky-200">{producto.clave}</div>
+                        <div className="truncate text-base font-black text-white">{producto.nombre}</div>
+                      </div>
+
+                      <button type="button" onClick={() => eliminarProducto(index)} className="app-icon-button text-rose-200">
+                        {Icons.trash}
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </>
-          )}
-
-          {/* Preview de importación */}
-          {mostrarPreview && (
-            <div className="fade-in">
-              <div style={{
-                background: 'rgba(245, 158, 11, 0.1)',
-                borderRadius: '12px',
-                padding: '16px 20px',
-                marginBottom: '20px',
-                border: '1px solid rgba(245, 158, 11, 0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-              }}>
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#fbbf24', marginBottom: '4px' }}>
-                    📋 Vista previa de importación
-                  </div>
-                  <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)' }}>
-                    {previewCSV.length} productos listos para importar
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <button
-                    onClick={cancelarImportacion}
-                    style={{
-                      padding: '12px 20px',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      background: 'transparent',
-                      color: 'rgba(255,255,255,0.7)',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={confirmarImportacion}
-                    className="btn-hover"
-                    style={{
-                      padding: '12px 24px',
-                      borderRadius: '10px',
-                      border: 'none',
-                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      color: 'white',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      boxShadow: '0 8px 20px rgba(16, 185, 129, 0.4)'
-                    }}
-                  >
-                    {Icons.save}
-                    Confirmar Importación
-                  </button>
+          ) : (
+            <div className="space-y-5">
+              <div className="rounded-[24px] border border-amber-300/28 bg-amber-400/10 p-4">
+                <div className="text-sm font-black uppercase tracking-[0.16em] text-amber-200">Vista previa</div>
+                <div className="mt-2 text-base text-amber-50">
+                  {previewCSV.length} productos listos para entrar al catalogo.
                 </div>
               </div>
 
-              <div style={{
-                maxHeight: '400px',
-                overflowY: 'auto',
-                background: 'rgba(0,0,0,0.2)',
-                borderRadius: '12px',
-                border: '1px solid rgba(255,255,255,0.1)'
-              }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead style={{ position: 'sticky', top: 0, background: 'rgba(245, 158, 11, 0.2)' }}>
-                    <tr>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>Clave</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: 800, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>Producto</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewCSV.map((prod, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 700, color: '#fbbf24' }}>{prod.clave}</td>
-                        <td style={{ padding: '12px 16px', fontSize: '14px', fontWeight: 600, color: 'white' }}>{prod.nombre}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-3">
+                {previewCSV.map((producto) => (
+                  <div key={`${producto.clave}-${producto.nombre}`} className="app-card-soft flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="app-chip mb-2 w-fit border-amber-300/28 bg-amber-400/12 text-amber-100">{producto.clave}</div>
+                      <div className="text-base font-black text-white">{producto.nombre}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <button type="button" onClick={cancelarImportacion} className="app-button-ghost">
+                  Cancelar
+                </button>
+                <button type="button" onClick={confirmarImportacion} className="app-button-primary">
+                  {Icons.save}
+                  Confirmar importacion
+                </button>
               </div>
             </div>
           )}
-        </div>
-      )}
+        </section>
+      ) : null}
 
-      {/* Info adicional */}
-      <div style={{
-        marginTop: '24px',
-        padding: '20px',
-        background: 'rgba(59, 130, 246, 0.1)',
-        borderRadius: '12px',
-        border: '1px solid rgba(59, 130, 246, 0.2)',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: '12px'
-      }}>
-        <span style={{ fontSize: '20px' }}>💡</span>
-        <div>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd', marginBottom: '4px' }}>
-            Sincronización con Firebase
-          </div>
-          <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>
-            Los datos se guardan automáticamente en Firebase Realtime Database. 
-            Todos los usuarios verán los cambios en tiempo real. 
-            El CSV debe tener formato: CLAVE,PRODUCTO (ej: BIS-001,BISTEC DE RES).
-          </div>
-        </div>
-      </div>
+      <section className="rounded-[26px] border border-sky-400/24 bg-sky-400/10 p-5 text-sm text-sky-100">
+        <div className="mb-2 font-black uppercase tracking-[0.16em] text-sky-200">Notas operativas</div>
+        <p className="leading-6">
+          Los cambios se reflejan en Firebase para todos los usuarios. El archivo CSV debe venir como CLAVE,PRODUCTO;
+          por ejemplo: <span className="font-black">BIS-001,BISTEC DE RES</span>.
+        </p>
+      </section>
     </div>
   );
 }

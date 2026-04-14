@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { ref, update, push, set } from "firebase/database";
+import { formatOrderNumber, getLocalDateString } from "@/lib/orderUtils";
 
 // Iconos SVG estilo delivery
 const Icons = {
@@ -84,8 +85,9 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
   const [modalRecepcion, setModalRecepcion] = useState(null);
   const [pesosEditados, setPesosEditados] = useState({});
   const [modoEdicion, setModoEdicion] = useState(false);
-  const [notificaciones, setNotificaciones] = useState([]);
+  const [, setNotificaciones] = useState([]);
   const [modalNotificacion, setModalNotificacion] = useState(null);
+  const hoy = getLocalDateString();
 
   // Escuchar notificaciones para esta sucursal
   useEffect(() => {
@@ -107,20 +109,22 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
 
   // Filtrar pedidos relevantes para el usuario
   const pedidosRelevantes = pedidos.filter(p => 
-    p.sucursalOrigen === user || p.sucursalDestino === user
+    (p.sucursalOrigen === user || p.sucursalDestino === user) &&
+    !['RECIBIDO_CONFORME', 'ENTREGADO'].includes(p.estado) &&
+    (
+      p.estado === 'STANDBY_ENTREGA' ||
+      p.fechaPedido === hoy ||
+      p.fechaEntrega === hoy
+    )
   );
 
   // Aplicar filtros de pestaña
   const filtrarPedidos = () => {
     switch (filtro) {
       case 'activos':
-        return pedidosRelevantes.filter(p => 
-          !['RECIBIDO_CONFORME', 'ENTREGADO'].includes(p.estado)
-        );
+        return pedidosRelevantes.filter(p => p.estado !== 'STANDBY_ENTREGA');
       case 'enviados':
         return pedidosRelevantes.filter(p => p.estado === 'ENVIADO');
-      case 'recibidos':
-        return pedidosRelevantes.filter(p => p.estado === 'RECIBIDO_CONFORME');
       case 'standby':
         return pedidosRelevantes.filter(p => p.estado === 'STANDBY_ENTREGA');
       case 'todos':
@@ -244,12 +248,12 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
     // Enviar notificación a la sucursal origen
     const notificacion = {
       tipo: 'DIFERENCIA_PESO',
-      pedidoId: modalRecepcion.id,
+      pedidoId: formatOrderNumber(modalRecepcion),
       pedidoFirebaseId: modalRecepcion.firebaseId,
       sucursalOrigen: modalRecepcion.sucursalOrigen,
       sucursalDestino: user,
       fecha: new Date().toISOString(),
-      mensaje: `La sucursal ${user} reportó diferencias en el pedido #${modalRecepcion.id}`,
+      mensaje: `La sucursal ${user} reportó diferencias en el pedido ${formatOrderNumber(modalRecepcion)}`,
       diferencias: diferencias,
       leida: false
     };
@@ -293,9 +297,8 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
 
   // Contadores para tabs
   const contadores = {
-    activos: pedidosRelevantes.filter(p => !['RECIBIDO_CONFORME', 'ENTREGADO'].includes(p.estado)).length,
+    activos: pedidosRelevantes.filter(p => p.estado !== 'STANDBY_ENTREGA').length,
     enviados: pedidosRelevantes.filter(p => p.estado === 'ENVIADO').length,
-    recibidos: pedidosRelevantes.filter(p => p.estado === 'RECIBIDO_CONFORME').length,
     standby: pedidosRelevantes.filter(p => p.estado === 'STANDBY_ENTREGA').length,
     todos: pedidosRelevantes.length
   };
@@ -373,6 +376,29 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
         .toast {
           animation: slideInRight 0.3s ease;
         }
+        .filters-scroll {
+          scrollbar-width: none;
+        }
+        .filters-scroll::-webkit-scrollbar {
+          display: none;
+        }
+        @media (max-width: 768px) {
+          .status-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .status-header,
+          .status-meta,
+          .action-stack {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          .status-table {
+            min-width: 540px;
+          }
+          .modal-grid {
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) !important;
+          }
+        }
         @keyframes slideInRight {
           from { transform: translateX(100%); opacity: 0; }
           to { transform: translateX(0); opacity: 1; }
@@ -414,7 +440,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
       </div>
 
       {/* Tabs de filtro */}
-      <div style={{
+      <div className="filters-scroll" style={{
         display: 'flex',
         gap: '8px',
         marginBottom: '24px',
@@ -424,7 +450,6 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
         {[
           { key: 'activos', label: 'En Proceso', count: contadores.activos, color: '#3b82f6' },
           { key: 'enviados', label: 'Enviados', count: contadores.enviados, color: '#6366f1' },
-          { key: 'recibidos', label: 'Recibidos', count: contadores.recibidos, color: '#059669' },
           { key: 'standby', label: 'Standby', count: contadores.standby, color: '#f59e0b' },
           { key: 'todos', label: 'Todos', count: contadores.todos, color: '#10b981' }
         ].map((tab) => (
@@ -603,7 +628,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                   {modoEdicion ? 'Reportar Diferencia' : 'Recibir Pedido'}
                 </h2>
                 <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
-                  Pedido #{modalRecepcion.id} de {modalRecepcion.sucursalOrigen}
+                  Pedido {formatOrderNumber(modalRecepcion)} de {modalRecepcion.sucursalOrigen}
                 </p>
               </div>
               <button
@@ -653,16 +678,17 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
             )}
 
             {/* Tabla de productos */}
-            <div style={{
+            <div className="status-table" style={{
               background: '#f8fafc',
               borderRadius: '16px',
-              overflow: 'hidden',
+              overflowX: 'auto',
+              overflowY: 'hidden',
               marginBottom: '24px',
               border: '2px solid #e2e8f0'
             }}>
-              <div style={{
+              <div className="status-table" style={{
                 display: 'grid',
-                gridTemplateColumns: modoEdicion ? '1fr 100px 120px' : '1fr 100px 100px',
+                gridTemplateColumns: modoEdicion ? 'minmax(180px, 1fr) 90px 110px' : 'minmax(180px, 1fr) 90px 90px',
                 gap: '12px',
                 padding: '16px',
                 background: '#f1f5f9',
@@ -687,9 +713,10 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                 return (
                   <div 
                     key={idx}
+                    className="status-table"
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: modoEdicion ? '1fr 100px 120px' : '1fr 100px 100px',
+                      gridTemplateColumns: modoEdicion ? 'minmax(180px, 1fr) 90px 110px' : 'minmax(180px, 1fr) 90px 90px',
                       gap: '12px',
                       padding: '16px',
                       borderBottom: idx < modalRecepcion.items.length - 1 ? '1px solid #e2e8f0' : 'none',
@@ -891,7 +918,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                     : 'Enviar Pedido'}
                 </h2>
                 <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
-                  Pedido #{pedidos.find(p => p.firebaseId === modalRepartidor)?.id}
+                  Pedido {formatOrderNumber(pedidos.find(p => p.firebaseId === modalRepartidor))}
                 </p>
               </div>
               <button
@@ -941,7 +968,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
 
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
               gap: '12px',
               marginBottom: '24px'
             }}>
@@ -1032,9 +1059,9 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
           </p>
         </div>
       ) : (
-        <div style={{
+        <div className="status-grid" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(600px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
           gap: '24px'
         }}>
           {pedidosFiltrados.map((pedido, index) => {
@@ -1077,7 +1104,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
 
                 <div style={{ padding: '0', position: 'relative' }}>
                   {/* Header */}
-                  <div style={{
+                  <div className="status-header" style={{
                     background: 'rgba(255,255,255,0.95)',
                     padding: '24px 28px',
                     borderBottom: `3px solid ${config.border}`,
@@ -1089,7 +1116,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <div style={{
-                        width: '56px',
+                        minWidth: '72px',
                         height: '56px',
                         borderRadius: '16px',
                         background: config.color,
@@ -1097,11 +1124,12 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        padding: '0 12px',
                         boxShadow: `0 8px 20px ${config.color}50`,
-                        fontSize: '24px',
+                        fontSize: '18px',
                         fontWeight: 900
                       }}>
-                        #{pedido.id}
+                        {formatOrderNumber(pedido)}
                       </div>
                       <div>
                         <div style={{
@@ -1195,7 +1223,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                     )}
 
                     {/* Info de preparación y envío */}
-                    <div style={{
+                    <div className="status-meta" style={{
                       display: 'flex',
                       flexWrap: 'wrap',
                       gap: '12px',
@@ -1323,14 +1351,15 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                       <div style={{
                         background: 'white',
                         borderRadius: '16px',
-                        overflow: 'hidden',
+                        overflowX: 'auto',
+                        overflowY: 'hidden',
                         boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                         marginBottom: '20px',
                         border: '2px solid rgba(16, 185, 129, 0.3)'
                       }}>
-                        <div style={{
+                        <div className="status-table" style={{
                           display: 'grid',
-                          gridTemplateColumns: '1fr 100px 100px',
+                          gridTemplateColumns: 'minmax(180px, 1fr) 90px 90px',
                           gap: '12px',
                           padding: '12px 16px',
                           background: 'rgba(16, 185, 129, 0.1)',
@@ -1347,9 +1376,10 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                         {pedido.items.map((item, idx) => (
                           <div 
                             key={idx}
+                            className="status-table"
                             style={{
                               display: 'grid',
-                              gridTemplateColumns: '1fr 100px 100px',
+                              gridTemplateColumns: 'minmax(180px, 1fr) 90px 90px',
                               gap: '12px',
                               padding: '12px 16px',
                               borderBottom: idx < pedido.items.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
@@ -1423,7 +1453,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
 
                       {/* Botón Cambiar Repartidor (solo si es ENVIADO y soy el destino) */}
                       {status === 'ENVIADO' && esDestino && (
-                        <div style={{ display: 'flex', gap: '12px' }}>
+                        <div className="action-stack" style={{ display: 'flex', gap: '12px' }}>
                           <button
                             onClick={() => {
                               setModalRepartidor(pedido.firebaseId);

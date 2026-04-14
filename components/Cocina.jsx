@@ -1,112 +1,170 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
+
+import React, { useEffect, useState } from "react";
+import { db } from "../firebase";
 import { ref, update } from "firebase/database";
+import { formatOrderNumber } from "@/lib/orderUtils";
 
-// Iconos SVG estilo delivery
 const Icons = {
-  chef: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 4h12M6 4v16a2 2 0 002 2h8a2 2 0 002-2V4M6 4L4 2m16 2l2-2M12 14v6m-4-4l4 4 4-4"/></svg>,
-  clock: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
-  check: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>,
-  fire: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>,
-  alert: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
-  package: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
-  scale: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>,
-  close: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-  calendar: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+  chef: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M7 10h10v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V10Z" />
+      <path d="M6 10a4 4 0 1 1 2-7 4.6 4.6 0 0 1 8 2 3.5 3.5 0 1 1 1 6" />
+    </svg>
+  ),
+  clock: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  ),
+  check: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="m5 12 4 4L19 6" />
+    </svg>
+  ),
+  fire: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 2s4 4.4 4 8.3A4 4 0 1 1 8 11c0-2.3 1-4.1 2.4-5.6" />
+    </svg>
+  ),
+  alert: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 9v4M12 17h.01" />
+      <path d="m10.3 3.9-8 13.9A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.2l-8-13.9a2 2 0 0 0-3.4 0Z" />
+    </svg>
+  ),
+  package: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="m3 7 9-4 9 4-9 4-9-4ZM3 7v10l9 4 9-4V7M12 11v10" />
+    </svg>
+  ),
+  scale: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M6 6h12M7 6l-3 13h16L17 6M9 10a3 3 0 0 0 6 0" />
+    </svg>
+  ),
+  close: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M6 6 18 18M6 18 18 6" />
+    </svg>
+  ),
+  calendar: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M8 2v4M16 2v4M3 10h18" />
+    </svg>
+  ),
 };
 
-// Configuración de estados visuales
 const STATUS_CONFIG = {
-  'NUEVO': {
-    color: '#3b82f6',
-    bg: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
-    border: '#60a5fa',
+  NUEVO: {
+    color: "#38bdf8",
+    border: "#38bdf8",
     icon: Icons.clock,
-    label: 'Nuevo Pedido',
-    pulse: true,
-    shadow: '0 20px 40px -10px rgba(59, 130, 246, 0.3)'
+    label: "Nuevo",
+    glow: "rgba(56,189,248,0.16)",
   },
-  'STANDBY_ENTREGA': {
-    color: '#f59e0b',
-    bg: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-    border: '#fbbf24',
+  STANDBY_ENTREGA: {
+    color: "#f59e0b",
+    border: "#f59e0b",
     icon: Icons.alert,
-    label: 'Standby - Entrega Programada',
-    pulse: true,
-    shadow: '0 20px 40px -10px rgba(245, 158, 11, 0.3)'
+    label: "Standby",
+    glow: "rgba(245,158,11,0.14)",
   },
-  'PREPARACION': {
-    color: '#f97316',
-    bg: 'linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%)',
-    border: '#fb923c',
+  PREPARACION: {
+    color: "#fb923c",
+    border: "#fb923c",
     icon: Icons.fire,
-    label: 'En Preparación',
-    pulse: false,
-    shadow: '0 20px 40px -10px rgba(249, 115, 22, 0.3)'
+    label: "En preparacion",
+    glow: "rgba(251,146,60,0.14)",
   },
-  'LISTO': {
-    color: '#10b981',
-    bg: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)',
-    border: '#34d399',
+  LISTO: {
+    color: "#22c55e",
+    border: "#22c55e",
     icon: Icons.check,
-    label: 'Listo para Enviar',
-    pulse: false,
-    shadow: '0 20px 40px -10px rgba(16, 185, 129, 0.3)'
-  }
+    label: "Listo",
+    glow: "rgba(34,197,94,0.14)",
+  },
 };
+
+function StatCard({ label, value, helper, accent }) {
+  return (
+    <div
+      className="app-card-soft p-4"
+      style={{
+        borderColor: `${accent}38`,
+        background: `linear-gradient(135deg, ${accent}16 0%, rgba(8,24,46,0.72) 100%)`,
+      }}
+    >
+      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-300">{label}</div>
+      <div className="mt-2 text-2xl font-black text-white">{value}</div>
+      {helper ? <div className="mt-1 text-sm text-slate-300/80">{helper}</div> : null}
+    </div>
+  );
+}
 
 export default function Cocina({ user, pedidos, personalCocina }) {
   const [modalPreparador, setModalPreparador] = useState(null);
   const [preparadorSeleccionado, setPreparadorSeleccionado] = useState(null);
   const [animatingCards, setAnimatingCards] = useState(new Set());
-  const [pesosEditando, setPesosEditando] = useState({}); // firebaseId_itemIdx: valor
+  const [pesosEditando, setPesosEditando] = useState({});
+  const [now, setNow] = useState(() => new Date().getTime());
 
-  // Filtrar pedidos: solo los que van a esta sucursal Y no están enviados
-  const pedidosEnProceso = pedidos.filter(p => 
-    p.sucursalDestino === user && 
-    p.estado !== 'ENVIADO' &&
-    p.estado !== 'ENTREGADO'
+  const pedidosEnProceso = pedidos.filter(
+    (pedido) =>
+      pedido.sucursalDestino === user &&
+      pedido.estado !== "ENVIADO" &&
+      pedido.estado !== "ENTREGADO",
   );
 
   const actualizarPesoReal = (firebaseId, itemIdx, valor) => {
     const key = `${firebaseId}_${itemIdx}`;
-    setPesosEditando({ ...pesosEditando, [key]: valor });
+    setPesosEditando((prev) => ({ ...prev, [key]: valor }));
   };
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date().getTime()), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const guardarPesoReal = (firebaseId, itemIdx) => {
     const key = `${firebaseId}_${itemIdx}`;
     const valor = pesosEditando[key];
     if (valor === undefined) return;
 
-    const pedido = pedidos.find(p => p.firebaseId === firebaseId);
+    const pedido = pedidos.find((item) => item.firebaseId === firebaseId);
     if (!pedido) return;
 
-    const nuevosItems = [...pedido.items];
-    nuevosItems[itemIdx].pesoReal = valor;
+    const nuevosItems = [...(pedido.items || [])];
+    nuevosItems[itemIdx] = { ...nuevosItems[itemIdx], pesoReal: valor };
 
     update(ref(db, `pedidos_internos/${firebaseId}`), {
-      items: nuevosItems
+      items: nuevosItems,
     });
 
-    // Limpiar del estado temporal
-    const newPesos = { ...pesosEditando };
-    delete newPesos[key];
-    setPesosEditando(newPesos);
+    setPesosEditando((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   };
 
   const iniciarPreparacion = (firebaseId, preparador) => {
-    setAnimatingCards(prev => new Set([...prev, firebaseId]));
-    
+    setAnimatingCards((prev) => new Set([...prev, firebaseId]));
+
     update(ref(db, `pedidos_internos/${firebaseId}`), {
-      estado: 'PREPARACION',
+      estado: "PREPARACION",
       preparadoPor: preparador,
-      timestampPreparacion: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-      timestamp: Date.now()
+      timestampPreparacion: new Date().toLocaleTimeString("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      timestamp: new Date().getTime(),
     });
 
     setTimeout(() => {
-      setAnimatingCards(prev => {
+      setAnimatingCards((prev) => {
         const next = new Set(prev);
         next.delete(firebaseId);
         return next;
@@ -118,29 +176,28 @@ export default function Cocina({ user, pedidos, personalCocina }) {
   };
 
   const marcarListo = (firebaseId) => {
-    const pedido = pedidos.find(p => p.firebaseId === firebaseId);
+    const pedido = pedidos.find((item) => item.firebaseId === firebaseId);
     if (!pedido) return;
 
-    // Verificar que todos los pesos reales estén llenos
-    const todosLosPesosLlenos = pedido.items.every(item => 
-      item.pesoReal && item.pesoReal !== ""
-    );
-
+    const todosLosPesosLlenos = (pedido.items || []).every((item) => item.pesoReal && item.pesoReal !== "");
     if (!todosLosPesosLlenos) {
-      alert("⚠️ Debes ingresar el PESO REAL de todos los productos antes de marcar como listo");
+      alert("Debes ingresar el peso real de todos los productos antes de marcar como listo.");
       return;
     }
 
-    setAnimatingCards(prev => new Set([...prev, firebaseId]));
+    setAnimatingCards((prev) => new Set([...prev, firebaseId]));
 
     update(ref(db, `pedidos_internos/${firebaseId}`), {
-      estado: 'LISTO',
-      timestampListo: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-      timestamp: Date.now()
+      estado: "LISTO",
+      timestampListo: new Date().toLocaleTimeString("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      timestamp: new Date().getTime(),
     });
 
     setTimeout(() => {
-      setAnimatingCards(prev => {
+      setAnimatingCards((prev) => {
         const next = new Set(prev);
         next.delete(firebaseId);
         return next;
@@ -149,579 +206,267 @@ export default function Cocina({ user, pedidos, personalCocina }) {
   };
 
   const getTimeElapsed = (timestamp) => {
-    if (!timestamp) return '';
-    const diff = Math.floor((Date.now() - timestamp) / 60000);
-    if (diff < 1) return 'Ahora';
+    if (!timestamp) return "Ahora";
+    const diff = Math.floor((now - timestamp) / 60000);
+    if (diff < 1) return "Ahora";
     if (diff < 60) return `${diff}m`;
     return `${Math.floor(diff / 60)}h ${diff % 60}m`;
   };
 
-  return (
-    <div style={{ animation: 'slideIn 0.4s ease-out' }}>
-      <style>{`
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pulse-ring {
-          0% { transform: scale(1); opacity: 0.5; }
-          50% { transform: scale(1.02); opacity: 0; }
-          100% { transform: scale(1); opacity: 0.5; }
-        }
-        @keyframes modalIn {
-          from { opacity: 0; transform: scale(0.9); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes shake {
-          0%, 100% { transform: rotate(0deg); }
-          25% { transform: rotate(-3deg); }
-          75% { transform: rotate(3deg); }
-        }
-        .card-enter { animation: slideIn 0.4s ease-out forwards; }
-        .pulse-bg { animation: pulse-ring 2s ease-in-out infinite; }
-        .shake-icon { animation: shake 0.5s ease-in-out infinite; }
-        .btn-hover { transition: all 0.2s ease; }
-        .btn-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
-        .card-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .card-transition:hover { transform: translateY(-4px); }
-        .preparador-card { 
-          transition: all 0.2s ease; 
-          cursor: pointer;
-        }
-        .preparador-card:hover { 
-          transform: scale(1.05); 
-          box-shadow: 0 8px 25px rgba(0,0,0,0.15); 
-        }
-        .preparador-card.selected { 
-          background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important; 
-          color: white !important;
-          border-color: #f97316 !important;
-        }
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.7);
-          backdrop-filter: blur(4px);
-          display: flex;
-          alignItems: center;
-          justifyContent: center;
-          z-index: 1000;
-          animation: fadeIn 0.2s ease;
-        }
-        .modal-content {
-          animation: modalIn 0.3s ease;
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-      `}</style>
+  const listos = pedidosEnProceso.filter((pedido) => pedido.estado === "LISTO").length;
+  const standby = pedidosEnProceso.filter((pedido) => pedido.estado === "STANDBY_ENTREGA").length;
+  const preparacion = pedidosEnProceso.filter((pedido) => pedido.estado === "PREPARACION").length;
 
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '24px',
-        flexWrap: 'wrap',
-        gap: '16px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 10px 25px rgba(249, 115, 22, 0.4)',
-            color: 'white'
-          }}>
-            {Icons.chef}
-          </div>
+  return (
+    <div className="page-enter space-y-5">
+      <section className="app-panel p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: 'white' }}>
-              Cocina / CEDI
-            </h1>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
-              {user} • {pedidosEnProceso.length} pedidos activos
+            <div className="app-chip mb-3 border-orange-300/20 bg-orange-400/12 text-orange-100">
+              {Icons.chef}
+              Cocina movil
+            </div>
+            <h2 className="app-title text-3xl font-black text-white">Preparacion pensada para pantalla pequena</h2>
+            <p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">
+              Cada pedido baja a una sola columna y cada producto se maneja como tarjeta para pesar y avanzar rapido.
             </p>
           </div>
-        </div>
-      </div>
 
-      {/* Modal Seleccionar Preparador */}
-      {modalPreparador && (
-        <div 
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
+          <div className="app-chip border-white/10 bg-white/5 text-slate-200">
+            {Icons.clock}
+            {user}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Activos" value={pedidosEnProceso.length} helper="Pedidos visibles" accent="#38bdf8" />
+          <StatCard label="Standby" value={standby} helper="Entrega programada" accent="#f59e0b" />
+          <StatCard label="Preparando" value={preparacion} helper="Con responsable asignado" accent="#fb923c" />
+          <StatCard label="Listos" value={listos} helper="Listos para despacho" accent="#22c55e" />
+        </div>
+      </section>
+
+      {modalPreparador ? (
+        <div
+          className="app-modal"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
               setModalPreparador(null);
               setPreparadorSeleccionado(null);
             }
           }}
         >
-          <div className="modal-content" style={{
-            background: 'white',
-            borderRadius: '24px',
-            padding: '32px',
-            width: '90%',
-            maxWidth: '500px',
-            maxHeight: '90vh',
-            overflow: 'auto',
-            boxShadow: '0 25px 50px rgba(0,0,0,0.3)'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '24px'
-            }}>
+          <div className="app-modal-panel">
+            <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <h2 style={{ margin: '0 0 4px 0', fontSize: '22px', fontWeight: 800, color: '#1e293b' }}>
-                  ¿Quién prepara este pedido?
-                </h2>
-                <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
-                  Pedido #{pedidos.find(p => p.firebaseId === modalPreparador)?.id}
+                <h3 className="app-title text-2xl font-black text-slate-900">Asignar preparador</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Pedido {formatOrderNumber(pedidos.find((item) => item.firebaseId === modalPreparador))}
                 </p>
               </div>
+
               <button
+                type="button"
                 onClick={() => {
                   setModalPreparador(null);
                   setPreparadorSeleccionado(null);
                 }}
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  border: 'none',
-                  background: '#f1f5f9',
-                  color: '#64748b',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
+                className="app-icon-button text-slate-700"
               >
                 {Icons.close}
               </button>
             </div>
 
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '12px',
-              marginBottom: '24px'
-            }}>
+            <div className="grid gap-3 sm:grid-cols-2">
               {personalCocina.map((nombre) => (
                 <button
-                  key={nombre}
                   type="button"
+                  key={nombre}
                   onClick={() => setPreparadorSeleccionado(nombre)}
-                  className={`preparador-card ${preparadorSeleccionado === nombre ? 'selected' : ''}`}
+                  className="rounded-[24px] border p-4 text-left transition-all"
                   style={{
-                    padding: '20px',
-                    borderRadius: '16px',
-                    border: '2px solid',
-                    borderColor: preparadorSeleccionado === nombre ? '#f97316' : '#e2e8f0',
-                    background: preparadorSeleccionado === nombre 
-                      ? 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' 
-                      : '#f8fafc',
-                    color: preparadorSeleccionado === nombre ? 'white' : '#475569',
-                    fontWeight: preparadorSeleccionado === nombre ? 800 : 700,
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '8px'
+                    borderColor: preparadorSeleccionado === nombre ? "#fb923c" : "#cbd5e1",
+                    background:
+                      preparadorSeleccionado === nombre
+                        ? "linear-gradient(135deg, #fb923c 0%, #ea580c 100%)"
+                        : "#f8fafc",
+                    color: preparadorSeleccionado === nombre ? "#ffffff" : "#0f172a",
                   }}
                 >
-                  <span style={{ fontSize: '32px' }}>👨‍🍳</span>
-                  <span>{nombre}</span>
+                  <div className="mb-2 text-sm font-extrabold uppercase tracking-[0.18em] opacity-80">Preparador</div>
+                  <div className="text-lg font-black">{nombre}</div>
                 </button>
               ))}
             </div>
 
             <button
+              type="button"
               onClick={() => {
                 if (preparadorSeleccionado) {
                   iniciarPreparacion(modalPreparador, preparadorSeleccionado);
                 }
               }}
               disabled={!preparadorSeleccionado}
-              style={{
-                width: '100%',
-                padding: '16px',
-                borderRadius: '12px',
-                border: 'none',
-                background: preparadorSeleccionado 
-                  ? 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' 
-                  : '#cbd5e1',
-                color: 'white',
-                fontWeight: 800,
-                fontSize: '16px',
-                cursor: preparadorSeleccionado ? 'pointer' : 'not-allowed',
-                transition: 'all 0.2s',
-                boxShadow: preparadorSeleccionado ? '0 8px 25px rgba(249, 115, 22, 0.4)' : 'none'
-              }}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-[18px] border-none bg-[linear-gradient(135deg,#fb923c_0%,#ea580c_100%)] px-4 py-4 text-base font-black text-white shadow-[0_16px_30px_rgba(234,88,12,0.24)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
             >
-              {preparadorSeleccionado ? `Asignar a ${preparadorSeleccionado}` : 'Selecciona un preparador'}
+              {Icons.chef}
+              {preparadorSeleccionado ? `Asignar a ${preparadorSeleccionado}` : "Selecciona un preparador"}
             </button>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* Lista de Pedidos */}
       {pedidosEnProceso.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '80px 20px',
-          background: 'rgba(255,255,255,0.03)',
-          borderRadius: '24px',
-          border: '2px dashed rgba(255,255,255,0.1)'
-        }}>
-          <div style={{ fontSize: '64px', marginBottom: '16px' }}>🍳</div>
-          <h3 style={{ fontSize: '24px', margin: '0 0 8px 0', color: 'white' }}>No hay pedidos pendientes</h3>
-          <p style={{ margin: 0, color: 'rgba(255,255,255,0.5)' }}>
-            Los nuevos pedidos aparecerán aquí automáticamente
-          </p>
+        <div className="app-empty px-4 py-14 text-center">
+          <div className="text-xl font-black text-white">No hay pedidos pendientes en cocina.</div>
+          <p className="mt-2 text-sm text-slate-300">Los nuevos pedidos apareceran aqui automaticamente.</p>
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(600px, 1fr))',
-          gap: '24px'
-        }}>
-          {pedidosEnProceso.map((pedido, index) => {
-            const status = pedido.estado || 'NUEVO';
-            const config = STATUS_CONFIG[status] || STATUS_CONFIG['NUEVO'];
+        <div className="grid gap-4 xl:grid-cols-2">
+          {pedidosEnProceso.map((pedido) => {
+            const status = pedido.estado || "NUEVO";
+            const config = STATUS_CONFIG[status] || STATUS_CONFIG.NUEVO;
             const isAnimating = animatingCards.has(pedido.firebaseId);
-            const isStandby = status === 'STANDBY_ENTREGA';
-            
-            // Verificar si todos los pesos están llenos
-            const todosPesosLlenos = pedido.items.every(item => 
-              item.pesoReal && item.pesoReal !== ""
-            );
+            const isStandby = status === "STANDBY_ENTREGA";
+            const todosPesosLlenos = (pedido.items || []).every((item) => item.pesoReal && item.pesoReal !== "");
 
             return (
-              <div
+              <article
                 key={pedido.firebaseId}
-                className={`card-enter card-transition ${isAnimating ? 'card-transition' : ''}`}
+                className="app-panel overflow-hidden transition-all"
                 style={{
-                  background: config.bg,
-                  borderRadius: '28px',
-                  border: `4px solid ${config.border}`,
-                  overflow: 'hidden',
-                  position: 'relative',
-                  boxShadow: config.shadow,
-                  transform: isAnimating ? 'scale(0.98)' : 'scale(1)',
-                  opacity: isAnimating ? 0.8 : 1,
-                  animationDelay: `${index * 0.05}s`
+                  borderColor: `${config.border}55`,
+                  boxShadow: `0 24px 60px ${config.glow}`,
+                  transform: isAnimating ? "scale(0.99)" : "scale(1)",
+                  opacity: isAnimating ? 0.82 : 1,
                 }}
               >
-                {/* Pulse animation */}
-                {config.pulse && (
-                  <div
-                    className="pulse-bg"
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      background: config.color,
-                      opacity: 0.15,
-                      pointerEvents: 'none'
-                    }}
-                  />
-                )}
-
-                {/* ALERTA STANDBY DESTACADA */}
-                {isStandby && (
-                  <div style={{
-                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                    color: 'white',
-                    padding: '16px 24px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    fontWeight: 800,
-                    fontSize: '14px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    <span style={{ fontSize: '24px' }}>⏰</span>
-                    <div>
-                      <div style={{ fontSize: '12px', opacity: 0.9 }}>Recuerda entregar pedido</div>
-                      <div style={{ fontSize: '16px' }}>
-                        Entrega programada: {pedido.fechaEntrega}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ padding: '0', position: 'relative' }}>
-                  {/* Header */}
-                  <div style={{
-                    background: 'rgba(255,255,255,0.95)',
-                    padding: '24px 28px',
-                    borderBottom: `3px solid ${config.border}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '20px',
-                    flexWrap: 'wrap'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                      <div 
-                        className={config.pulse ? 'shake-icon' : ''}
-                        style={{
-                          width: '56px',
-                          height: '56px',
-                          borderRadius: '16px',
-                          background: config.color,
-                          color: 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: `0 8px 20px ${config.color}50`,
-                          fontSize: '24px',
-                          fontWeight: 900
-                        }}
-                      >
-                        #{pedido.id}
-                      </div>
+                <div
+                  className="p-5 sm:p-6"
+                  style={{
+                    background:
+                      status === "LISTO"
+                        ? "linear-gradient(135deg, rgba(34,197,94,0.26) 0%, rgba(6,78,59,0.94) 45%, rgba(8,24,46,0.98) 100%)"
+                        : `linear-gradient(135deg, ${config.glow} 0%, rgba(8,24,46,0.96) 60%)`,
+                  }}
+                >
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <div style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 16px',
-                          borderRadius: '20px',
-                          background: config.color,
-                          color: 'white',
-                          fontSize: '12px',
-                          fontWeight: 800,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                          marginBottom: '6px'
-                        }}>
-                          {config.icon}
+                        <div
+                          className="app-chip mb-3"
+                          style={{
+                            borderColor: `${config.border}40`,
+                            background: `${config.border}1a`,
+                            color: "#ffffff",
+                          }}
+                        >
+                          <span style={{ color: config.border }}>{config.icon}</span>
                           {config.label}
                         </div>
-                        <div style={{ 
-                          fontSize: '14px', 
-                          color: '#475569', 
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
-                        }}>
-                          <span style={{ fontSize: '16px' }}>⏱️</span>
-                          {getTimeElapsed(pedido.timestamp)} • {pedido.sucursalOrigen} → {pedido.sucursalDestino}
+                        <h3 className="app-title text-2xl font-black text-white">Pedido {formatOrderNumber(pedido)}</h3>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-200">
+                          <span>{pedido.sucursalOrigen}</span>
+                          <span className="text-slate-500">/</span>
+                          <span>{pedido.sucursalDestino}</span>
+                          <span className="text-slate-500">/</span>
+                          <span>{getTimeElapsed(pedido.timestamp)}</span>
                         </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <span className="app-chip border-white/10 bg-white/8 text-slate-100">
+                          {Icons.calendar}
+                          {pedido.fechaPedido}
+                        </span>
+                        {pedido.preparadoPor ? (
+                          <span className="app-chip border-orange-300/20 bg-orange-400/12 text-orange-100">
+                            {Icons.chef}
+                            {pedido.preparadoPor}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
 
-                    {/* Preparador asignado */}
-                    {pedido.preparadoPor && (
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        padding: '12px 18px',
-                        background: 'white',
-                        borderRadius: '14px',
-                        border: `2px solid ${config.color}30`,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-                      }}>
-                        <span style={{ fontSize: '28px' }}>👨‍🍳</span>
-                        <div>
-                          <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
-                            Preparando
-                          </div>
-                          <div style={{ fontSize: '16px', fontWeight: 800, color: '#1e293b' }}>
-                            {pedido.preparadoPor}
-                          </div>
+                    {isStandby ? (
+                      <div className="rounded-[22px] border border-amber-300/28 bg-amber-400/12 px-4 py-4 text-sm text-amber-100">
+                        <div className="mb-2 flex items-center gap-2 font-black uppercase tracking-[0.16em] text-amber-200">
+                          {Icons.alert}
+                          Entrega programada
+                        </div>
+                        <div>Recuerda liberar este pedido para la fecha {pedido.fechaEntrega}.</div>
+                      </div>
+                    ) : null}
+
+                    {status === "LISTO" ? (
+                      <div className="rounded-[24px] border border-red-400/40 bg-red-500/12 px-4 py-5 text-center shadow-[0_16px_32px_rgba(239,68,68,0.18)]">
+                        <div className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-red-200">Alerta de despacho</div>
+                        <div className="mt-2 text-2xl font-black tracking-[0.08em] text-red-400 sm:text-3xl">
+                          LISTOS PARA ENVIAR
                         </div>
                       </div>
-                    )}
-                  </div>
+                    ) : null}
 
-                  {/* Contenido */}
-                  <div style={{ padding: '24px' }}>
-                    {/* Nota General del Pedido */}
-                    {pedido.notaGeneral && (
-                      <div style={{
-                        background: 'rgba(59, 130, 246, 0.1)',
-                        border: '2px solid rgba(59, 130, 246, 0.3)',
-                        borderRadius: '16px',
-                        padding: '16px 20px',
-                        marginBottom: '20px',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '12px'
-                      }}>
-                        <span style={{ fontSize: '20px' }}>📋</span>
-                        <div>
-                          <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
-                            Nota General del Pedido
-                          </div>
-                          <div style={{ fontSize: '14px', color: '#1e293b', fontWeight: 700, fontStyle: 'italic' }}>
-                            {pedido.notaGeneral}
-                          </div>
-                        </div>
+                    {pedido.notaGeneral ? (
+                      <div className="rounded-[22px] border border-sky-400/24 bg-sky-400/10 px-4 py-4 text-sm text-sky-100">
+                        <div className="mb-2 font-black uppercase tracking-[0.16em] text-sky-200">Nota general</div>
+                        <div>{pedido.notaGeneral}</div>
                       </div>
-                    )}
+                    ) : null}
 
-                    {/* Tabla de Productos */}
-                    <div style={{
-                      background: 'white',
-                      borderRadius: '20px',
-                      overflow: 'hidden',
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                      border: `3px solid ${config.border}60`
-                    }}>
-                      {/* Header de tabla */}
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 100px 140px',
-                        gap: '12px',
-                        padding: '16px 20px',
-                        background: 'rgba(0,0,0,0.03)',
-                        borderBottom: '2px solid rgba(0,0,0,0.05)',
-                        fontSize: '11px',
-                        fontWeight: 800,
-                        color: '#64748b',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
-                      }}>
-                        <div>Producto</div>
-                        <div style={{ textAlign: 'center' }}>Solicitado</div>
-                        <div style={{ textAlign: 'center' }}>Peso Real</div>
-                      </div>
-
-                      {/* Filas */}
-                      {pedido.items.map((item, idx) => {
+                    <div className="space-y-3">
+                      {(pedido.items || []).map((item, idx) => {
                         const pesoKey = `${pedido.firebaseId}_${idx}`;
-                        const pesoEditado = pesosEditando[pesoKey] !== undefined ? pesosEditando[pesoKey] : (item.pesoReal || '');
-                        
+                        const pesoEditado =
+                          pesosEditando[pesoKey] !== undefined ? pesosEditando[pesoKey] : item.pesoReal || "";
+
                         return (
-                          <div 
-                            key={idx}
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: '1fr 100px 140px',
-                              gap: '12px',
-                              padding: '16px 20px',
-                              borderBottom: idx < pedido.items.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
-                              alignItems: 'center',
-                              background: idx % 2 === 0 ? 'white' : 'rgba(0,0,0,0.01)'
-                            }}
-                          >
-                            {/* Producto + Nota Especial */}
-                            <div>
-                              <div style={{
-                                fontSize: '15px',
-                                fontWeight: 800,
-                                color: '#1e293b',
-                                textTransform: 'uppercase',
-                                marginBottom: item.nota ? '8px' : '0'
-                              }}>
-                                {item.producto}
+                          <div key={`${pedido.firebaseId}-${idx}`} className="rounded-[24px] border border-white/10 bg-white/88 p-4 text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.10)]">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="text-base font-black uppercase text-slate-900">{item.producto}</div>
+                                {item.nota ? (
+                                  <div className="mt-2 rounded-[16px] border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                                    {item.nota}
+                                  </div>
+                                ) : null}
                               </div>
-                              
-                              {/* NOTA ESPECIAL POR PRODUCTO - DESTACADA */}
-                              {item.nota && (
-                                <div style={{
-                                  background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                                  border: '2px solid #fbbf24',
-                                  borderRadius: '10px',
-                                  padding: '10px 14px',
-                                  display: 'flex',
-                                  alignItems: 'flex-start',
-                                  gap: '8px',
-                                  marginTop: '6px'
-                                }}>
-                                  <span style={{ fontSize: '16px' }}>⚠️</span>
-                                  <div>
-                                    <div style={{ fontSize: '10px', color: '#d97706', fontWeight: 800, textTransform: 'uppercase' }}>
-                                      Nota Especial
-                                    </div>
-                                    <div style={{ fontSize: '13px', color: '#92400e', fontWeight: 700 }}>
-                                      {item.nota}
-                                    </div>
+
+                              <div className="grid gap-2 sm:min-w-[220px]">
+                                <div className="rounded-[16px] border border-sky-200 bg-sky-50 px-3 py-3">
+                                  <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-sky-700">Solicitado</div>
+                                  <div className="mt-1 text-lg font-black text-sky-900">
+                                    {item.cantidad} {item.unidad}
                                   </div>
                                 </div>
-                              )}
-                            </div>
-
-                            {/* Cantidad Solicitada */}
-                            <div style={{ textAlign: 'center' }}>
-                              <div style={{
-                                fontSize: '18px',
-                                fontWeight: 800,
-                                color: '#3b82f6'
-                              }}>
-                                {item.cantidad}
-                              </div>
-                              <div style={{
-                                fontSize: '11px',
-                                color: '#64748b',
-                                fontWeight: 600,
-                                textTransform: 'uppercase'
-                              }}>
-                                {item.unidad}
                               </div>
                             </div>
 
-                            {/* Peso Real - Input */}
-                            <div>
-                              {status === 'NUEVO' || status === 'STANDBY_ENTREGA' ? (
-                                <div style={{
-                                  padding: '12px',
-                                  background: '#f3f4f6',
-                                  borderRadius: '10px',
-                                  textAlign: 'center',
-                                  color: '#9ca3af',
-                                  fontSize: '12px',
-                                  fontWeight: 700,
-                                  border: '2px dashed #d1d5db'
-                                }}>
-                                  🔒 BLOQUEADO
+                            <div className="mt-3">
+                              {status === "NUEVO" || status === "STANDBY_ENTREGA" ? (
+                                <div className="rounded-[16px] border border-dashed border-slate-300 bg-slate-100 px-3 py-3 text-center text-sm font-bold text-slate-500">
+                                  Peso real se habilita al iniciar preparacion.
                                 </div>
                               ) : (
-                                <div style={{ position: 'relative' }}>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    value={pesoEditado}
-                                    onChange={(e) => actualizarPesoReal(pedido.firebaseId, idx, e.target.value)}
-                                    onBlur={() => guardarPesoReal(pedido.firebaseId, idx)}
-                                    placeholder="0.00"
-                                    style={{
-                                      width: '100%',
-                                      padding: '12px',
-                                      background: pesoEditado ? 'rgba(34, 197, 94, 0.1)' : 'white',
-                                      border: `2px solid ${pesoEditado ? '#22c55e' : '#e5e7eb'}`,
-                                      borderRadius: '10px',
-                                      textAlign: 'center',
-                                      fontSize: '16px',
-                                      fontWeight: 800,
-                                      color: pesoEditado ? '#16a34a' : '#374151',
-                                      transition: 'all 0.2s'
-                                    }}
-                                  />
-                                  <div style={{
-                                    position: 'absolute',
-                                    right: '8px',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    fontSize: '10px',
-                                    color: '#9ca3af',
-                                    fontWeight: 700
-                                  }}>
-                                    lb
+                                <div>
+                                  <div className="mb-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-500">Peso real</div>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={pesoEditado}
+                                      onChange={(event) => actualizarPesoReal(pedido.firebaseId, idx, event.target.value)}
+                                      onBlur={() => guardarPesoReal(pedido.firebaseId, idx)}
+                                      placeholder="0.00"
+                                      className="w-full rounded-[16px] border border-slate-300 bg-white px-4 py-3 pr-12 text-center text-lg font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                                      style={{
+                                        borderColor: pesoEditado ? "#22c55e" : undefined,
+                                        background: pesoEditado ? "#f0fdf4" : "#ffffff",
+                                      }}
+                                    />
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                                      lb
+                                    </span>
                                   </div>
                                 </div>
                               )}
@@ -731,139 +476,64 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                       })}
                     </div>
 
-                    {/* Botones de Acción */}
-                    <div style={{ marginTop: '24px' }}>
-                      {(status === 'NUEVO' || status === 'STANDBY_ENTREGA') && (
+                    <div className="grid gap-3">
+                      {(status === "NUEVO" || status === "STANDBY_ENTREGA") ? (
                         <button
+                          type="button"
                           onClick={() => {
                             setModalPreparador(pedido.firebaseId);
                             setPreparadorSeleccionado(null);
                           }}
-                          className="btn-hover"
-                          style={{
-                            width: '100%',
-                            padding: '18px 24px',
-                            borderRadius: '14px',
-                            border: '2px dashed #f97316',
-                            background: 'rgba(249, 115, 22, 0.1)',
-                            color: '#ea580c',
-                            fontWeight: 800,
-                            fontSize: '16px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '12px',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.target.style.background = 'rgba(249, 115, 22, 0.2)';
-                            e.target.style.borderStyle = 'solid';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.background = 'rgba(249, 115, 22, 0.1)';
-                            e.target.style.borderStyle = 'dashed';
-                          }}
+                          className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-orange-300/40 bg-orange-400/12 px-4 py-4 text-base font-black text-orange-100 transition hover:-translate-y-0.5"
                         >
-                          <span style={{ fontSize: '24px' }}>👨‍🍳</span>
-                          {isStandby ? 'Iniciar Preparación (Standby)' : 'Iniciar Preparación'}
+                          {Icons.chef}
+                          {isStandby ? "Iniciar preparacion de standby" : "Iniciar preparacion"}
                         </button>
-                      )}
+                      ) : null}
 
-                      {status === 'PREPARACION' && (
+                      {status === "PREPARACION" ? (
                         <button
+                          type="button"
                           onClick={() => marcarListo(pedido.firebaseId)}
                           disabled={!todosPesosLlenos}
-                          className="btn-hover"
+                          className="flex w-full items-center justify-center gap-2 rounded-[18px] border-none px-4 py-4 text-base font-black text-white transition"
                           style={{
-                            width: '100%',
-                            padding: '20px 24px',
-                            borderRadius: '14px',
-                            border: 'none',
-                            background: todosPesosLlenos 
-                              ? 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' 
-                              : '#e5e7eb',
-                            color: todosPesosLlenos ? 'white' : '#9ca3af',
-                            fontWeight: 800,
-                            fontSize: '17px',
-                            cursor: todosPesosLlenos ? 'pointer' : 'not-allowed',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '12px',
-                            boxShadow: todosPesosLlenos ? '0 10px 25px rgba(34, 197, 94, 0.4)' : 'none',
-                            transition: 'all 0.2s'
+                            background: todosPesosLlenos
+                              ? "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)"
+                              : "linear-gradient(135deg, rgba(100,116,139,0.9) 0%, rgba(71,85,105,0.9) 100%)",
+                            boxShadow: todosPesosLlenos ? "0 18px 30px rgba(34,197,94,0.24)" : "none",
+                            cursor: todosPesosLlenos ? "pointer" : "not-allowed",
                           }}
                         >
-                          {todosPesosLlenos ? (
-                            <>{Icons.check} Marcar como Listo</>
-                          ) : (
-                            <>🔒 Completa todos los pesos reales</>
-                          )}
-                        </button>
-                      )}
-
-                      {status === 'LISTO' && (
-                        <div style={{
-                          padding: '16px 20px',
-                          background: 'rgba(34, 197, 94, 0.1)',
-                          borderRadius: '12px',
-                          border: '2px solid #22c55e',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '12px',
-                          color: '#16a34a',
-                          fontWeight: 800,
-                          fontSize: '16px'
-                        }}>
                           {Icons.check}
-                          Pedido Listo para Enviar
-                        </div>
-                      )}
-                    </div>
+                          {todosPesosLlenos ? "Marcar como listo" : "Completa todos los pesos"}
+                        </button>
+                      ) : null}
 
-                    {/* Timestamps */}
-                    {pedido.timestampPreparacion && (
-                      <div style={{
-                        marginTop: '16px',
-                        display: 'flex',
-                        gap: '16px',
-                        fontSize: '12px',
-                        color: '#64748b',
-                        fontWeight: 600
-                      }}>
-                        <div style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '6px',
-                          padding: '8px 12px',
-                          background: 'rgba(249, 115, 22, 0.1)',
-                          borderRadius: '8px',
-                          color: '#c2410c'
-                        }}>
-                          <span>🕐</span>
-                          Inicio: {pedido.timestampPreparacion}
+                      {status === "LISTO" ? (
+                        <div className="rounded-[20px] border border-emerald-300/40 bg-emerald-400/18 px-4 py-4 text-center text-base font-black text-emerald-50">
+                          Pedido listo para enviar.
                         </div>
-                        {pedido.timestampListo && (
-                          <div style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: '6px',
-                            padding: '8px 12px',
-                            background: 'rgba(34, 197, 94, 0.1)',
-                            borderRadius: '8px',
-                            color: '#16a34a'
-                          }}>
-                            <span>✅</span>
-                            Listo: {pedido.timestampListo}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      ) : null}
+
+                      {pedido.timestampPreparacion ? (
+                        <div className="flex flex-wrap gap-2">
+                          <span className="app-chip border-orange-300/20 bg-orange-400/12 text-orange-100">
+                            {Icons.clock}
+                            Inicio {pedido.timestampPreparacion}
+                          </span>
+                          {pedido.timestampListo ? (
+                            <span className="app-chip border-emerald-300/20 bg-emerald-400/12 text-emerald-100">
+                              {Icons.check}
+                              Listo {pedido.timestampListo}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
