@@ -55,6 +55,18 @@ const Icons = {
       <path d="M8 2v4M16 2v4M3 10h18" />
     </svg>
   ),
+  expand: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5" />
+      <path d="M3 8 9 2M15 2l6 6M21 16l-6 6M9 22l-6-6" />
+    </svg>
+  ),
+  collapse: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M9 3H3v6M15 3h6v6M21 15v6h-6M9 21H3v-6" />
+      <path d="m3 9 6-6M15 3l6 6M21 15l-6 6M9 21l-6-6" />
+    </svg>
+  ),
 };
 
 const STATUS_CONFIG = {
@@ -110,6 +122,7 @@ export default function Cocina({ user, pedidos, personalCocina }) {
   const [animatingCards, setAnimatingCards] = useState(new Set());
   const [pesosEditando, setPesosEditando] = useState({});
   const [now, setNow] = useState(() => new Date().getTime());
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const pedidosEnProceso = pedidos.filter(
     (pedido) =>
@@ -127,6 +140,17 @@ export default function Cocina({ user, pedidos, personalCocina }) {
     const interval = setInterval(() => setNow(new Date().getTime()), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!isExpanded) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isExpanded]);
 
   const guardarPesoReal = (firebaseId, itemIdx) => {
     const key = `${firebaseId}_${itemIdx}`;
@@ -217,8 +241,237 @@ export default function Cocina({ user, pedidos, personalCocina }) {
   const standby = pedidosEnProceso.filter((pedido) => pedido.estado === "STANDBY_ENTREGA").length;
   const preparacion = pedidosEnProceso.filter((pedido) => pedido.estado === "PREPARACION").length;
 
+  const renderPedidosGrid = (expanded = false) => {
+    if (pedidosEnProceso.length === 0) {
+      return (
+        <div className="app-empty px-4 py-14 text-center">
+          <div className="text-xl font-black text-white">No hay pedidos pendientes en cocina.</div>
+          <p className="mt-2 text-sm text-slate-300">Los nuevos pedidos apareceran aqui automaticamente.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className={`grid gap-4 ${expanded ? "lg:grid-cols-2 2xl:grid-cols-3" : "xl:grid-cols-2"}`}>
+        {pedidosEnProceso.map((pedido) => {
+          const status = pedido.estado || "NUEVO";
+          const config = STATUS_CONFIG[status] || STATUS_CONFIG.NUEVO;
+          const isAnimating = animatingCards.has(pedido.firebaseId);
+          const isStandby = status === "STANDBY_ENTREGA";
+          const todosPesosLlenos = (pedido.items || []).every((item) => item.pesoReal && item.pesoReal !== "");
+
+          return (
+            <article
+              key={pedido.firebaseId}
+              className="app-panel overflow-hidden transition-all"
+              style={{
+                borderColor: `${config.border}55`,
+                boxShadow: `0 24px 60px ${config.glow}`,
+                transform: isAnimating ? "scale(0.99)" : "scale(1)",
+                opacity: isAnimating ? 0.82 : 1,
+              }}
+            >
+              <div
+                className="p-5 sm:p-6"
+                style={{
+                  background:
+                    status === "LISTO"
+                      ? "linear-gradient(135deg, rgba(34,197,94,0.26) 0%, rgba(6,78,59,0.94) 45%, rgba(8,24,46,0.98) 100%)"
+                      : `linear-gradient(135deg, ${config.glow} 0%, rgba(8,24,46,0.96) 60%)`,
+                }}
+              >
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div
+                        className="app-chip mb-3"
+                        style={{
+                          borderColor: `${config.border}40`,
+                          background: `${config.border}1a`,
+                          color: "#ffffff",
+                        }}
+                      >
+                        <span style={{ color: config.border }}>{config.icon}</span>
+                        {config.label}
+                      </div>
+                      <h3 className="app-title text-2xl font-black text-white">Pedido {formatOrderNumber(pedido)}</h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-200">
+                        <span>{pedido.sucursalOrigen}</span>
+                        <span className="text-slate-500">/</span>
+                        <span>{pedido.sucursalDestino}</span>
+                        <span className="text-slate-500">/</span>
+                        <span>{getTimeElapsed(pedido.timestamp)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span className="app-chip border-white/10 bg-white/8 text-slate-100">
+                        {Icons.calendar}
+                        {pedido.fechaPedido}
+                      </span>
+                      {pedido.preparadoPor ? (
+                        <span className="app-chip border-orange-300/20 bg-orange-400/12 text-orange-100">
+                          {Icons.chef}
+                          {pedido.preparadoPor}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {isStandby ? (
+                    <div className="rounded-[22px] border border-amber-300/28 bg-amber-400/12 px-4 py-4 text-sm text-amber-100">
+                      <div className="mb-2 flex items-center gap-2 font-black uppercase tracking-[0.16em] text-amber-200">
+                        {Icons.alert}
+                        Entrega programada
+                      </div>
+                      <div>Recuerda liberar este pedido para la fecha {pedido.fechaEntrega}.</div>
+                    </div>
+                  ) : null}
+
+                  {status === "LISTO" ? (
+                    <div className="rounded-[24px] border border-red-400/40 bg-red-500/12 px-4 py-5 text-center shadow-[0_16px_32px_rgba(239,68,68,0.18)]">
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-red-200">Alerta de despacho</div>
+                      <div className="mt-2 text-2xl font-black tracking-[0.08em] text-red-400 sm:text-3xl">
+                        LISTOS PARA ENVIAR
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {pedido.notaGeneral ? (
+                    <div className="rounded-[22px] border border-sky-400/24 bg-sky-400/10 px-4 py-4 text-sm text-sky-100">
+                      <div className="mb-2 font-black uppercase tracking-[0.16em] text-sky-200">Nota general</div>
+                      <div>{pedido.notaGeneral}</div>
+                    </div>
+                  ) : null}
+
+                  <div className="space-y-3">
+                    {(pedido.items || []).map((item, idx) => {
+                      const pesoKey = `${pedido.firebaseId}_${idx}`;
+                      const pesoEditado =
+                        pesosEditando[pesoKey] !== undefined ? pesosEditando[pesoKey] : item.pesoReal || "";
+
+                      return (
+                        <div key={`${pedido.firebaseId}-${idx}`} className="rounded-[24px] border border-white/10 bg-white/88 p-4 text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.10)]">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <div className="text-base font-black uppercase text-slate-900">{item.producto}</div>
+                              {item.nota ? (
+                                <div className="mt-2 rounded-[16px] border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                                  {item.nota}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="grid gap-2 sm:min-w-[220px]">
+                              <div className="rounded-[16px] border border-sky-200 bg-sky-50 px-3 py-3">
+                                <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-sky-700">Solicitado</div>
+                                <div className="mt-1 text-lg font-black text-sky-900">
+                                  {item.cantidad} {item.unidad}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-3">
+                            {status === "NUEVO" || status === "STANDBY_ENTREGA" ? (
+                              <div className="rounded-[16px] border border-dashed border-slate-300 bg-slate-100 px-3 py-3 text-center text-sm font-bold text-slate-500">
+                                Peso real se habilita al iniciar preparacion.
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="mb-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-500">Peso real</div>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={pesoEditado}
+                                    onChange={(event) => actualizarPesoReal(pedido.firebaseId, idx, event.target.value)}
+                                    onBlur={() => guardarPesoReal(pedido.firebaseId, idx)}
+                                    placeholder="0.00"
+                                    className="w-full rounded-[16px] border border-slate-300 bg-white px-4 py-3 pr-12 text-center text-lg font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                                    style={{
+                                      borderColor: pesoEditado ? "#22c55e" : undefined,
+                                      background: pesoEditado ? "#f0fdf4" : "#ffffff",
+                                    }}
+                                  />
+                                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                                    lb
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid gap-3">
+                    {(status === "NUEVO" || status === "STANDBY_ENTREGA") ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalPreparador(pedido.firebaseId);
+                          setPreparadorSeleccionado(null);
+                        }}
+                        className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-orange-300/40 bg-orange-400/12 px-4 py-4 text-base font-black text-orange-100 transition hover:-translate-y-0.5"
+                      >
+                        {Icons.chef}
+                        {isStandby ? "Iniciar preparacion de standby" : "Iniciar preparacion"}
+                      </button>
+                    ) : null}
+
+                    {status === "PREPARACION" ? (
+                      <button
+                        type="button"
+                        onClick={() => marcarListo(pedido.firebaseId)}
+                        disabled={!todosPesosLlenos}
+                        className="flex w-full items-center justify-center gap-2 rounded-[18px] border-none px-4 py-4 text-base font-black text-white transition"
+                        style={{
+                          background: todosPesosLlenos
+                            ? "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)"
+                            : "linear-gradient(135deg, rgba(100,116,139,0.9) 0%, rgba(71,85,105,0.9) 100%)",
+                          boxShadow: todosPesosLlenos ? "0 18px 30px rgba(34,197,94,0.24)" : "none",
+                          cursor: todosPesosLlenos ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {Icons.check}
+                        {todosPesosLlenos ? "Marcar como listo" : "Completa todos los pesos"}
+                      </button>
+                    ) : null}
+
+                    {status === "LISTO" ? (
+                      <div className="rounded-[20px] border border-emerald-300/40 bg-emerald-400/18 px-4 py-4 text-center text-base font-black text-emerald-50">
+                        Pedido listo para enviar.
+                      </div>
+                    ) : null}
+
+                    {pedido.timestampPreparacion ? (
+                      <div className="flex flex-wrap gap-2">
+                        <span className="app-chip border-orange-300/20 bg-orange-400/12 text-orange-100">
+                          {Icons.clock}
+                          Inicio {pedido.timestampPreparacion}
+                        </span>
+                        {pedido.timestampListo ? (
+                          <span className="app-chip border-emerald-300/20 bg-emerald-400/12 text-emerald-100">
+                            {Icons.check}
+                            Listo {pedido.timestampListo}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
-    <div className="page-enter space-y-5">
+    <div className="space-y-6">
       <section className="app-panel p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -232,9 +485,19 @@ export default function Cocina({ user, pedidos, personalCocina }) {
             </p>
           </div>
 
-          <div className="app-chip border-white/10 bg-white/5 text-slate-200">
-            {Icons.clock}
-            {user}
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setIsExpanded(true)}
+              className="app-button-secondary sm:w-auto"
+            >
+              {Icons.expand}
+              Expandir cocina
+            </button>
+            <div className="app-chip border-white/10 bg-white/5 text-slate-200">
+              {Icons.clock}
+              {user}
+            </div>
           </div>
         </div>
 
@@ -245,6 +508,8 @@ export default function Cocina({ user, pedidos, personalCocina }) {
           <StatCard label="Listos" value={listos} helper="Listos para despacho" accent="#22c55e" />
         </div>
       </section>
+
+      {renderPedidosGrid(false)}
 
       {modalPreparador ? (
         <div
@@ -316,228 +581,64 @@ export default function Cocina({ user, pedidos, personalCocina }) {
         </div>
       ) : null}
 
-      {pedidosEnProceso.length === 0 ? (
-        <div className="app-empty px-4 py-14 text-center">
-          <div className="text-xl font-black text-white">No hay pedidos pendientes en cocina.</div>
-          <p className="mt-2 text-sm text-slate-300">Los nuevos pedidos apareceran aqui automaticamente.</p>
-        </div>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {pedidosEnProceso.map((pedido) => {
-            const status = pedido.estado || "NUEVO";
-            const config = STATUS_CONFIG[status] || STATUS_CONFIG.NUEVO;
-            const isAnimating = animatingCards.has(pedido.firebaseId);
-            const isStandby = status === "STANDBY_ENTREGA";
-            const todosPesosLlenos = (pedido.items || []).every((item) => item.pesoReal && item.pesoReal !== "");
-
-            return (
-              <article
-                key={pedido.firebaseId}
-                className="app-panel overflow-hidden transition-all"
-                style={{
-                  borderColor: `${config.border}55`,
-                  boxShadow: `0 24px 60px ${config.glow}`,
-                  transform: isAnimating ? "scale(0.99)" : "scale(1)",
-                  opacity: isAnimating ? 0.82 : 1,
-                }}
-              >
-                <div
-                  className="p-5 sm:p-6"
-                  style={{
-                    background:
-                      status === "LISTO"
-                        ? "linear-gradient(135deg, rgba(34,197,94,0.26) 0%, rgba(6,78,59,0.94) 45%, rgba(8,24,46,0.98) 100%)"
-                        : `linear-gradient(135deg, ${config.glow} 0%, rgba(8,24,46,0.96) 60%)`,
-                  }}
-                >
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <div
-                          className="app-chip mb-3"
-                          style={{
-                            borderColor: `${config.border}40`,
-                            background: `${config.border}1a`,
-                            color: "#ffffff",
-                          }}
-                        >
-                          <span style={{ color: config.border }}>{config.icon}</span>
-                          {config.label}
-                        </div>
-                        <h3 className="app-title text-2xl font-black text-white">Pedido {formatOrderNumber(pedido)}</h3>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-200">
-                          <span>{pedido.sucursalOrigen}</span>
-                          <span className="text-slate-500">/</span>
-                          <span>{pedido.sucursalDestino}</span>
-                          <span className="text-slate-500">/</span>
-                          <span>{getTimeElapsed(pedido.timestamp)}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <span className="app-chip border-white/10 bg-white/8 text-slate-100">
-                          {Icons.calendar}
-                          {pedido.fechaPedido}
-                        </span>
-                        {pedido.preparadoPor ? (
-                          <span className="app-chip border-orange-300/20 bg-orange-400/12 text-orange-100">
-                            {Icons.chef}
-                            {pedido.preparadoPor}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {isStandby ? (
-                      <div className="rounded-[22px] border border-amber-300/28 bg-amber-400/12 px-4 py-4 text-sm text-amber-100">
-                        <div className="mb-2 flex items-center gap-2 font-black uppercase tracking-[0.16em] text-amber-200">
-                          {Icons.alert}
-                          Entrega programada
-                        </div>
-                        <div>Recuerda liberar este pedido para la fecha {pedido.fechaEntrega}.</div>
-                      </div>
-                    ) : null}
-
-                    {status === "LISTO" ? (
-                      <div className="rounded-[24px] border border-red-400/40 bg-red-500/12 px-4 py-5 text-center shadow-[0_16px_32px_rgba(239,68,68,0.18)]">
-                        <div className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-red-200">Alerta de despacho</div>
-                        <div className="mt-2 text-2xl font-black tracking-[0.08em] text-red-400 sm:text-3xl">
-                          LISTOS PARA ENVIAR
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {pedido.notaGeneral ? (
-                      <div className="rounded-[22px] border border-sky-400/24 bg-sky-400/10 px-4 py-4 text-sm text-sky-100">
-                        <div className="mb-2 font-black uppercase tracking-[0.16em] text-sky-200">Nota general</div>
-                        <div>{pedido.notaGeneral}</div>
-                      </div>
-                    ) : null}
-
-                    <div className="space-y-3">
-                      {(pedido.items || []).map((item, idx) => {
-                        const pesoKey = `${pedido.firebaseId}_${idx}`;
-                        const pesoEditado =
-                          pesosEditando[pesoKey] !== undefined ? pesosEditando[pesoKey] : item.pesoReal || "";
-
-                        return (
-                          <div key={`${pedido.firebaseId}-${idx}`} className="rounded-[24px] border border-white/10 bg-white/88 p-4 text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.10)]">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="min-w-0">
-                                <div className="text-base font-black uppercase text-slate-900">{item.producto}</div>
-                                {item.nota ? (
-                                  <div className="mt-2 rounded-[16px] border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-                                    {item.nota}
-                                  </div>
-                                ) : null}
-                              </div>
-
-                              <div className="grid gap-2 sm:min-w-[220px]">
-                                <div className="rounded-[16px] border border-sky-200 bg-sky-50 px-3 py-3">
-                                  <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-sky-700">Solicitado</div>
-                                  <div className="mt-1 text-lg font-black text-sky-900">
-                                    {item.cantidad} {item.unidad}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="mt-3">
-                              {status === "NUEVO" || status === "STANDBY_ENTREGA" ? (
-                                <div className="rounded-[16px] border border-dashed border-slate-300 bg-slate-100 px-3 py-3 text-center text-sm font-bold text-slate-500">
-                                  Peso real se habilita al iniciar preparacion.
-                                </div>
-                              ) : (
-                                <div>
-                                  <div className="mb-2 text-xs font-extrabold uppercase tracking-[0.16em] text-slate-500">Peso real</div>
-                                  <div className="relative">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={pesoEditado}
-                                      onChange={(event) => actualizarPesoReal(pedido.firebaseId, idx, event.target.value)}
-                                      onBlur={() => guardarPesoReal(pedido.firebaseId, idx)}
-                                      placeholder="0.00"
-                                      className="w-full rounded-[16px] border border-slate-300 bg-white px-4 py-3 pr-12 text-center text-lg font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                                      style={{
-                                        borderColor: pesoEditado ? "#22c55e" : undefined,
-                                        background: pesoEditado ? "#f0fdf4" : "#ffffff",
-                                      }}
-                                    />
-                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-                                      lb
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="grid gap-3">
-                      {(status === "NUEVO" || status === "STANDBY_ENTREGA") ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setModalPreparador(pedido.firebaseId);
-                            setPreparadorSeleccionado(null);
-                          }}
-                          className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-orange-300/40 bg-orange-400/12 px-4 py-4 text-base font-black text-orange-100 transition hover:-translate-y-0.5"
-                        >
-                          {Icons.chef}
-                          {isStandby ? "Iniciar preparacion de standby" : "Iniciar preparacion"}
-                        </button>
-                      ) : null}
-
-                      {status === "PREPARACION" ? (
-                        <button
-                          type="button"
-                          onClick={() => marcarListo(pedido.firebaseId)}
-                          disabled={!todosPesosLlenos}
-                          className="flex w-full items-center justify-center gap-2 rounded-[18px] border-none px-4 py-4 text-base font-black text-white transition"
-                          style={{
-                            background: todosPesosLlenos
-                              ? "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)"
-                              : "linear-gradient(135deg, rgba(100,116,139,0.9) 0%, rgba(71,85,105,0.9) 100%)",
-                            boxShadow: todosPesosLlenos ? "0 18px 30px rgba(34,197,94,0.24)" : "none",
-                            cursor: todosPesosLlenos ? "pointer" : "not-allowed",
-                          }}
-                        >
-                          {Icons.check}
-                          {todosPesosLlenos ? "Marcar como listo" : "Completa todos los pesos"}
-                        </button>
-                      ) : null}
-
-                      {status === "LISTO" ? (
-                        <div className="rounded-[20px] border border-emerald-300/40 bg-emerald-400/18 px-4 py-4 text-center text-base font-black text-emerald-50">
-                          Pedido listo para enviar.
-                        </div>
-                      ) : null}
-
-                      {pedido.timestampPreparacion ? (
-                        <div className="flex flex-wrap gap-2">
-                          <span className="app-chip border-orange-300/20 bg-orange-400/12 text-orange-100">
-                            {Icons.clock}
-                            Inicio {pedido.timestampPreparacion}
-                          </span>
-                          {pedido.timestampListo ? (
-                            <span className="app-chip border-emerald-300/20 bg-emerald-400/12 text-emerald-100">
-                              {Icons.check}
-                              Listo {pedido.timestampListo}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
+      {isExpanded ? (
+        <div
+          className="app-modal"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsExpanded(false);
+            }
+          }}
+        >
+          <div
+            className="app-panel w-full overflow-hidden"
+            style={{
+              width: "min(100%, 1700px)",
+              maxHeight: "94vh",
+              background:
+                "radial-gradient(circle at top right, rgba(56,189,248,0.18), transparent 24%), linear-gradient(180deg, #04111d 0%, #061423 55%, #030c14 100%)",
+            }}
+          >
+            <div className="border-b border-white/10 px-4 py-4 sm:px-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="app-chip mb-2 border-orange-300/20 bg-orange-400/12 text-orange-100">
+                    {Icons.chef}
+                    Cocina expandida
                   </div>
+                  <h2 className="app-title text-2xl font-black text-white sm:text-3xl">Preparacion fija</h2>
+                  <p className="mt-1 text-sm text-slate-300">
+                    Popup de trabajo con solo pedidos y todo el espacio para preparacion.
+                  </p>
                 </div>
-              </article>
-            );
-          })}
+
+                <div className="flex flex-wrap gap-3">
+                  <div className="app-chip border-sky-400/20 bg-sky-400/10 text-sky-100">
+                    {Icons.package}
+                    {pedidosEnProceso.length} pedidos
+                  </div>
+                  <div className="app-chip border-emerald-300/20 bg-emerald-400/12 text-emerald-100">
+                    {Icons.check}
+                    {listos} listos
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsExpanded(false)}
+                    className="app-button-ghost sm:w-auto"
+                  >
+                    {Icons.collapse}
+                    Cerrar popup
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="app-scroll-y px-4 py-4 sm:px-6 sm:py-6" style={{ maxHeight: "calc(94vh - 132px)" }}>
+              {renderPedidosGrid(true)}
+            </div>
+          </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
