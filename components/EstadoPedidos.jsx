@@ -107,16 +107,31 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
     setModalNotificacion({ ...notif, id });
   };
 
+  const esPedidoAtrasado = (pedido) => {
+    const fechas = [pedido.fechaPedido, pedido.fechaEntrega].filter(Boolean);
+    return fechas.some((fecha) => fecha < hoy);
+  };
+
+  const esPedidoDelDia = (pedido) =>
+    pedido.fechaPedido === hoy || pedido.fechaEntrega === hoy;
+
   // Filtrar pedidos relevantes para el usuario
-  const pedidosRelevantes = pedidos.filter(p => 
-    (p.sucursalOrigen === user || p.sucursalDestino === user) &&
-    !['RECIBIDO_CONFORME', 'ENTREGADO'].includes(p.estado) &&
-    (
-      p.estado === 'STANDBY_ENTREGA' ||
-      p.fechaPedido === hoy ||
-      p.fechaEntrega === hoy
-    )
-  );
+  const pedidosRelevantes = pedidos.filter((pedido) => {
+    const participaEnPedido = pedido.sucursalOrigen === user || pedido.sucursalDestino === user;
+    const estaFinalizado = ['RECIBIDO_CONFORME', 'ENTREGADO'].includes(pedido.estado);
+    const esStandby = pedido.estado === 'STANDBY_ENTREGA';
+    const esAtrasadoSinEnviar = esPedidoAtrasado(pedido) && pedido.estado !== 'ENVIADO';
+
+    return (
+      participaEnPedido &&
+      !estaFinalizado &&
+      (
+        esStandby ||
+        esPedidoDelDia(pedido) ||
+        esAtrasadoSinEnviar
+      )
+    );
+  });
 
   // Aplicar filtros de pestaña
   const filtrarPedidos = () => {
