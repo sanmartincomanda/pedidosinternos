@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import { db } from '../firebase';
 import { ref, onValue } from "firebase/database";
 import { formatOrderNumber } from "@/lib/orderUtils";
@@ -33,9 +34,11 @@ const STATUS_COLORS = {
 };
 
 export default function Historial({ user, pedidos }) {
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  const hoy = new Date().toISOString().split('T')[0];
+  const [modoFecha, setModoFecha] = useState('dia');
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy);
+  const [fechaDesde, setFechaDesde] = useState(hoy);
+  const [fechaHasta, setFechaHasta] = useState(hoy);
   const [vista, setVista] = useState('ambos');
   const [mostrarConsolidado, setMostrarConsolidado] = useState(false);
   
@@ -75,34 +78,55 @@ export default function Historial({ user, pedidos }) {
     return () => unsubscribe();
   }, []);
 
-  // Filtrar pedidos por fecha
-  const pedidosDelDia = useMemo(() => {
+  const { fechaInicioFiltro, fechaFinFiltro } = useMemo(() => {
+    if (modoFecha === 'rango') {
+      const inicio = fechaDesde || fechaHasta || hoy;
+      const fin = fechaHasta || fechaDesde || inicio;
+
+      return inicio <= fin
+        ? { fechaInicioFiltro: inicio, fechaFinFiltro: fin }
+        : { fechaInicioFiltro: fin, fechaFinFiltro: inicio };
+    }
+
+    return {
+      fechaInicioFiltro: fechaSeleccionada,
+      fechaFinFiltro: fechaSeleccionada,
+    };
+  }, [modoFecha, fechaSeleccionada, fechaDesde, fechaHasta, hoy]);
+
+  const fechaEstaEnFiltro = useCallback((fecha) => {
+    if (!fecha) return false;
+    return fecha >= fechaInicioFiltro && fecha <= fechaFinFiltro;
+  }, [fechaInicioFiltro, fechaFinFiltro]);
+
+  // Filtrar pedidos por fecha o rango
+  const pedidosFiltradosFecha = useMemo(() => {
     return pedidos.filter(p => {
       const fechaPedido = p.fechaPedido || '';
       const fechaEntrega = p.fechaEntrega || '';
-      return fechaPedido === fechaSeleccionada || fechaEntrega === fechaSeleccionada;
+      return fechaEstaEnFiltro(fechaPedido) || fechaEstaEnFiltro(fechaEntrega);
     });
-  }, [pedidos, fechaSeleccionada]);
+  }, [pedidos, fechaEstaEnFiltro]);
 
   // Pedidos recibidos y solicitados
-  const pedidosRecibidos = pedidosDelDia.filter(p => p.sucursalDestino === user);
-  const pedidosSolicitados = pedidosDelDia.filter(p => p.sucursalOrigen === user);
+  const pedidosRecibidos = pedidosFiltradosFecha.filter(p => p.sucursalDestino === user);
+  const pedidosSolicitados = pedidosFiltradosFecha.filter(p => p.sucursalOrigen === user);
 
   // 🆕 Obtener lista de sucursales únicas para el filtro (solo las que me hicieron pedidos)
   const sucursalesDisponibles = useMemo(() => {
-    const pedidosEnviadosPorMi = pedidosDelDia.filter(p => 
+    const pedidosEnviadosPorMi = pedidosFiltradosFecha.filter(p => 
       p.sucursalDestino === user && 
       (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')
     );
     
     const sucursales = [...new Set(pedidosEnviadosPorMi.map(p => p.sucursalOrigen))];
     return sucursales.sort();
-  }, [pedidosDelDia, user]);
+  }, [pedidosFiltradosFecha, user]);
 
   // 🎯 CONSOLIDADO CON FILTRO DE SUCURSAL
   const consolidadoDia = useMemo(() => {
     // Pedidos donde yo soy el destino y ya los envié
-    let pedidosEnviadosPorMi = pedidosDelDia.filter(p => 
+    let pedidosEnviadosPorMi = pedidosFiltradosFecha.filter(p => 
       p.sucursalDestino === user && 
       (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')
     );
@@ -143,7 +167,7 @@ export default function Historial({ user, pedidos }) {
 
     return Array.from(productosMap.values())
       .sort((a, b) => b.cantidad - a.cantidad);
-  }, [pedidosDelDia, user, sucursalFiltro]);
+  }, [pedidosFiltradosFecha, user, sucursalFiltro]);
 
   // Totales
   const totalesConsolidado = useMemo(() => {
@@ -155,7 +179,7 @@ export default function Historial({ user, pedidos }) {
 
   // Contador de pedidos
   const pedidosFisicamenteEnviados = useMemo(() => {
-    let filtrados = pedidosDelDia.filter(p => 
+    let filtrados = pedidosFiltradosFecha.filter(p => 
       p.sucursalDestino === user && 
       (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')
     );
@@ -165,7 +189,7 @@ export default function Historial({ user, pedidos }) {
     }
     
     return filtrados;
-  }, [pedidosDelDia, user, sucursalFiltro]);
+  }, [pedidosFiltradosFecha, user, sucursalFiltro]);
 
   // Obtener clave del catálogo
   const obtenerClaveProducto = (nombreProducto) => {
@@ -174,7 +198,28 @@ export default function Historial({ user, pedidos }) {
     return clave || '';
   };
 
-  // 📝 Exportar Excel con CLAVE como TEXTO (agregando apostrofo)
+  const construirCeldaClaveExcel = (clave) => {
+    const claveLimpia = `${clave || ''}`.trim();
+
+    if (!claveLimpia) {
+      return { t: 's', v: '' };
+    }
+
+    if (/^\d+$/.test(claveLimpia)) {
+      return {
+        t: 'n',
+        v: Number(claveLimpia),
+        z: '00000',
+      };
+    }
+
+    return {
+      t: 's',
+      v: claveLimpia,
+    };
+  };
+
+  // 📝 Exportar Excel real con CLAVE en formato tipo codigo postal
   const exportarExcel = () => {
     if (consolidadoDia.length === 0) return;
 
@@ -190,39 +235,47 @@ export default function Historial({ user, pedidos }) {
     }
 
     const headers = ['CLAVE', 'CANTIDAD'];
-    
-    const rows = consolidadoDia.map(item => {
+
+    const sheetData = [
+      headers,
+      ...consolidadoDia.map(item => [
+        obtenerClaveProducto(item.producto),
+        Number(item.cantidad.toFixed(2))
+      ])
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+
+    consolidadoDia.forEach((item, index) => {
       const claveReal = obtenerClaveProducto(item.producto);
-      // 🆕 Forzar formato TEXTO agregando apostrofo al inicio
-      // El apostrofo hace que Excel trate la celda como texto incluso si son solo números
-      const claveComoTexto = claveReal ? `'${claveReal}` : '';
-      
-      return [
-        claveComoTexto, // CLAVE como TEXTO (con apostrofo)
-        item.cantidad.toFixed(2) // CANTIDAD
-      ];
+      const claveCellAddress = XLSX.utils.encode_cell({ r: index + 1, c: 0 });
+      const cantidadCellAddress = XLSX.utils.encode_cell({ r: index + 1, c: 1 });
+
+      worksheet[claveCellAddress] = construirCeldaClaveExcel(claveReal);
+      worksheet[cantidadCellAddress] = {
+        t: 'n',
+        v: Number(item.cantidad.toFixed(2)),
+        z: '0.00',
+      };
     });
 
-    const xlsContent = [
-      headers.join('\t'),
-      ...rows.map(row => row.join('\t'))
-    ].join('\r\n');
+    worksheet['!cols'] = [
+      { wch: 14 },
+      { wch: 14 },
+    ];
 
-    const blob = new Blob([xlsContent], { 
-      type: 'application/vnd.ms-excel;charset=utf-8;' 
-    });
-    
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    // 🆕 Nombre de archivo incluye sucursal si hay filtro
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Consolidado');
+
     const nombreSucursal = sucursalFiltro === 'todas' ? 'TODAS' : sucursalFiltro;
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Consolidado_${fechaSeleccionada}_${nombreSucursal}_${user}.xls`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const nombreFecha = modoFecha === 'rango'
+      ? `${fechaInicioFiltro}_a_${fechaFinFiltro}`
+      : fechaSeleccionada;
+    XLSX.writeFile(
+      workbook,
+      `Consolidado_${nombreFecha}_${nombreSucursal}_${user}.xlsx`,
+      { compression: true }
+    );
   };
 
   // Determinar qué mostrar según vista
@@ -234,9 +287,9 @@ export default function Historial({ user, pedidos }) {
         return pedidosSolicitados;
       case 'ambos':
       default:
-        return pedidosDelDia;
+        return pedidosFiltradosFecha;
     }
-  }, [vista, pedidosRecibidos, pedidosSolicitados, pedidosDelDia]);
+  }, [vista, pedidosRecibidos, pedidosSolicitados, pedidosFiltradosFecha]);
 
   // Estadísticas
   const stats = {
@@ -246,8 +299,8 @@ export default function Historial({ user, pedidos }) {
     pesoTotalEnviado: pedidosFisicamenteEnviados.reduce((acc, p) => 
       acc + p.items.reduce((sum, item) => sum + (parseFloat(item.pesoReal) || 0), 0), 0
     ),
-    completados: pedidosDelDia.filter(p => p.estado === 'RECIBIDO_CONFORME' || p.estado === 'ENTREGADO').length,
-    enProceso: pedidosDelDia.filter(p => ['NUEVO', 'PREPARACION', 'LISTO'].includes(p.estado)).length
+    completados: pedidosFiltradosFecha.filter(p => p.estado === 'RECIBIDO_CONFORME' || p.estado === 'ENTREGADO').length,
+    enProceso: pedidosFiltradosFecha.filter(p => ['NUEVO', 'PREPARACION', 'LISTO'].includes(p.estado)).length
   };
 
   const formatearFecha = (fechaStr) => {
@@ -255,6 +308,10 @@ export default function Historial({ user, pedidos }) {
     const [year, month, day] = fechaStr.split('-');
     return `${day}/${month}/${year}`;
   };
+
+  const etiquetaFiltroFecha = modoFecha === 'rango'
+    ? `${formatearFecha(fechaInicioFiltro)} al ${formatearFecha(fechaFinFiltro)}`
+    : formatearFecha(fechaSeleccionada);
 
   const getEstadoColor = (estado) => STATUS_COLORS[estado] || '#6b7280';
 
@@ -363,10 +420,61 @@ export default function Historial({ user, pedidos }) {
       }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
           gap: '20px',
           marginBottom: '20px'
         }}>
+          <div>
+            <label style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color: 'rgba(255,255,255,0.5)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              marginBottom: '8px',
+              display: 'block'
+            }}>
+              Modo de Fecha
+            </label>
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              background: 'rgba(0,0,0,0.2)',
+              padding: '6px',
+              borderRadius: '12px'
+            }}>
+              {[
+                { key: 'dia', label: 'Fecha' },
+                { key: 'rango', label: 'Intervalo' }
+              ].map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => {
+                    setModoFecha(option.key);
+                    setSucursalFiltro('todas');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: modoFecha === option.key
+                      ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
+                      : 'transparent',
+                    color: modoFecha === option.key ? 'white' : 'rgba(255,255,255,0.5)',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div>
             <label style={{
               fontSize: '11px',
@@ -380,13 +488,17 @@ export default function Historial({ user, pedidos }) {
               gap: '6px'
             }}>
               {Icons.calendar}
-              Seleccionar Fecha
+              {modoFecha === 'rango' ? 'Fecha Desde' : 'Seleccionar Fecha'}
             </label>
             <input
               type="date"
-              value={fechaSeleccionada}
+              value={modoFecha === 'rango' ? fechaDesde : fechaSeleccionada}
               onChange={(e) => {
-                setFechaSeleccionada(e.target.value);
+                if (modoFecha === 'rango') {
+                  setFechaDesde(e.target.value);
+                } else {
+                  setFechaSeleccionada(e.target.value);
+                }
                 setSucursalFiltro('todas'); // Resetear filtro al cambiar fecha
               }}
               style={{
@@ -402,6 +514,44 @@ export default function Historial({ user, pedidos }) {
               }}
             />
           </div>
+
+          {modoFecha === 'rango' ? (
+            <div>
+              <label style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: 'rgba(255,255,255,0.5)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                marginBottom: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                {Icons.calendar}
+                Fecha Hasta
+              </label>
+              <input
+                type="date"
+                value={fechaHasta}
+                onChange={(e) => {
+                  setFechaHasta(e.target.value);
+                  setSucursalFiltro('todas');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '2px solid rgba(255,255,255,0.2)',
+                  borderRadius: '12px',
+                  color: 'white',
+                  fontWeight: 700,
+                  fontSize: '15px',
+                  cursor: 'pointer'
+                }}
+              />
+            </div>
+          ) : null}
 
           <div>
             <label style={{
@@ -473,7 +623,7 @@ export default function Historial({ user, pedidos }) {
             fontWeight: 800,
             color: '#a78bfa'
           }}>
-            {formatearFecha(fechaSeleccionada)}
+            {etiquetaFiltroFecha}
           </span>
         </div>
       </div>
@@ -606,10 +756,10 @@ export default function Historial({ user, pedidos }) {
                 }}
               >
                 <option value="todas" style={{ background: '#1e293b' }}>
-                  Todas las sucursales ({pedidosDelDia.filter(p => p.sucursalDestino === user && (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')).length} pedidos)
+                  Todas las sucursales ({pedidosFiltradosFecha.filter(p => p.sucursalDestino === user && (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')).length} pedidos)
                 </option>
                 {sucursalesDisponibles.map(sucursal => {
-                  const count = pedidosDelDia.filter(p => 
+                  const count = pedidosFiltradosFecha.filter(p => 
                     p.sucursalDestino === user && 
                     (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME') &&
                     p.sucursalOrigen === sucursal
@@ -792,8 +942,8 @@ export default function Historial({ user, pedidos }) {
                 gap: '8px'
               }}>
                 <span>ℹ️</span>
-                El archivo Excel contendrá CLAVE (formato TEXTO) y CANTIDAD. 
-                La columna CLAVE lleva un prefijo para forzar formato texto en Excel.
+                El archivo Excel contendrá CLAVE y CANTIDAD.
+                Si la clave es numérica, se exporta con formato 00000 para conservar ceros al inicio.
               </div>
             </>
           )}
@@ -880,7 +1030,7 @@ export default function Historial({ user, pedidos }) {
               className={consolidadoDia.length > 0 && !cargandoCatalogo ? 'btn-hover' : ''}
             >
               {Icons.download}
-              {cargandoCatalogo ? 'Cargando catálogo...' : 'Exportar Excel (.xls)'}
+              {cargandoCatalogo ? 'Cargando catálogo...' : 'Exportar Excel (.xlsx)'}
             </button>
           </div>
 
@@ -1030,8 +1180,8 @@ export default function Historial({ user, pedidos }) {
                 gap: '8px'
               }}>
                 <span>ℹ️</span>
-                El archivo Excel exportado contendrá 2 columnas: CLAVE (desde catálogo) y CANTIDAD (peso real). 
-                Los productos sin clave aparecerán con celda vacía.
+                El archivo Excel exportado contendrá 2 columnas: CLAVE (desde catálogo) y CANTIDAD (peso real).
+                Las claves numéricas salen con formato 00000 y los productos sin clave aparecerán con celda vacía.
               </div>
             </>
           )}
@@ -1200,10 +1350,10 @@ export default function Historial({ user, pedidos }) {
         }}>
           <div style={{ fontSize: '64px', marginBottom: '16px' }}>📭</div>
           <h3 style={{ fontSize: '24px', margin: '0 0 8px 0', color: 'white' }}>
-            No hay pedidos para esta fecha
+            No hay pedidos para este filtro
           </h3>
           <p style={{ margin: 0, color: 'rgba(255,255,255,0.5)' }}>
-            No tienes actividad registrada en esta fecha
+            No tienes actividad registrada en {etiquetaFiltroFecha}
           </p>
         </div>
       ) : (
