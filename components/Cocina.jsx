@@ -106,12 +106,12 @@ function StatCard({ label, value, helper, accent }) {
       className="app-card-soft p-4"
       style={{
         borderColor: `${accent}38`,
-        background: `linear-gradient(135deg, ${accent}16 0%, rgba(8,24,46,0.72) 100%)`,
+        background: `linear-gradient(135deg, ${accent}14 0%, rgba(255,255,255,0.98) 100%)`,
       }}
     >
-      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-300">{label}</div>
-      <div className="mt-2 text-2xl font-black text-white">{value}</div>
-      {helper ? <div className="mt-1 text-sm text-slate-300/80">{helper}</div> : null}
+      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">{label}</div>
+      <div className="mt-2 text-2xl font-black text-slate-900">{value}</div>
+      {helper ? <div className="mt-1 text-sm text-slate-600">{helper}</div> : null}
     </div>
   );
 }
@@ -245,8 +245,8 @@ export default function Cocina({ user, pedidos, personalCocina }) {
     if (pedidosEnProceso.length === 0) {
       return (
         <div className="app-empty px-4 py-14 text-center">
-          <div className="text-xl font-black text-white">No hay pedidos pendientes en cocina.</div>
-          <p className="mt-2 text-sm text-slate-300">Los nuevos pedidos apareceran aqui automaticamente.</p>
+          <div className="text-xl font-black text-slate-900">No hay pedidos pendientes en cocina.</div>
+          <p className="mt-2 text-sm text-slate-600">Los nuevos pedidos apareceran aqui automaticamente.</p>
         </div>
       );
     }
@@ -276,8 +276,8 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                 style={{
                   background:
                     status === "LISTO"
-                      ? "linear-gradient(135deg, rgba(34,197,94,0.26) 0%, rgba(6,78,59,0.94) 45%, rgba(8,24,46,0.98) 100%)"
-                      : `linear-gradient(135deg, ${config.glow} 0%, rgba(8,24,46,0.96) 60%)`,
+                      ? "linear-gradient(135deg, rgba(220,252,231,0.96) 0%, rgba(240,253,244,0.98) 100%)"
+                      : `linear-gradient(135deg, ${config.glow} 0%, rgba(255,255,255,0.98) 62%)`,
                 }}
               >
                 <div className="flex flex-col gap-4">
@@ -288,29 +288,29 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                         style={{
                           borderColor: `${config.border}40`,
                           background: `${config.border}1a`,
-                          color: "#ffffff",
+                          color: "#12324e",
                         }}
                       >
                         <span style={{ color: config.border }}>{config.icon}</span>
                         {config.label}
                       </div>
-                      <h3 className="app-title text-2xl font-black text-white">Pedido {formatOrderNumber(pedido)}</h3>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-200">
+                      <h3 className="app-title text-2xl font-black text-slate-900">Pedido {formatOrderNumber(pedido)}</h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                         <span>{pedido.sucursalOrigen}</span>
-                        <span className="text-slate-500">/</span>
+                        <span className="text-slate-300">/</span>
                         <span>{pedido.sucursalDestino}</span>
-                        <span className="text-slate-500">/</span>
+                        <span className="text-slate-300">/</span>
                         <span>{getTimeElapsed(pedido.timestamp)}</span>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <span className="app-chip border-white/10 bg-white/8 text-slate-100">
+                      <span className="app-chip border-slate-200 bg-white text-slate-700">
                         {Icons.calendar}
                         {pedido.fechaPedido}
                       </span>
                       {pedido.preparadoPor ? (
-                        <span className="app-chip border-orange-300/20 bg-orange-400/12 text-orange-100">
+                        <span className="app-chip border-orange-200 bg-orange-50 text-orange-800">
                           {Icons.chef}
                           {pedido.preparadoPor}
                         </span>
@@ -319,8 +319,8 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                   </div>
 
                   {isStandby ? (
-                    <div className="rounded-[22px] border border-amber-300/28 bg-amber-400/12 px-4 py-4 text-sm text-amber-100">
-                      <div className="mb-2 flex items-center gap-2 font-black uppercase tracking-[0.16em] text-amber-200">
+                    <div className="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+                      <div className="mb-2 flex items-center gap-2 font-black uppercase tracking-[0.16em] text-amber-700">
                         {Icons.alert}
                         Entrega programada
                       </div>
@@ -329,8 +329,8 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                   ) : null}
 
                   {status === "LISTO" ? (
-                    <div className="rounded-[24px] border border-red-400/40 bg-red-500/12 px-4 py-5 text-center shadow-[0_16px_32px_rgba(239,68,68,0.18)]">
-                      <div className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-red-200">Alerta de despacho</div>
+                    <div className="rounded-[24px] border border-red-300 bg-red-50 px-4 py-5 text-center shadow-[0_12px_24px_rgba(220,38,38,0.08)]">
+                      <div className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-red-500">Alerta de despacho</div>
                       <div className="mt-2 text-2xl font-black tracking-[0.08em] text-red-400 sm:text-3xl">
                         LISTOS PARA ENVIAR
                       </div>
@@ -338,8 +338,8 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                   ) : null}
 
                   {pedido.notaGeneral ? (
-                    <div className="rounded-[22px] border border-sky-400/24 bg-sky-400/10 px-4 py-4 text-sm text-sky-100">
-                      <div className="mb-2 font-black uppercase tracking-[0.16em] text-sky-200">Nota general</div>
+                    <div className="rounded-[22px] border border-sky-200 bg-sky-50 px-4 py-4 text-sm text-sky-900">
+                      <div className="mb-2 font-black uppercase tracking-[0.16em] text-sky-700">Nota general</div>
                       <div>{pedido.notaGeneral}</div>
                     </div>
                   ) : null}
@@ -417,7 +417,7 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                           setModalPreparador(pedido.firebaseId);
                           setPreparadorSeleccionado(null);
                         }}
-                        className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-orange-300/40 bg-orange-400/12 px-4 py-4 text-base font-black text-orange-100 transition hover:-translate-y-0.5"
+                        className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-orange-300 bg-orange-50 px-4 py-4 text-base font-black text-orange-800 transition hover:-translate-y-0.5"
                       >
                         {Icons.chef}
                         {isStandby ? "Iniciar preparacion de standby" : "Iniciar preparacion"}
@@ -444,19 +444,19 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                     ) : null}
 
                     {status === "LISTO" ? (
-                      <div className="rounded-[20px] border border-emerald-300/40 bg-emerald-400/18 px-4 py-4 text-center text-base font-black text-emerald-50">
+                      <div className="rounded-[20px] border border-emerald-300 bg-emerald-50 px-4 py-4 text-center text-base font-black text-emerald-800">
                         Pedido listo para enviar.
                       </div>
                     ) : null}
 
                     {pedido.timestampPreparacion ? (
                       <div className="flex flex-wrap gap-2">
-                        <span className="app-chip border-orange-300/20 bg-orange-400/12 text-orange-100">
+                        <span className="app-chip border-orange-200 bg-orange-50 text-orange-800">
                           {Icons.clock}
                           Inicio {pedido.timestampPreparacion}
                         </span>
                         {pedido.timestampListo ? (
-                          <span className="app-chip border-emerald-300/20 bg-emerald-400/12 text-emerald-100">
+                          <span className="app-chip border-emerald-200 bg-emerald-50 text-emerald-800">
                             {Icons.check}
                             Listo {pedido.timestampListo}
                           </span>
@@ -478,12 +478,12 @@ export default function Cocina({ user, pedidos, personalCocina }) {
       <section className="app-panel p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="app-chip mb-3 border-orange-300/20 bg-orange-400/12 text-orange-100">
+            <div className="app-chip mb-3 border-orange-200 bg-orange-50 text-orange-800">
               {Icons.chef}
               Cocina movil
             </div>
-            <h2 className="app-title text-3xl font-black text-white">Preparacion pensada para pantalla pequena</h2>
-            <p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">
+            <h2 className="app-title text-3xl font-black text-slate-900">Preparacion pensada para pantalla pequena</h2>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">
               Cada pedido baja a una sola columna y cada producto se maneja como tarjeta para pesar y avanzar rapido.
             </p>
           </div>
@@ -497,7 +497,7 @@ export default function Cocina({ user, pedidos, personalCocina }) {
               {Icons.expand}
               Expandir cocina
             </button>
-            <div className="app-chip border-white/10 bg-white/5 text-slate-200">
+            <div className="app-chip border-slate-200 bg-slate-50 text-slate-700">
               {Icons.clock}
               {user}
             </div>
@@ -599,28 +599,28 @@ export default function Cocina({ user, pedidos, personalCocina }) {
               width: "min(100%, 1700px)",
               maxHeight: "94vh",
               background:
-                "radial-gradient(circle at top right, rgba(56,189,248,0.18), transparent 24%), linear-gradient(180deg, #04111d 0%, #061423 55%, #030c14 100%)",
+                "radial-gradient(circle at top right, rgba(77,160,223,0.16), transparent 22%), linear-gradient(180deg, #eef5fa 0%, #f8fbfe 55%, #eef5fa 100%)",
             }}
           >
-            <div className="border-b border-white/10 px-4 py-4 sm:px-6">
+            <div className="border-b border-slate-200 px-4 py-4 sm:px-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div className="app-chip mb-2 border-orange-300/20 bg-orange-400/12 text-orange-100">
+                  <div className="app-chip mb-2 border-orange-200 bg-orange-50 text-orange-800">
                     {Icons.chef}
                     Cocina expandida
                   </div>
-                  <h2 className="app-title text-2xl font-black text-white sm:text-3xl">Preparacion fija</h2>
-                  <p className="mt-1 text-sm text-slate-300">
+                  <h2 className="app-title text-2xl font-black text-slate-900 sm:text-3xl">Preparacion fija</h2>
+                  <p className="mt-1 text-sm text-slate-600">
                     Popup de trabajo con solo pedidos y todo el espacio para preparacion.
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <div className="app-chip border-sky-400/20 bg-sky-400/10 text-sky-100">
+                  <div className="app-chip border-sky-200 bg-sky-50 text-sky-800">
                     {Icons.package}
                     {pedidosEnProceso.length} pedidos
                   </div>
-                  <div className="app-chip border-emerald-300/20 bg-emerald-400/12 text-emerald-100">
+                  <div className="app-chip border-emerald-200 bg-emerald-50 text-emerald-800">
                     {Icons.check}
                     {listos} listos
                   </div>

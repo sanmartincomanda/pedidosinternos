@@ -145,12 +145,12 @@ function MetricCard({ label, value, accent, helper }) {
       className="app-card-soft p-4"
       style={{
         borderColor: `${accent}35`,
-        background: `linear-gradient(135deg, ${accent}18 0%, rgba(7,18,34,0.7) 100%)`,
+        background: `linear-gradient(135deg, ${accent}14 0%, rgba(255,255,255,0.98) 100%)`,
       }}
     >
-      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-300">{label}</div>
-      <div className="mt-2 text-2xl font-black text-white">{value}</div>
-      {helper ? <div className="mt-1 text-sm text-slate-300/80">{helper}</div> : null}
+      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">{label}</div>
+      <div className="mt-2 text-2xl font-black text-slate-900">{value}</div>
+      {helper ? <div className="mt-1 text-sm text-slate-600">{helper}</div> : null}
     </div>
   );
 }
@@ -300,35 +300,41 @@ export default function AppInterna() {
     return (
       <div className="app-shell flex min-h-screen items-center">
         <div className="grid w-full gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="app-panel page-enter overflow-hidden p-6 sm:p-8 lg:p-10">
-            <div className="app-chip mb-5 w-fit border-sky-400/30 bg-sky-400/10 text-sky-200">
+          <section
+            className="app-panel page-enter overflow-hidden p-6 sm:p-8 lg:p-10"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(53,125,191,0.98) 0%, rgba(71,138,198,0.96) 52%, rgba(244,249,254,0.95) 100%)",
+            }}
+          >
+            <div className="app-chip mb-5 w-fit border-white/25 bg-white/14 text-white">
               {Icons.spark}
-              Version movil
+              Version interna
             </div>
             <div className="max-w-2xl">
               <h1 className="app-title text-4xl font-black leading-tight text-white sm:text-5xl">
-                Pedidos internos con experiencia pensada para telefono y handheld.
+                Pedidos internos con imagen mas limpia, blanca y lista para uso diario.
               </h1>
-              <p className="mt-4 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
-                Mantuvimos el flujo operativo y le dimos una interfaz mas tactil, rapida y lista para el salto a Android.
+              <p className="mt-4 max-w-xl text-base leading-7 text-sky-50 sm:text-lg">
+                Mantuvimos toda la operacion y la llevamos a una presentacion mas clara, mas parecida a un sistema de escritorio moderno como SICAR.
               </p>
             </div>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              <MetricCard label="Vista movil" value="100%" accent="#38bdf8" helper="Controles grandes y claros" />
-              <MetricCard label="Navegacion" value="Inferior" accent="#2dd4bf" helper="Mas natural en mano" />
-              <MetricCard label="Objetivo" value="Android" accent="#818cf8" helper="Base visual ya preparada" />
+              <MetricCard label="Tema" value="Claro" accent="#dceeff" helper="Mas descanso visual" />
+              <MetricCard label="Navegacion" value="Ordenada" accent="#d7ecfb" helper="Mas intuitiva en telefono" />
+              <MetricCard label="Estilo" value="SICAR" accent="#dbe8ff" helper="Azul, blanco y limpio" />
             </div>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               {[
-                "Acciones principales accesibles con el pulgar.",
-                "Tarjetas apiladas en lugar de tablas pesadas.",
-                "Colores y jerarquia visual pensados para turnos rapidos.",
-                "Base lista para empaquetar luego en Android.",
+                "Acciones principales visibles y faciles de tocar.",
+                "Tarjetas compactas en vez de bloques pesados y oscuros.",
+                "Jerarquia visual inspirada en SICAR: barra azul y zona de trabajo clara.",
+                "Base lista para seguir refinando y pasar luego a Android.",
               ].map((item) => (
-                <div key={item} className="app-card-soft flex items-start gap-3 p-4 text-sm text-slate-200">
-                  <span className="mt-1 flex h-6 w-6 items-center justify-center rounded-full bg-sky-400/20 text-sky-200">
+                <div key={item} className="rounded-[24px] border border-white/18 bg-white/12 p-4 text-sm text-white shadow-[0_12px_28px_rgba(17,57,96,0.14)] backdrop-blur-sm">
+                  <span className="mr-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/18 text-white">
                     {Icons.spark}
                   </span>
                   <span>{item}</span>
@@ -340,12 +346,12 @@ export default function AppInterna() {
           <section className="app-panel page-enter p-6 sm:p-8">
             <div className="mx-auto max-w-md">
               <div className="mb-6 flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-[linear-gradient(135deg,#38bdf8_0%,#2563eb_100%)] text-white shadow-[0_18px_40px_rgba(37,99,235,0.38)]">
+                <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-[linear-gradient(135deg,#3f83c0_0%,#2373b9_100%)] text-white shadow-[0_16px_34px_rgba(35,115,185,0.24)]">
                   {Icons.app}
                 </div>
                 <div>
-                  <div className="app-title text-3xl font-black text-white">Sistema Interno</div>
-                  <div className="mt-1 text-sm text-slate-300">Ingreso de sucursales y seguimiento operativo.</div>
+                  <div className="app-title text-3xl font-black text-slate-900">Sistema Interno</div>
+                  <div className="mt-1 text-sm text-slate-600">Ingreso de sucursales y seguimiento operativo.</div>
                 </div>
               </div>
 
@@ -382,7 +388,7 @@ export default function AppInterna() {
                     <button
                       type="button"
                       onClick={() => setShowPassword((current) => !current)}
-                      className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200"
+                      className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600"
                     >
                       {Icons.eye}
                     </button>
@@ -400,9 +406,9 @@ export default function AppInterna() {
                 </button>
               </form>
 
-              <div className="mt-6 rounded-[24px] border border-white/8 bg-white/4 p-4 text-sm text-slate-300">
-                La app ya esta organizada para una experiencia movil: tarjetas, botoneria grande y navegacion inferior.
-              </div>
+                <div className="mt-6 rounded-[24px] border border-sky-100 bg-sky-50 p-4 text-sm text-slate-600">
+                  La app ya esta organizada para una experiencia movil: tarjetas claras, botoneria grande y navegacion facil.
+                </div>
             </div>
           </section>
         </div>
@@ -412,22 +418,28 @@ export default function AppInterna() {
 
   return (
     <div className="app-shell page-enter">
-      <header className="app-panel overflow-hidden px-4 py-4 sm:px-6">
+      <header
+        className="app-panel overflow-hidden px-4 py-4 sm:px-6"
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(54,124,189,0.98) 0%, rgba(73,138,197,0.96) 42%, rgba(232,241,249,0.96) 100%)",
+        }}
+      >
         <div
           className="absolute inset-0 opacity-40"
           style={{
-            background: `radial-gradient(circle at top right, ${navMeta.color}28, transparent 30%), linear-gradient(135deg, rgba(255,255,255,0.04), transparent 55%)`,
+            background: `radial-gradient(circle at top right, rgba(255,255,255,0.22), transparent 28%), linear-gradient(135deg, ${navMeta.color}20, transparent 54%)`,
           }}
         />
 
         <div className="relative flex flex-col gap-4">
           {isFormularioView ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="app-chip w-fit border-white/10 bg-white/5 text-slate-200">{fechaActual}</div>
+              <div className="app-chip w-fit border-white/25 bg-white/14 text-white">{fechaActual}</div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="rounded-[22px] border border-white/10 bg-white/5 px-4 py-3">
-                  <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-400">Sesion</div>
+                <div className="rounded-[22px] border border-white/24 bg-white/14 px-4 py-3 text-white">
+                  <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-sky-50/80">Sesion</div>
                   <div className="mt-1 text-lg font-black text-white">{user}</div>
                 </div>
                 <button
@@ -436,7 +448,7 @@ export default function AppInterna() {
                     setPassword("");
                     setView("formulario");
                   }}
-                  className="app-button-ghost whitespace-nowrap text-sm"
+                  className="app-button-ghost whitespace-nowrap border-white/24 bg-white/14 text-sm text-white"
                 >
                   {Icons.logout}
                   Salir
@@ -454,15 +466,15 @@ export default function AppInterna() {
                     {navMeta.icon}
                   </div>
                   <div>
-                    <div className="app-chip mb-2 border-white/10 bg-white/5 text-slate-200">{fechaActual}</div>
+                    <div className="app-chip mb-2 border-white/24 bg-white/14 text-white">{fechaActual}</div>
                     <h1 className="app-title text-3xl font-black text-white">{navMeta.title}</h1>
-                    <p className="mt-1 max-w-2xl text-sm text-slate-300 sm:text-base">{navMeta.subtitle}</p>
+                    <p className="mt-1 max-w-2xl text-sm text-sky-50 sm:text-base">{navMeta.subtitle}</p>
                   </div>
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="rounded-[22px] border border-white/10 bg-white/5 px-4 py-3">
-                    <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-400">Sesion</div>
+                  <div className="rounded-[22px] border border-white/24 bg-white/14 px-4 py-3 text-white">
+                    <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-sky-50/80">Sesion</div>
                     <div className="mt-1 text-lg font-black text-white">{user}</div>
                   </div>
                   <button
@@ -471,7 +483,7 @@ export default function AppInterna() {
                       setPassword("");
                       setView("formulario");
                     }}
-                    className="app-button-ghost whitespace-nowrap text-sm"
+                    className="app-button-ghost whitespace-nowrap border-white/24 bg-white/14 text-sm text-white"
                   >
                     {Icons.logout}
                     Salir
@@ -499,9 +511,9 @@ export default function AppInterna() {
                 onClick={() => setView(item.key)}
                 className="app-chip transition-all"
                 style={{
-                  borderColor: view === item.key ? `${item.color}55` : "rgba(255,255,255,0.08)",
-                  background: view === item.key ? `${item.color}18` : "rgba(255,255,255,0.04)",
-                  color: view === item.key ? "#ffffff" : "#cbd5e1",
+                  borderColor: view === item.key ? `${item.color}40` : "rgba(148,163,184,0.2)",
+                  background: view === item.key ? `${item.color}14` : "rgba(247,251,255,0.98)",
+                  color: view === item.key ? "#12324e" : "#55718d",
                 }}
               >
                 <span style={{ color: item.color }}>{item.icon}</span>
@@ -541,16 +553,16 @@ export default function AppInterna() {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-4">
-        <div className="mx-auto flex max-w-4xl gap-2 rounded-[28px] border border-white/10 bg-slate-950/80 p-2 shadow-[0_24px_70px_rgba(2,6,23,0.46)] backdrop-blur-2xl">
+        <div className="mx-auto flex max-w-4xl gap-2 rounded-[28px] border border-slate-200 bg-white/94 p-2 shadow-[0_16px_42px_rgba(60,90,122,0.16)] backdrop-blur-2xl">
           {NAV_ITEMS.map((item) => (
             <button
               key={item.key}
               onClick={() => setView(item.key)}
               className="flex min-h-[68px] flex-1 flex-col items-center justify-center rounded-[22px] px-2 text-xs font-bold transition-all sm:flex-row sm:gap-2 sm:text-sm"
               style={{
-                background: view === item.key ? `${item.color}22` : "transparent",
-                border: `1px solid ${view === item.key ? `${item.color}55` : "transparent"}`,
-                color: view === item.key ? "#ffffff" : "#94a3b8",
+                background: view === item.key ? `${item.color}14` : "transparent",
+                border: `1px solid ${view === item.key ? `${item.color}36` : "transparent"}`,
+                color: view === item.key ? "#12324e" : "#6b7f92",
               }}
             >
               <span style={{ color: item.color }}>{item.icon}</span>

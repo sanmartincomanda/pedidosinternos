@@ -434,20 +434,20 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
             width: '48px',
             height: '48px',
             borderRadius: '16px',
-            background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 10px 25px rgba(99, 102, 241, 0.4)',
+            boxShadow: '0 14px 30px rgba(37, 99, 235, 0.22)',
             color: 'white'
           }}>
             {Icons.truck}
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: 'white' }}>
+            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
               Estado de Pedidos
             </h1>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
+            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
               {user} • Seguimiento en tiempo real
             </p>
           </div>
@@ -477,8 +477,8 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
               border: 'none',
               background: filtro === tab.key 
                 ? `linear-gradient(135deg, ${tab.color} 0%, ${tab.color}dd 100%)` 
-                : 'rgba(255,255,255,0.05)',
-              color: filtro === tab.key ? 'white' : 'rgba(255,255,255,0.6)',
+                : 'rgba(255,255,255,0.92)',
+              color: filtro === tab.key ? 'white' : '#475569',
               fontWeight: 700,
               fontSize: '13px',
               cursor: 'pointer',
@@ -492,7 +492,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
           >
             {tab.label}
             <span style={{
-              background: filtro === tab.key ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
+              background: filtro === tab.key ? 'rgba(255,255,255,0.2)' : '#e2e8f0',
               padding: '2px 8px',
               borderRadius: '10px',
               fontSize: '11px',
@@ -1061,15 +1061,15 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
         <div style={{
           textAlign: 'center',
           padding: '80px 20px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'rgba(255,255,255,0.8)',
           borderRadius: '24px',
-          border: '2px dashed rgba(255,255,255,0.1)'
+          border: '2px dashed rgba(148, 163, 184, 0.22)'
         }}>
           <div style={{ fontSize: '64px', marginBottom: '16px' }}>📋</div>
-          <h3 style={{ fontSize: '24px', margin: '0 0 8px 0', color: 'white' }}>
+          <h3 style={{ fontSize: '24px', margin: '0 0 8px 0', color: '#0f172a' }}>
             No hay pedidos en este filtro
           </h3>
-          <p style={{ margin: 0, color: 'rgba(255,255,255,0.5)' }}>
+          <p style={{ margin: 0, color: '#64748b' }}>
             Los pedidos aparecerán aquí según su estado
           </p>
         </div>

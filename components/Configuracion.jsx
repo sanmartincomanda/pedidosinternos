@@ -100,12 +100,12 @@ function StatCard({ label, value, helper, accent }) {
       className="app-card-soft p-4"
       style={{
         borderColor: `${accent}38`,
-        background: `linear-gradient(135deg, ${accent}16 0%, rgba(8,24,46,0.72) 100%)`,
+        background: `linear-gradient(135deg, ${accent}14 0%, rgba(255,255,255,0.98) 100%)`,
       }}
     >
-      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-300">{label}</div>
-      <div className="mt-2 text-2xl font-black text-white">{value}</div>
-      {helper ? <div className="mt-1 text-sm text-slate-300/80">{helper}</div> : null}
+      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">{label}</div>
+      <div className="mt-2 text-2xl font-black text-slate-900">{value}</div>
+      {helper ? <div className="mt-1 text-sm text-slate-600">{helper}</div> : null}
     </div>
   );
 }
@@ -116,18 +116,18 @@ function PersonCard({ name, accent, icon, onDelete }) {
       className="app-card-soft flex items-center justify-between gap-3 p-4"
       style={{
         borderColor: `${accent}38`,
-        background: `linear-gradient(135deg, ${accent}12 0%, rgba(15,30,53,0.58) 100%)`,
+        background: `linear-gradient(135deg, ${accent}12 0%, rgba(255,255,255,0.98) 100%)`,
       }}
     >
       <div className="flex min-w-0 items-center gap-3">
         <div
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
-          style={{ background: `linear-gradient(135deg, ${accent} 0%, rgba(15,23,42,0.85) 100%)` }}
+          style={{ background: `linear-gradient(135deg, ${accent} 0%, rgba(35,115,185,0.92) 100%)` }}
         >
           {icon}
         </div>
         <div className="min-w-0">
-          <div className="truncate text-sm font-black text-white">{name}</div>
+          <div className="truncate text-sm font-black text-slate-900">{name}</div>
         </div>
       </div>
 
@@ -379,12 +379,12 @@ export default function Configuracion({ setConfig }) {
       <section className="app-panel p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="app-chip mb-3 border-white/10 bg-white/5 text-slate-200">
+            <div className="app-chip mb-3 border-sky-200 bg-sky-50 text-sky-800">
               {Icons.settings}
               Panel administrativo
             </div>
-            <h2 className="app-title text-3xl font-black text-white">Configuracion lista para usar en movil</h2>
-            <p className="mt-2 max-w-2xl text-sm text-slate-300 sm:text-base">
+            <h2 className="app-title text-3xl font-black text-slate-900">Configuracion lista para usar en movil</h2>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">
               Administra personal y catalogo con bloques mas comodos, manteniendo sincronizacion en tiempo real con Firebase.
             </p>
           </div>
@@ -420,9 +420,9 @@ export default function Configuracion({ setConfig }) {
               onClick={() => setActiveTab(tab.key)}
               className="app-chip min-h-[50px] whitespace-nowrap px-4 transition-all"
               style={{
-                borderColor: activeTab === tab.key ? `${tab.color}55` : "rgba(255,255,255,0.08)",
-                background: activeTab === tab.key ? `${tab.color}1a` : "rgba(255,255,255,0.04)",
-                color: activeTab === tab.key ? "#ffffff" : "#cbd5e1",
+                borderColor: activeTab === tab.key ? `${tab.color}40` : "rgba(148,163,184,0.18)",
+                background: activeTab === tab.key ? `${tab.color}14` : "rgba(247,251,255,0.98)",
+                color: activeTab === tab.key ? "#12324e" : "#55718d",
               }}
             >
               <span style={{ color: tab.color }}>{tab.icon}</span>
@@ -435,8 +435,8 @@ export default function Configuracion({ setConfig }) {
       {activeTab === "cocina" ? (
         <section className="app-panel space-y-5 p-5 sm:p-6">
           <div>
-            <h3 className="app-title text-2xl font-black text-white">Personal de cocina</h3>
-            <p className="mt-1 text-sm text-slate-300">Quienes pueden tomar un pedido y pasarlo a preparacion.</p>
+            <h3 className="app-title text-2xl font-black text-slate-900">Personal de cocina</h3>
+            <p className="mt-1 text-sm text-slate-600">Quienes pueden tomar un pedido y pasarlo a preparacion.</p>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -481,8 +481,8 @@ export default function Configuracion({ setConfig }) {
       {activeTab === "transporte" ? (
         <section className="app-panel space-y-5 p-5 sm:p-6">
           <div>
-            <h3 className="app-title text-2xl font-black text-white">Personal de transporte</h3>
-            <p className="mt-1 text-sm text-slate-300">Quienes pueden despachar y mover pedidos entre sucursales.</p>
+            <h3 className="app-title text-2xl font-black text-slate-900">Personal de transporte</h3>
+            <p className="mt-1 text-sm text-slate-600">Quienes pueden despachar y mover pedidos entre sucursales.</p>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -527,8 +527,8 @@ export default function Configuracion({ setConfig }) {
       {activeTab === "productos" ? (
         <section className="app-panel space-y-5 p-5 sm:p-6">
           <div>
-            <h3 className="app-title text-2xl font-black text-white">Catalogo de productos</h3>
-            <p className="mt-1 text-sm text-slate-300">Importa claves y nombres desde CSV o administra el listado actual desde el telefono.</p>
+            <h3 className="app-title text-2xl font-black text-slate-900">Catalogo de productos</h3>
+            <p className="mt-1 text-sm text-slate-600">Importa claves y nombres desde CSV o administra el listado actual desde el telefono.</p>
           </div>
 
           {!mostrarPreview ? (
@@ -541,14 +541,14 @@ export default function Configuracion({ setConfig }) {
                 className="rounded-[28px] border-2 border-dashed p-6 text-center transition-all sm:p-8"
                 style={{
                   borderColor: dragActive ? "rgba(56,189,248,0.68)" : "rgba(148,163,184,0.26)",
-                  background: dragActive ? "rgba(56,189,248,0.10)" : "rgba(255,255,255,0.03)",
+                  background: dragActive ? "rgba(56,189,248,0.10)" : "rgba(247,251,255,0.98)",
                 }}
               >
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-sky-400/12 text-sky-200">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-sky-100 text-sky-700">
                   {Icons.upload}
                 </div>
-                <h4 className="mt-4 text-xl font-black text-white">Arrastra el archivo aqui</h4>
-                <p className="mt-2 text-sm text-slate-300">Acepta .csv y .txt con formato CLAVE,PRODUCTO.</p>
+                <h4 className="mt-4 text-xl font-black text-slate-900">Arrastra el archivo aqui</h4>
+                <p className="mt-2 text-sm text-slate-600">Acepta .csv y .txt con formato CLAVE,PRODUCTO.</p>
 
                 <input id="csv-upload" type="file" accept=".csv,.txt" onChange={handleFileUpload} className="hidden" />
                 <label htmlFor="csv-upload" className="app-button-primary mt-5 inline-flex sm:w-auto">
@@ -571,8 +571,8 @@ export default function Configuracion({ setConfig }) {
                   {productosCSV.map((producto, index) => (
                     <div key={`${producto.clave}-${index}`} className="app-card-soft flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
-                        <div className="app-chip mb-2 w-fit border-sky-400/25 bg-sky-400/10 text-sky-200">{producto.clave}</div>
-                        <div className="truncate text-base font-black text-white">{producto.nombre}</div>
+                        <div className="app-chip mb-2 w-fit border-sky-200 bg-sky-50 text-sky-700">{producto.clave}</div>
+                        <div className="truncate text-base font-black text-slate-900">{producto.nombre}</div>
                       </div>
 
                       <button type="button" onClick={() => eliminarProducto(index)} className="app-icon-button text-rose-200">
@@ -585,9 +585,9 @@ export default function Configuracion({ setConfig }) {
             </>
           ) : (
             <div className="space-y-5">
-              <div className="rounded-[24px] border border-amber-300/28 bg-amber-400/10 p-4">
-                <div className="text-sm font-black uppercase tracking-[0.16em] text-amber-200">Vista previa</div>
-                <div className="mt-2 text-base text-amber-50">
+              <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4">
+                <div className="text-sm font-black uppercase tracking-[0.16em] text-amber-700">Vista previa</div>
+                <div className="mt-2 text-base text-amber-900">
                   {previewCSV.length} productos listos para entrar al catalogo.
                 </div>
               </div>
@@ -596,8 +596,8 @@ export default function Configuracion({ setConfig }) {
                 {previewCSV.map((producto) => (
                   <div key={`${producto.clave}-${producto.nombre}`} className="app-card-soft flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <div className="app-chip mb-2 w-fit border-amber-300/28 bg-amber-400/12 text-amber-100">{producto.clave}</div>
-                      <div className="text-base font-black text-white">{producto.nombre}</div>
+                      <div className="app-chip mb-2 w-fit border-amber-200 bg-amber-50 text-amber-800">{producto.clave}</div>
+                      <div className="text-base font-black text-slate-900">{producto.nombre}</div>
                     </div>
                   </div>
                 ))}

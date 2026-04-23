@@ -574,7 +574,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
         <div className="grid gap-3 md:grid-cols-3">
           <div>
             <FieldLabel icon={Icons.package} label="N. Pedido" />
-            <div className="app-card-soft flex min-h-[54px] items-center px-4 text-lg font-black text-white">
+            <div className="app-card-soft flex min-h-[54px] items-center px-4 text-lg font-black text-slate-900">
               {orderPreview}
             </div>
           </div>
@@ -583,7 +583,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
             <FieldLabel icon={Icons.send} label="Enviar pedido a" />
             <select className="app-select" value={destino} onChange={(event) => setDestino(event.target.value)}>
               {sucursales.filter((sucursal) => sucursal !== user).map((sucursal) => (
-                <option key={sucursal} value={sucursal} style={{ background: "#0f172a" }}>
+                <option key={sucursal} value={sucursal} style={{ background: "#ffffff", color: "#12324e" }}>
                   {sucursal}
                 </option>
               ))}
@@ -609,7 +609,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
 
       <section className="app-panel p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="app-title text-2xl font-black text-white">Captura de pedido</h3>
+          <h3 className="app-title text-2xl font-black text-slate-900">Captura de pedido</h3>
           <button
             type="button"
             onClick={() => agregarFila(true)}
@@ -627,7 +627,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
             return (
               <article key={idx} className="app-card p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <span className="app-chip border-white/10 bg-white/5 text-slate-100">
+                  <span className="app-chip border-slate-200 bg-slate-50 text-slate-700">
                     Linea {String(idx + 1).padStart(2, "0")}
                   </span>
 
@@ -663,7 +663,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
                     </div>
 
                     {item.mostrarDropdown ? (
-                      <div className="app-scroll-y absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 rounded-[22px] border border-white/10 bg-slate-950/96 p-2 shadow-[0_22px_60px_rgba(2,6,23,0.46)] backdrop-blur-xl">
+                      <div className="app-scroll-y absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 rounded-[22px] border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)] backdrop-blur-xl">
                         {productosFiltrados.length === 0 ? (
                           <div className="rounded-[18px] px-4 py-5 text-center text-sm text-slate-400">
                             Sin resultados
@@ -674,12 +674,12 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
                               type="button"
                               key={`${producto.clave}-${producto.nombre}`}
                               onClick={() => seleccionarProducto(idx, producto)}
-                              className="mb-2 flex w-full items-start gap-3 rounded-[18px] border border-transparent bg-white/4 px-4 py-3 text-left transition hover:border-sky-400/30 hover:bg-sky-400/10"
+                              className="mb-2 flex w-full items-start gap-3 rounded-[18px] border border-transparent bg-slate-50 px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50"
                             >
-                              <span className="rounded-full bg-sky-400/15 px-3 py-1 text-xs font-black tracking-[0.16em] text-sky-200">
+                              <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-sky-700">
                                 {producto.clave}
                               </span>
-                              <span className="text-sm font-semibold text-white">{producto.nombre}</span>
+                              <span className="text-sm font-semibold text-slate-800">{producto.nombre}</span>
                             </button>
                           ))
                         )}
@@ -701,7 +701,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
                       step="0.01"
                       inputMode="decimal"
                       enterKeyHint="next"
-                      className="app-input text-center text-white"
+                      className="app-input text-center text-slate-900"
                     />
                   </div>
 
@@ -734,7 +734,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
                   </button>
 
                   {item.nota ? (
-                    <div className="mt-2 rounded-[18px] border border-amber-300/25 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100">
+                    <div className="mt-2 rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
                       {item.nota}
                     </div>
                   ) : null}

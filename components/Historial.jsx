@@ -353,20 +353,20 @@ export default function Historial({ user, pedidos }) {
             width: '48px',
             height: '48px',
             borderRadius: '16px',
-            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 10px 25px rgba(139, 92, 246, 0.4)',
+            boxShadow: '0 14px 30px rgba(37, 99, 235, 0.22)',
             color: 'white'
           }}>
             {Icons.calendar}
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: 'white' }}>
+            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
               Historial
             </h1>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
+            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
               {user} • Centro de Distribución
             </p>
           </div>
@@ -412,11 +412,12 @@ export default function Historial({ user, pedidos }) {
 
       {/* Selector de Fecha y Vista */}
       <div style={{
-        background: 'rgba(255,255,255,0.05)',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,245,249,0.96) 100%)',
         borderRadius: '20px',
         padding: '24px',
         marginBottom: '24px',
-        border: '1px solid rgba(255,255,255,0.1)'
+        border: '1px solid rgba(148, 163, 184, 0.18)',
+        boxShadow: '0 20px 40px -28px rgba(15, 23, 42, 0.28)'
       }}>
         <div style={{
           display: 'grid',
@@ -428,7 +429,7 @@ export default function Historial({ user, pedidos }) {
             <label style={{
               fontSize: '11px',
               fontWeight: 700,
-              color: 'rgba(255,255,255,0.5)',
+              color: '#64748b',
               textTransform: 'uppercase',
               letterSpacing: '0.5px',
               marginBottom: '8px',
@@ -439,7 +440,7 @@ export default function Historial({ user, pedidos }) {
             <div style={{
               display: 'flex',
               gap: '8px',
-              background: 'rgba(0,0,0,0.2)',
+              background: '#e2e8f0',
               padding: '6px',
               borderRadius: '12px'
             }}>
@@ -460,9 +461,9 @@ export default function Historial({ user, pedidos }) {
                     borderRadius: '10px',
                     border: 'none',
                     background: modoFecha === option.key
-                      ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)'
+                      ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
                       : 'transparent',
-                    color: modoFecha === option.key ? 'white' : 'rgba(255,255,255,0.5)',
+                    color: modoFecha === option.key ? 'white' : '#475569',
                     fontWeight: 700,
                     fontSize: '13px',
                     cursor: 'pointer',
@@ -479,7 +480,7 @@ export default function Historial({ user, pedidos }) {
             <label style={{
               fontSize: '11px',
               fontWeight: 700,
-              color: 'rgba(255,255,255,0.5)',
+              color: '#64748b',
               textTransform: 'uppercase',
               letterSpacing: '0.5px',
               marginBottom: '8px',
@@ -504,10 +505,10 @@ export default function Historial({ user, pedidos }) {
               style={{
                 width: '100%',
                 padding: '14px 16px',
-                background: 'rgba(255,255,255,0.1)',
-                border: '2px solid rgba(255,255,255,0.2)',
+                background: '#ffffff',
+                border: '2px solid #cbd5e1',
                 borderRadius: '12px',
-                color: 'white',
+                color: '#0f172a',
                 fontWeight: 700,
                 fontSize: '15px',
                 cursor: 'pointer'
@@ -520,7 +521,7 @@ export default function Historial({ user, pedidos }) {
               <label style={{
                 fontSize: '11px',
                 fontWeight: 700,
-                color: 'rgba(255,255,255,0.5)',
+                color: '#64748b',
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
                 marginBottom: '8px',
@@ -541,10 +542,10 @@ export default function Historial({ user, pedidos }) {
                 style={{
                   width: '100%',
                   padding: '14px 16px',
-                  background: 'rgba(255,255,255,0.1)',
-                  border: '2px solid rgba(255,255,255,0.2)',
+                  background: '#ffffff',
+                  border: '2px solid #cbd5e1',
                   borderRadius: '12px',
-                  color: 'white',
+                  color: '#0f172a',
                   fontWeight: 700,
                   fontSize: '15px',
                   cursor: 'pointer'
@@ -557,7 +558,7 @@ export default function Historial({ user, pedidos }) {
             <label style={{
               fontSize: '11px',
               fontWeight: 700,
-              color: 'rgba(255,255,255,0.5)',
+              color: '#64748b',
               textTransform: 'uppercase',
               letterSpacing: '0.5px',
               marginBottom: '8px',
@@ -568,7 +569,7 @@ export default function Historial({ user, pedidos }) {
             <div style={{
               display: 'flex',
               gap: '8px',
-              background: 'rgba(0,0,0,0.2)',
+              background: '#e2e8f0',
               padding: '6px',
               borderRadius: '12px'
             }}>
@@ -588,7 +589,7 @@ export default function Historial({ user, pedidos }) {
                     background: vista === tab.key 
                       ? `linear-gradient(135deg, ${tab.color} 0%, ${tab.color}dd 100%)` 
                       : 'transparent',
-                    color: vista === tab.key ? 'white' : 'rgba(255,255,255,0.5)',
+                    color: vista === tab.key ? 'white' : '#475569',
                     fontWeight: 700,
                     fontSize: '13px',
                     cursor: 'pointer',
@@ -613,15 +614,15 @@ export default function Historial({ user, pedidos }) {
           justifyContent: 'center',
           gap: '12px',
           padding: '16px',
-          background: 'rgba(139, 92, 246, 0.2)',
+          background: 'rgba(59, 130, 246, 0.08)',
           borderRadius: '12px',
-          border: '1px solid rgba(139, 92, 246, 0.3)'
+          border: '1px solid rgba(59, 130, 246, 0.18)'
         }}>
           <span style={{ fontSize: '24px' }}>📅</span>
           <span style={{
             fontSize: '20px',
             fontWeight: 800,
-            color: '#a78bfa'
+            color: '#2563eb'
           }}>
             {etiquetaFiltroFecha}
           </span>
@@ -636,7 +637,7 @@ export default function Historial({ user, pedidos }) {
           padding: '28px',
           marginBottom: '32px',
           border: '2px solid rgba(16, 185, 129, 0.3)',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+          boxShadow: '0 20px 40px -30px rgba(5, 150, 105, 0.32)'
         }}>
           {/* Header */}
           <div style={{
@@ -674,7 +675,7 @@ export default function Historial({ user, pedidos }) {
                   Consolidado de Productos Enviados
                   <span style={{
                     background: 'rgba(16, 185, 129, 0.2)',
-                    color: '#34d399',
+                    color: '#047857',
                     padding: '4px 12px',
                     borderRadius: '20px',
                     fontSize: '12px'
@@ -682,7 +683,7 @@ export default function Historial({ user, pedidos }) {
                     {pedidosFisicamenteEnviados.length} pedidos
                   </span>
                 </h2>
-                <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: 'rgba(255,255,255,0.6)' }}>
+                <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: '#475569' }}>
                   {sucursalFiltro === 'todas' 
                     ? `Todos los pedidos recibidos en ${user}` 
                     : `Solo pedidos de: ${sucursalFiltro}`}
@@ -697,7 +698,7 @@ export default function Historial({ user, pedidos }) {
                 padding: '14px 24px',
                 borderRadius: '12px',
                 border: 'none',
-                background: consolidadoDia.length === 0 || cargandoCatalogo ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                background: consolidadoDia.length === 0 || cargandoCatalogo ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
                 color: 'white',
                 fontWeight: 700,
                 fontSize: '14px',
@@ -718,20 +719,21 @@ export default function Historial({ user, pedidos }) {
           {/* 🆕 FILTRO POR SUCURSAL */}
           {sucursalesDisponibles.length > 0 && (
             <div style={{
-              background: 'rgba(0,0,0,0.2)',
+              background: 'rgba(255,255,255,0.72)',
               borderRadius: '12px',
               padding: '16px',
               marginBottom: '20px',
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
-              flexWrap: 'wrap'
+              flexWrap: 'wrap',
+              border: '1px solid rgba(148, 163, 184, 0.18)'
             }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                color: 'rgba(255,255,255,0.7)',
+                color: '#475569',
                 fontSize: '14px',
                 fontWeight: 600
               }}>
@@ -746,16 +748,16 @@ export default function Historial({ user, pedidos }) {
                   flex: 1,
                   minWidth: '200px',
                   padding: '10px 14px',
-                  background: 'rgba(255,255,255,0.1)',
-                  border: '2px solid rgba(255,255,255,0.2)',
+                  background: '#ffffff',
+                  border: '2px solid #cbd5e1',
                   borderRadius: '8px',
-                  color: 'white',
+                  color: '#0f172a',
                   fontWeight: 700,
                   fontSize: '14px',
                   cursor: 'pointer'
                 }}
               >
-                <option value="todas" style={{ background: '#1e293b' }}>
+                <option value="todas" style={{ background: '#ffffff', color: '#0f172a' }}>
                   Todas las sucursales ({pedidosFiltradosFecha.filter(p => p.sucursalDestino === user && (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')).length} pedidos)
                 </option>
                 {sucursalesDisponibles.map(sucursal => {
@@ -765,7 +767,7 @@ export default function Historial({ user, pedidos }) {
                     p.sucursalOrigen === sucursal
                   ).length;
                   return (
-                    <option key={sucursal} value={sucursal} style={{ background: '#1e293b' }}>
+                    <option key={sucursal} value={sucursal} style={{ background: '#ffffff', color: '#0f172a' }}>
                       {sucursal} ({count} pedidos)
                     </option>
                   );
@@ -778,9 +780,9 @@ export default function Historial({ user, pedidos }) {
                   style={{
                     padding: '8px 16px',
                     borderRadius: '6px',
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    background: 'transparent',
-                    color: 'rgba(255,255,255,0.7)',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#475569',
                     fontSize: '12px',
                     cursor: 'pointer'
                   }}
@@ -796,27 +798,29 @@ export default function Historial({ user, pedidos }) {
             <div style={{
               textAlign: 'center',
               padding: '40px',
-              background: 'rgba(0,0,0,0.2)',
-              borderRadius: '16px'
+              background: 'rgba(255,255,255,0.82)',
+              borderRadius: '16px',
+              border: '1px solid rgba(148, 163, 184, 0.18)'
             }}>
               <div style={{ fontSize: '48px', marginBottom: '12px' }}>📭</div>
-              <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '16px', fontWeight: 600 }}>
+              <p style={{ margin: 0, color: '#334155', fontSize: '16px', fontWeight: 600 }}>
                 {sucursalFiltro === 'todas' 
                   ? 'No has enviado productos en esta fecha' 
                   : `No hay envíos para ${sucursalFiltro} en esta fecha`}
               </p>
-              <p style={{ margin: '8px 0 0 0', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
+              <p style={{ margin: '8px 0 0 0', color: '#64748b', fontSize: '14px' }}>
                 Los pedidos deben estar marcados como Enviado o Recibido Conforme
               </p>
             </div>
           ) : (
             <>
               <div style={{
-                background: 'rgba(0,0,0,0.3)',
+                background: 'rgba(255,255,255,0.88)',
                 borderRadius: '16px',
                 overflowX: 'auto',
                 overflowY: 'hidden',
-                border: '1px solid rgba(255,255,255,0.1)'
+                border: '1px solid rgba(148, 163, 184, 0.18)',
+                boxShadow: '0 18px 38px -28px rgba(15, 23, 42, 0.3)'
               }}>
                 {/* Header de tabla */}
                 <div className="history-table" style={{
@@ -828,7 +832,7 @@ export default function Historial({ user, pedidos }) {
                   borderBottom: '2px solid rgba(16, 185, 129, 0.3)',
                   fontSize: '12px',
                   fontWeight: 800,
-                  color: '#34d399',
+                  color: '#047857',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
@@ -851,21 +855,21 @@ export default function Historial({ user, pedidos }) {
                           gridTemplateColumns: 'minmax(220px, 2fr) minmax(80px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)',
                           gap: '16px',
                           padding: '16px 20px',
-                          borderBottom: '1px solid rgba(255,255,255,0.05)',
-                          background: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                          borderBottom: '1px solid rgba(148, 163, 184, 0.12)',
+                          background: index % 2 === 0 ? 'rgba(241, 245, 249, 0.82)' : 'rgba(255,255,255,0.92)',
                           transition: 'all 0.2s',
                           cursor: 'default'
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                          e.currentTarget.style.background = 'rgba(219, 234, 254, 0.72)';
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.background = index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+                          e.currentTarget.style.background = index % 2 === 0 ? 'rgba(241, 245, 249, 0.82)' : 'rgba(255,255,255,0.92)';
                         }}
                       >
                         <div style={{ 
                           fontWeight: 700, 
-                          color: 'white',
+                          color: '#0f172a',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '8px'
@@ -873,7 +877,7 @@ export default function Historial({ user, pedidos }) {
                           <span style={{ color: '#10b981', fontSize: '20px' }}>•</span>
                           {item.producto}
                         </div>
-                        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.7)' }}>
+                        <div style={{ textAlign: 'center', color: '#475569' }}>
                           {item.unidad}
                         </div>
                         <div style={{ 
@@ -913,7 +917,7 @@ export default function Historial({ user, pedidos }) {
                     {Icons.truck}
                     TOTALES
                   </div>
-                  <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ textAlign: 'center', color: '#64748b' }}>
                     {totalesConsolidado.totalLineas} productos
                   </div>
                   <div></div>
@@ -936,7 +940,7 @@ export default function Historial({ user, pedidos }) {
                 borderRadius: '10px',
                 border: '1px solid rgba(59, 130, 246, 0.2)',
                 fontSize: '13px',
-                color: '#93c5fd',
+                color: '#1d4ed8',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px'
@@ -957,7 +961,7 @@ export default function Historial({ user, pedidos }) {
           padding: '28px',
           marginBottom: '32px',
           border: '2px solid rgba(16, 185, 129, 0.3)',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
+          boxShadow: '0 20px 40px -30px rgba(5, 150, 105, 0.32)'
         }}>
           {/* Header del Consolidado */}
           <div style={{
@@ -995,7 +999,7 @@ export default function Historial({ user, pedidos }) {
                   Consolidado de Productos Enviados
                   <span style={{
                     background: 'rgba(16, 185, 129, 0.2)',
-                    color: '#34d399',
+                    color: '#047857',
                     padding: '4px 12px',
                     borderRadius: '20px',
                     fontSize: '12px'
@@ -1003,7 +1007,7 @@ export default function Historial({ user, pedidos }) {
                     {pedidosFisicamenteEnviados.length} pedidos
                   </span>
                 </h2>
-                <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: 'rgba(255,255,255,0.6)' }}>
+                <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: '#475569' }}>
                   Productos que salieron físicamente de {user} hacia otras sucursales
                 </p>
               </div>
@@ -1016,7 +1020,7 @@ export default function Historial({ user, pedidos }) {
                 padding: '14px 24px',
                 borderRadius: '12px',
                 border: 'none',
-                background: consolidadoDia.length === 0 || cargandoCatalogo ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                background: consolidadoDia.length === 0 || cargandoCatalogo ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
                 color: 'white',
                 fontWeight: 700,
                 fontSize: '14px',
@@ -1039,24 +1043,26 @@ export default function Historial({ user, pedidos }) {
             <div style={{
               textAlign: 'center',
               padding: '40px',
-              background: 'rgba(0,0,0,0.2)',
-              borderRadius: '16px'
+              background: 'rgba(255,255,255,0.82)',
+              borderRadius: '16px',
+              border: '1px solid rgba(148, 163, 184, 0.18)'
             }}>
               <div style={{ fontSize: '48px', marginBottom: '12px' }}>📭</div>
-              <p style={{ margin: 0, color: 'rgba(255,255,255,0.6)', fontSize: '16px', fontWeight: 600 }}>
+              <p style={{ margin: 0, color: '#334155', fontSize: '16px', fontWeight: 600 }}>
                 No has enviado productos en esta fecha
               </p>
-              <p style={{ margin: '8px 0 0 0', color: 'rgba(255,255,255,0.4)', fontSize: '14px' }}>
+              <p style={{ margin: '8px 0 0 0', color: '#64748b', fontSize: '14px' }}>
                 Los pedidos deben estar marcados como Enviado o Recibido Conforme
               </p>
             </div>
           ) : (
             <>
               <div style={{
-                background: 'rgba(0,0,0,0.3)',
+                background: 'rgba(255,255,255,0.88)',
                 borderRadius: '16px',
                 overflow: 'hidden',
-                border: '1px solid rgba(255,255,255,0.1)'
+                border: '1px solid rgba(148, 163, 184, 0.18)',
+                boxShadow: '0 18px 38px -28px rgba(15, 23, 42, 0.3)'
               }}>
                 {/* Header de tabla */}
                 <div style={{
@@ -1068,7 +1074,7 @@ export default function Historial({ user, pedidos }) {
                   borderBottom: '2px solid rgba(16, 185, 129, 0.3)',
                   fontSize: '12px',
                   fontWeight: 800,
-                  color: '#34d399',
+                  color: '#047857',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
@@ -1090,21 +1096,21 @@ export default function Historial({ user, pedidos }) {
                           gridTemplateColumns: '2fr 1fr 1fr 1fr',
                           gap: '16px',
                           padding: '16px 20px',
-                          borderBottom: '1px solid rgba(255,255,255,0.05)',
-                          background: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                          borderBottom: '1px solid rgba(148, 163, 184, 0.12)',
+                          background: index % 2 === 0 ? 'rgba(241, 245, 249, 0.82)' : 'rgba(255,255,255,0.92)',
                           transition: 'all 0.2s',
                           cursor: 'default'
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                          e.currentTarget.style.background = 'rgba(219, 234, 254, 0.72)';
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.background = index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+                          e.currentTarget.style.background = index % 2 === 0 ? 'rgba(241, 245, 249, 0.82)' : 'rgba(255,255,255,0.92)';
                         }}
                       >
                         <div style={{ 
                           fontWeight: 700, 
-                          color: 'white',
+                          color: '#0f172a',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '8px'
@@ -1112,7 +1118,7 @@ export default function Historial({ user, pedidos }) {
                           <span style={{ color: '#10b981', fontSize: '20px' }}>•</span>
                           {item.producto}
                         </div>
-                        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.7)' }}>
+                        <div style={{ textAlign: 'center', color: '#475569' }}>
                           {item.unidad}
                         </div>
                         <div style={{ 
@@ -1151,7 +1157,7 @@ export default function Historial({ user, pedidos }) {
                     {Icons.truck}
                     TOTALES
                   </div>
-                  <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ textAlign: 'center', color: '#64748b' }}>
                     {totalesConsolidado.totalLineas} productos
                   </div>
                   <div></div>
@@ -1174,7 +1180,7 @@ export default function Historial({ user, pedidos }) {
                 borderRadius: '10px',
                 border: '1px solid rgba(59, 130, 246, 0.2)',
                 fontSize: '13px',
-                color: '#93c5fd',
+                color: '#1d4ed8',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px'
@@ -1222,10 +1228,10 @@ export default function Historial({ user, pedidos }) {
               <div style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>
                 {stats.totalRecibidos}
               </div>
-              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+              <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
                 Pedidos Recibidos
               </div>
-              <div style={{ fontSize: '11px', color: '#34d399', marginTop: '4px' }}>
+              <div style={{ fontSize: '11px', color: '#047857', marginTop: '4px' }}>
                 Me pidieron {stats.totalRecibidos} pedidos
               </div>
             </div>
@@ -1259,7 +1265,7 @@ export default function Historial({ user, pedidos }) {
               <div style={{ fontSize: '28px', fontWeight: 800, color: '#3b82f6' }}>
                 {stats.totalEnviadosPorMi}
               </div>
-              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+              <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
                 Pedidos Enviados por Mí
               </div>
               <div style={{ fontSize: '11px', color: '#60a5fa', marginTop: '4px' }}>
@@ -1296,10 +1302,10 @@ export default function Historial({ user, pedidos }) {
               <div style={{ fontSize: '28px', fontWeight: 800, color: '#8b5cf6' }}>
                 {stats.totalSolicitados}
               </div>
-              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+              <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
                 Pedidos que Hice
               </div>
-              <div style={{ fontSize: '11px', color: '#a78bfa', marginTop: '4px' }}>
+              <div style={{ fontSize: '11px', color: '#6d28d9', marginTop: '4px' }}>
                 A otras sucursales
               </div>
             </div>
@@ -1332,7 +1338,7 @@ export default function Historial({ user, pedidos }) {
             <div style={{ fontSize: '28px', fontWeight: 800, color: '#6366f1' }}>
               {stats.completados}
             </div>
-            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+            <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
               Completados
             </div>
           </div>
@@ -1344,15 +1350,15 @@ export default function Historial({ user, pedidos }) {
         <div style={{
           textAlign: 'center',
           padding: '80px 20px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'rgba(255,255,255,0.8)',
           borderRadius: '24px',
-          border: '2px dashed rgba(255,255,255,0.1)'
+          border: '2px dashed rgba(148, 163, 184, 0.22)'
         }}>
           <div style={{ fontSize: '64px', marginBottom: '16px' }}>📭</div>
-          <h3 style={{ fontSize: '24px', margin: '0 0 8px 0', color: 'white' }}>
+          <h3 style={{ fontSize: '24px', margin: '0 0 8px 0', color: '#0f172a' }}>
             No hay pedidos para este filtro
           </h3>
-          <p style={{ margin: 0, color: 'rgba(255,255,255,0.5)' }}>
+          <p style={{ margin: 0, color: '#64748b' }}>
             No tienes actividad registrada en {etiquetaFiltroFecha}
           </p>
         </div>
@@ -1372,14 +1378,15 @@ export default function Historial({ user, pedidos }) {
                 key={pedido.firebaseId}
                 className="card-enter"
                 style={{
-                  background: 'rgba(255,255,255,0.05)',
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)',
                   borderRadius: '20px',
                   padding: '24px',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(148, 163, 184, 0.14)',
                   animationDelay: `${index * 0.05}s`,
                   position: 'relative',
                   overflow: 'hidden',
-                  borderLeft: `4px solid ${meHicieronElPedido ? '#10b981' : '#8b5cf6'}`
+                  borderLeft: `4px solid ${meHicieronElPedido ? '#10b981' : '#3b82f6'}`,
+                  boxShadow: '0 18px 36px -28px rgba(15, 23, 42, 0.28)'
                 }}
               >
                 {/* Badge de rol */}
@@ -1454,14 +1461,14 @@ export default function Historial({ user, pedidos }) {
                       margin: 0,
                       fontSize: '20px',
                       fontWeight: 800,
-                      color: 'white'
+                      color: '#0f172a'
                     }}>
                       Pedido {formatOrderNumber(pedido)}
                     </h3>
                     <p style={{
                       margin: '4px 0 0 0',
                       fontSize: '13px',
-                      color: 'rgba(255,255,255,0.6)'
+                      color: '#64748b'
                     }}>
                       {meHicieronElPedido ? (
                         <><strong>{pedido.sucursalOrigen}</strong> me pidió → Yo ({user}) preparé y envié</>
@@ -1473,7 +1480,7 @@ export default function Historial({ user, pedidos }) {
                   <div style={{
                     textAlign: 'right',
                     fontSize: '12px',
-                    color: 'rgba(255,255,255,0.5)'
+                    color: '#64748b'
                   }}>
                     <div>{pedido.fechaPedido}</div>
                     <div style={{ marginTop: '4px', fontWeight: 600 }}>{pedido.hora}</div>
@@ -1482,15 +1489,16 @@ export default function Historial({ user, pedidos }) {
 
                 {/* Items resumidos */}
                 <div style={{
-                  background: 'rgba(0,0,0,0.2)',
+                  background: '#f8fafc',
                   borderRadius: '12px',
                   padding: '16px',
-                  marginBottom: '16px'
+                  marginBottom: '16px',
+                  border: '1px solid rgba(148, 163, 184, 0.18)'
                 }}>
                   <div style={{
                     fontSize: '11px',
                     fontWeight: 700,
-                    color: 'rgba(255,255,255,0.5)',
+                    color: '#64748b',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px',
                     marginBottom: '12px',
@@ -1513,7 +1521,7 @@ export default function Historial({ user, pedidos }) {
                         alignItems: 'center',
                         fontSize: '13px'
                       }}>
-                        <span style={{ color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
+                        <span style={{ color: '#0f172a', fontWeight: 600 }}>
                           {item.producto}
                         </span>
                         <span style={{ color: '#60a5fa', fontWeight: 700 }}>
@@ -1529,7 +1537,7 @@ export default function Historial({ user, pedidos }) {
                     {pedido.items.length > 3 && (
                       <div style={{
                         fontSize: '12px',
-                        color: 'rgba(255,255,255,0.4)',
+                        color: '#94a3b8',
                         fontStyle: 'italic',
                         textAlign: 'center',
                         marginTop: '4px'
@@ -1555,7 +1563,7 @@ export default function Historial({ user, pedidos }) {
                       padding: '8px 12px',
                       background: 'rgba(249, 115, 22, 0.1)',
                       borderRadius: '8px',
-                      color: '#fbbf24'
+                      color: '#c2410c'
                     }}>
                       <span>👨‍🍳</span>
                       Preparado: {pedido.preparadoPor}
@@ -1569,7 +1577,7 @@ export default function Historial({ user, pedidos }) {
                       padding: '8px 12px',
                       background: 'rgba(99, 102, 241, 0.1)',
                       borderRadius: '8px',
-                      color: '#a78bfa'
+                      color: '#4f46e5'
                     }}>
                       <span>🛵</span>
                       Enviado con: {pedido.enviadoCon}
@@ -1583,7 +1591,7 @@ export default function Historial({ user, pedidos }) {
                       padding: '8px 12px',
                       background: 'rgba(245, 158, 11, 0.1)',
                       borderRadius: '8px',
-                      color: '#fbbf24'
+                      color: '#b45309'
                     }}>
                       {Icons.clock}
                       Entrega: {pedido.fechaEntrega}
@@ -1600,7 +1608,7 @@ export default function Historial({ user, pedidos }) {
                     borderRadius: '10px',
                     border: '1px solid rgba(59, 130, 246, 0.2)',
                     fontSize: '13px',
-                    color: '#93c5fd',
+                    color: '#1d4ed8',
                     fontStyle: 'italic'
                   }}>
                     📝 {pedido.notaGeneral}
