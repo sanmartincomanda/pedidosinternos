@@ -9,6 +9,7 @@ import Configuracion from "./Configuracion";
 import EstadoPedidos from "./EstadoPedidos";
 import Formulario from "./Formulario";
 import Historial from "./Historial";
+import PedidoVacuna from "./PedidoVacuna";
 
 const Icons = {
   app: (
@@ -29,6 +30,13 @@ const Icons = {
       <rect x="5" y="4" width="14" height="17" rx="2" />
       <path d="M9 4.5h6v3H9z" />
       <path d="M9 11h6M9 15h6" />
+    </svg>
+  ),
+  vaccine: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M9 3h6v4H9z" />
+      <path d="M8 7h8v4a4 4 0 0 1-4 4 4 4 0 0 1-4-4V7Z" />
+      <path d="M12 15v6M9 19h6" />
     </svg>
   ),
   truck: (
@@ -92,6 +100,14 @@ const NAV_ITEMS = [
     subtitle: "Carga productos y envia rapido.",
     color: "#38bdf8",
     icon: Icons.clipboard,
+  },
+  {
+    key: "vacuna",
+    label: "Vacuna",
+    title: "Pedido vacuna",
+    subtitle: "Envio directo con peso real, sin solicitud previa.",
+    color: "#0ea5a4",
+    icon: Icons.vaccine,
   },
   {
     key: "cocina",
@@ -528,6 +544,16 @@ export default function AppInterna() {
         <section className="app-section p-4 sm:p-6">
           {view === "formulario" ? (
             <Formulario
+              user={sharedProps.user}
+              pedidos={sharedProps.pedidos}
+              setView={setView}
+              sucursales={SUCURSALES_REGISTRADAS.map((item) => item.nombre).filter((name) => name !== user)}
+              productosCSV={config.productos || []}
+            />
+          ) : null}
+
+          {view === "vacuna" ? (
+            <PedidoVacuna
               user={sharedProps.user}
               pedidos={sharedProps.pedidos}
               setView={setView}

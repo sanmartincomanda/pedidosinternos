@@ -33,6 +33,8 @@ const STATUS_COLORS = {
   'ENTREGADO': '#059669'
 };
 
+const isPedidoVacuna = (pedido) => pedido?.tipoPedido === 'VACUNA';
+
 export default function Historial({ user, pedidos }) {
   const hoy = new Date().toISOString().split('T')[0];
   const [modoFecha, setModoFecha] = useState('dia');
@@ -1370,8 +1372,15 @@ export default function Historial({ user, pedidos }) {
         }}>
           {pedidosMostrar.map((pedido, index) => {
             const meHicieronElPedido = pedido.sucursalDestino === user;
-            const yoHiceElPedido = pedido.sucursalOrigen === user;
+            const esVacuna = isPedidoVacuna(pedido);
             const estadoColor = getEstadoColor(pedido.estado);
+            const descripcionPedido = esVacuna
+              ? meHicieronElPedido
+                ? <>Yo ({user}) envié vacuna directa → <strong>{pedido.sucursalOrigen}</strong></>
+                : <><strong>{pedido.sucursalDestino}</strong> me envió vacuna directa</>
+              : meHicieronElPedido
+                ? <><strong>{pedido.sucursalOrigen}</strong> me pidió → Yo ({user}) preparé y envié</>
+                : <>Yo ({user}) pedí → <strong>{pedido.sucursalDestino}</strong> me enviará</>;
             
             return (
               <div
@@ -1442,6 +1451,7 @@ export default function Historial({ user, pedidos }) {
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
+                      flexWrap: 'wrap',
                       gap: '8px',
                       marginBottom: '8px'
                     }}>
@@ -1456,6 +1466,19 @@ export default function Historial({ user, pedidos }) {
                       }}>
                         {pedido.estado === 'RECIBIDO_CONFORME' ? 'Recibido Conf.' : pedido.estado}
                       </span>
+                      {esVacuna && (
+                        <span style={{
+                          padding: '4px 12px',
+                          borderRadius: '20px',
+                          background: 'rgba(15, 118, 110, 0.12)',
+                          color: '#0f766e',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          textTransform: 'uppercase'
+                        }}>
+                          Vacuna directa
+                        </span>
+                      )}
                     </div>
                     <h3 style={{
                       margin: 0,
@@ -1476,6 +1499,16 @@ export default function Historial({ user, pedidos }) {
                         <>Yo ({user}) pedí → <strong>{pedido.sucursalDestino}</strong> me enviará</>
                       )}
                     </p>
+                    {esVacuna && (
+                      <p style={{
+                        margin: '8px 0 0 0',
+                        fontSize: '12px',
+                        color: '#0f766e',
+                        fontWeight: 700
+                      }}>
+                        {descripcionPedido}
+                      </p>
+                    )}
                   </div>
                   <div style={{
                     textAlign: 'right',

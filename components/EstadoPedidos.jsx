@@ -74,6 +74,10 @@ const STATUS_CONFIG = {
   }
 };
 
+const isPedidoVacuna = (pedido) => pedido?.tipoPedido === 'VACUNA';
+const getSendingBranch = (pedido) => pedido?.sucursalDestino || '';
+const getReceivingBranch = (pedido) => pedido?.sucursalOrigen || '';
+
 export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
   const [filtro, setFiltro] = useState('activos');
   const [modalRepartidor, setModalRepartidor] = useState(null);
@@ -265,7 +269,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
       tipo: 'DIFERENCIA_PESO',
       pedidoId: formatOrderNumber(modalRecepcion),
       pedidoFirebaseId: modalRecepcion.firebaseId,
-      sucursalOrigen: modalRecepcion.sucursalOrigen,
+      sucursalOrigen: getSendingBranch(modalRecepcion),
       sucursalDestino: user,
       fecha: new Date().toISOString(),
       mensaje: `La sucursal ${user} reportó diferencias en el pedido ${formatOrderNumber(modalRecepcion)}`,
@@ -274,13 +278,13 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
     };
 
     // Guardar notificación en Firebase
-    const notifRef = push(ref(db, `notificaciones/${modalRecepcion.sucursalOrigen}`));
+    const notifRef = push(ref(db, `notificaciones/${getSendingBranch(modalRecepcion)}`));
     await set(notifRef, notificacion);
 
     // Mostrar confirmación local
     agregarNotificacion({
       tipo: 'EXITO',
-      mensaje: `Notificación enviada a ${modalRecepcion.sucursalOrigen} sobre las diferencias encontradas`
+      mensaje: `Notificación enviada a ${getSendingBranch(modalRecepcion)} sobre las diferencias encontradas`
     });
 
     setTimeout(() => {
@@ -640,10 +644,10 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
             }}>
               <div>
                 <h2 style={{ margin: '0 0 4px 0', fontSize: '22px', fontWeight: 800, color: '#1e293b' }}>
-                  {modoEdicion ? 'Reportar Diferencia' : 'Recibir Pedido'}
+                  {modoEdicion ? 'Reportar Diferencia' : isPedidoVacuna(modalRecepcion) ? 'Recibir Vacuna' : 'Recibir Pedido'}
                 </h2>
                 <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
-                  Pedido {formatOrderNumber(modalRecepcion)} de {modalRecepcion.sucursalOrigen}
+                  Pedido {formatOrderNumber(modalRecepcion)} de {getSendingBranch(modalRecepcion)}
                 </p>
               </div>
               <button
@@ -686,7 +690,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                     Modo Corrección
                   </div>
                   <div style={{ fontSize: '13px', color: '#a16207' }}>
-                    Los cambios realizados notificarán a {modalRecepcion.sucursalOrigen}
+                    Los cambios realizados notificarán a {getSendingBranch(modalRecepcion)}
                   </div>
                 </div>
               </div>
@@ -1085,7 +1089,10 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
             const isAnimating = animatingCards.has(pedido.firebaseId);
             const esOrigen = pedido.sucursalOrigen === user;
             const esDestino = pedido.sucursalDestino === user;
+            const esVacuna = isPedidoVacuna(pedido);
             const mostrarPeso = mostrarPesos[pedido.firebaseId];
+            const rutaOrigen = esVacuna ? getSendingBranch(pedido) : pedido.sucursalOrigen;
+            const rutaDestino = esVacuna ? getReceivingBranch(pedido) : pedido.sucursalDestino;
 
             return (
               <div
@@ -1147,22 +1154,40 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                         {formatOrderNumber(pedido)}
                       </div>
                       <div>
-                        <div style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 16px',
-                          borderRadius: '20px',
-                          background: config.color,
-                          color: 'white',
-                          fontSize: '12px',
-                          fontWeight: 800,
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.5px',
-                          marginBottom: '6px'
-                        }}>
-                          {config.icon}
-                          {config.label}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '6px' }}>
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '8px 16px',
+                            borderRadius: '20px',
+                            background: config.color,
+                            color: 'white',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            {config.icon}
+                            {config.label}
+                          </div>
+                          {esVacuna && (
+                            <div style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '8px 16px',
+                              borderRadius: '20px',
+                              background: 'rgba(15, 118, 110, 0.12)',
+                              color: '#0f766e',
+                              fontSize: '12px',
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px',
+                              border: '1px solid rgba(15, 118, 110, 0.16)'
+                            }}>
+                              Vacuna directa
+                            </div>
+                          )}
                         </div>
                         <div style={{ 
                           fontSize: '14px', 
@@ -1172,9 +1197,9 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           alignItems: 'center',
                           gap: '8px'
                         }}>
-                          {pedido.sucursalOrigen} 
+                          {rutaOrigen} 
                           <span style={{ color: config.color }}>{Icons.arrowRight}</span>
-                          {pedido.sucursalDestino}
+                          {rutaDestino}
                         </div>
                       </div>
                     </div>
@@ -1521,7 +1546,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           }}
                         >
                           {Icons.checkCircle}
-                          Recibir Conforme
+                          {esVacuna ? 'Confirmar Vacuna Recibida' : 'Recibir Conforme'}
                         </button>
                       )}
 
@@ -1537,7 +1562,9 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           fontWeight: 700,
                           textAlign: 'center'
                         }}>
-                          📦 Pedido recibido de {pedido.sucursalOrigen} • Preparar y enviar
+                          {esVacuna
+                            ? `💉 Vacuna lista para envio directo a ${getReceivingBranch(pedido)}`
+                            : `📦 Pedido recibido de ${pedido.sucursalOrigen} • Preparar y enviar`}
                         </div>
                       )}
 
@@ -1558,7 +1585,9 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           gap: '8px'
                         }}>
                           {Icons.check}
-                          Pedido enviado con {pedido.enviadoCon} - Esperando confirmación de {pedido.sucursalOrigen}
+                          {esVacuna
+                            ? `Vacuna enviada${pedido.enviadoCon ? ` con ${pedido.enviadoCon}` : ''} - Esperando confirmación de ${getReceivingBranch(pedido)}`
+                            : `Pedido enviado con ${pedido.enviadoCon || 'transporte interno'} - Esperando confirmación de ${pedido.sucursalOrigen}`}
                         </div>
                       )}
 
@@ -1579,7 +1608,9 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           gap: '8px'
                         }}>
                           {Icons.checkCircle}
-                          Pedido recibido conforme por {pedido.recibidoPor} a las {pedido.horaRecepcion}
+                          {esVacuna
+                            ? `Vacuna recibida conforme por ${pedido.recibidoPor} a las ${pedido.horaRecepcion}`
+                            : `Pedido recibido conforme por ${pedido.recibidoPor} a las ${pedido.horaRecepcion}`}
                           {pedido.pesosCorregidos && (
                             <span style={{ 
                               background: '#fef3c7', 
@@ -1612,7 +1643,9 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
                           gap: '8px'
                         }}>
                           {Icons.checkCircle}
-                          Has confirmado la recepción el {pedido.fechaRecepcion} a las {pedido.horaRecepcion}
+                          {esVacuna
+                            ? `Has confirmado la vacuna el ${pedido.fechaRecepcion} a las ${pedido.horaRecepcion}`
+                            : `Has confirmado la recepción el ${pedido.fechaRecepcion} a las ${pedido.horaRecepcion}`}
                         </div>
                       )}
 
