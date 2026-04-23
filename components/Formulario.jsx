@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
 import { off, onValue, push, ref, runTransaction } from "firebase/database";
 import {
@@ -104,8 +104,112 @@ function normalizeCatalogSearch(value = "") {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9\s]/gi, " ")
     .toUpperCase()
+    .replace(/\s+/g, " ")
     .trim();
+}
+
+function compactCatalogSearch(value = "") {
+  return normalizeCatalogSearch(value).replace(/\s+/g, "");
+}
+
+function splitCatalogTokens(value = "") {
+  return normalizeCatalogSearch(value).split(" ").filter(Boolean);
+}
+
+function getBoundedEditDistance(source = "", target = "", maxDistance = 2) {
+  if (!source) return target.length;
+  if (!target) return source.length;
+  if (Math.abs(source.length - target.length) > maxDistance) return maxDistance + 1;
+
+  const previous = Array.from({ length: target.length + 1 }, (_, index) => index);
+
+  for (let sourceIndex = 1; sourceIndex <= source.length; sourceIndex += 1) {
+    let current = [sourceIndex];
+    let rowMin = current[0];
+
+    for (let targetIndex = 1; targetIndex <= target.length; targetIndex += 1) {
+      const cost = source[sourceIndex - 1] === target[targetIndex - 1] ? 0 : 1;
+      const value = Math.min(
+        previous[targetIndex] + 1,
+        current[targetIndex - 1] + 1,
+        previous[targetIndex - 1] + cost,
+      );
+
+      current[targetIndex] = value;
+      rowMin = Math.min(rowMin, value);
+    }
+
+    if (rowMin > maxDistance) return maxDistance + 1;
+
+    for (let index = 0; index < current.length; index += 1) {
+      previous[index] = current[index];
+    }
+  }
+
+  return previous[target.length];
+}
+
+function getTokenMatchQuality(queryToken, candidateToken) {
+  if (!queryToken || !candidateToken) return null;
+  if (candidateToken === queryToken) return 0;
+  if (candidateToken.startsWith(queryToken)) return 1;
+  if (candidateToken.includes(queryToken)) return 2;
+
+  if (queryToken.length >= 3) {
+    const prefixDistance = getBoundedEditDistance(queryToken, candidateToken.slice(0, queryToken.length), 1);
+    if (prefixDistance <= 1) return 3;
+  }
+
+  if (queryToken.length >= 4) {
+    const fullDistance = getBoundedEditDistance(queryToken, candidateToken, 2);
+    if (fullDistance <= 2) return 4;
+  }
+
+  return null;
+}
+
+function getTokenGroupScore(queryTokens = [], candidateTokens = []) {
+  if (queryTokens.length === 0 || candidateTokens.length === 0) return null;
+
+  const scores = [];
+
+  for (const queryToken of queryTokens) {
+    let bestScore = null;
+
+    for (const candidateToken of candidateTokens) {
+      const quality = getTokenMatchQuality(queryToken, candidateToken);
+      if (quality === null) continue;
+
+      if (bestScore === null || quality < bestScore) {
+        bestScore = quality;
+      }
+    }
+
+    if (bestScore === null) {
+      return null;
+    }
+
+    scores.push(bestScore);
+  }
+
+  return Math.max(...scores);
+}
+
+function isSubsequenceMatch(query = "", candidate = "") {
+  if (!query || !candidate) return false;
+
+  let queryIndex = 0;
+
+  for (let candidateIndex = 0; candidateIndex < candidate.length; candidateIndex += 1) {
+    if (candidate[candidateIndex] === query[queryIndex]) {
+      queryIndex += 1;
+      if (queryIndex === query.length) return true;
+    }
+  }
+
+  return false;
 }
 
 const createEmptyItem = () => ({
@@ -134,6 +238,19 @@ function FieldLabel({ icon, label, badge }) {
 export default function Formulario({ user, setView, sucursales = [], productosCSV = [], pedidos = [] }) {
   const MAX_LINEAS = 25;
   const catalogoProductos = productosCSV.length > 0 ? productosCSV : PRODUCTOS_EJEMPLO;
+  const catalogoBusqueda = useMemo(
+    () =>
+      catalogoProductos.map((producto) => ({
+        producto,
+        nombreNormalizado: normalizeCatalogSearch(producto.nombre),
+        claveNormalizada: normalizeCatalogSearch(producto.clave),
+        nombreCompacto: compactCatalogSearch(producto.nombre),
+        claveCompacta: compactCatalogSearch(producto.clave),
+        tokensNombre: splitCatalogTokens(producto.nombre),
+        tokensClave: splitCatalogTokens(producto.clave),
+      })),
+    [catalogoProductos],
+  );
   const hoy = getLocalDateString();
   const userPrefix = getUserOrderPrefix(user);
   const userCounterKey = getUserCounterKey(user);
@@ -330,8 +447,11 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
       };
 
       if (field === "producto") {
+        const textoNormalizado = normalizeCatalogSearch(value);
         const productoEncontrado = catalogoProductos.find(
-          (producto) => producto.nombre.toUpperCase() === value.toUpperCase(),
+          (producto) =>
+            normalizeCatalogSearch(producto.nombre) === textoNormalizado ||
+            normalizeCatalogSearch(producto.clave) === textoNormalizado,
         );
 
         if (productoEncontrado) {
@@ -363,31 +483,64 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
 
   const filtrarProductos = (busqueda) => {
     const texto = normalizeCatalogSearch(busqueda);
+    const textoCompacto = compactCatalogSearch(busqueda);
+    const tokensBusqueda = splitCatalogTokens(busqueda);
 
     if (!texto) {
       return catalogoProductos.slice(0, 8);
     }
 
-    return catalogoProductos
-      .map((producto) => {
-        const nombre = normalizeCatalogSearch(producto.nombre);
-        const clave = normalizeCatalogSearch(producto.clave);
+    return catalogoBusqueda
+      .map((entry) => {
+        const {
+          producto,
+          nombreNormalizado,
+          claveNormalizada,
+          nombreCompacto,
+          claveCompacta,
+          tokensNombre,
+          tokensClave,
+        } = entry;
 
         let prioridad = null;
+        let detalle = 0;
 
-        if (clave === texto) prioridad = 0;
-        else if (nombre === texto) prioridad = 1;
-        else if (clave.startsWith(texto)) prioridad = 2;
-        else if (nombre.startsWith(texto)) prioridad = 3;
-        else if (clave.includes(texto)) prioridad = 4;
-        else if (nombre.includes(texto)) prioridad = 5;
+        if (claveNormalizada === texto) prioridad = 0;
+        else if (nombreNormalizado === texto) prioridad = 1;
+        else if (claveNormalizada.startsWith(texto)) prioridad = 2;
+        else if (nombreNormalizado.startsWith(texto)) prioridad = 3;
+        else if (claveNormalizada.includes(texto)) prioridad = 4;
+        else if (nombreNormalizado.includes(texto)) prioridad = 5;
+        else {
+          const clavePorTokens = getTokenGroupScore(tokensBusqueda, tokensClave);
+          const nombrePorTokens = getTokenGroupScore(tokensBusqueda, tokensNombre);
+
+          if (clavePorTokens !== null) {
+            prioridad = 6 + clavePorTokens;
+            detalle = claveNormalizada.length;
+          } else if (nombrePorTokens !== null) {
+            prioridad = 12 + nombrePorTokens;
+            detalle = nombreNormalizado.length;
+          } else if (isSubsequenceMatch(textoCompacto, claveCompacta)) {
+            prioridad = 18;
+            detalle = claveCompacta.length;
+          } else if (isSubsequenceMatch(textoCompacto, nombreCompacto)) {
+            prioridad = 19;
+            detalle = nombreCompacto.length;
+          }
+        }
 
         if (prioridad === null) return null;
 
-        return { producto, prioridad };
+        return { producto, prioridad, detalle };
       })
       .filter(Boolean)
-      .sort((a, b) => a.prioridad - b.prioridad || a.producto.nombre.localeCompare(b.producto.nombre))
+      .sort(
+        (a, b) =>
+          a.prioridad - b.prioridad ||
+          a.detalle - b.detalle ||
+          a.producto.nombre.localeCompare(b.producto.nombre),
+      )
       .slice(0, 10)
       .map((entry) => entry.producto);
   };
