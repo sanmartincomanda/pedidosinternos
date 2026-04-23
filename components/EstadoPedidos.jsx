@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { ref, update, push, set } from "firebase/database";
-import { formatOrderNumber, getLocalDateString } from "@/lib/orderUtils";
+import { formatOrderNumber, getLocalDateString, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 
 // Iconos SVG estilo delivery
 const Icons = {
@@ -107,30 +107,30 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
     setModalNotificacion({ ...notif, id });
   };
 
-  const esPedidoAtrasado = (pedido) => {
-    const fechas = [pedido.fechaPedido, pedido.fechaEntrega].filter(Boolean);
-    return fechas.some((fecha) => fecha < hoy);
-  };
+  const esPedidoEnviadoHoy = (pedido) => {
+    if (pedido.estado !== 'ENVIADO') return false;
 
-  const esPedidoDelDia = (pedido) =>
-    pedido.fechaPedido === hoy || pedido.fechaEntrega === hoy;
+    if (pedido.timestamp) {
+      return getLocalDateString(new Date(pedido.timestamp)) === hoy;
+    }
+
+    return pedido.fechaPedido === hoy || pedido.fechaEntrega === hoy;
+  };
 
   // Filtrar pedidos relevantes para el usuario
   const pedidosRelevantes = pedidos.filter((pedido) => {
     const participaEnPedido = pedido.sucursalOrigen === user || pedido.sucursalDestino === user;
     const estaFinalizado = ['RECIBIDO_CONFORME', 'ENTREGADO'].includes(pedido.estado);
-    const esStandby = pedido.estado === 'STANDBY_ENTREGA';
-    const esAtrasadoSinEnviar = esPedidoAtrasado(pedido) && pedido.estado !== 'ENVIADO';
 
-    return (
-      participaEnPedido &&
-      !estaFinalizado &&
-      (
-        esStandby ||
-        esPedidoDelDia(pedido) ||
-        esAtrasadoSinEnviar
-      )
-    );
+    if (!participaEnPedido || estaFinalizado || !isPedidoAfterOperativeReset(pedido)) {
+      return false;
+    }
+
+    if (pedido.estado === 'ENVIADO') {
+      return esPedidoEnviadoHoy(pedido);
+    }
+
+    return true;
   });
 
   // Aplicar filtros de pestaña

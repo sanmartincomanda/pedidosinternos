@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { db } from "../firebase";
 import { onValue, ref } from "firebase/database";
+import { isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 import Cocina from "./Cocina";
 import Configuracion from "./Configuracion";
 import EstadoPedidos from "./EstadoPedidos";
@@ -269,17 +270,18 @@ export default function AppInterna() {
   );
 
   const stats = useMemo(() => {
-    const activos = pedidos.filter(
+    const pedidosOperativos = pedidos.filter(isPedidoAfterOperativeReset);
+    const activos = pedidosOperativos.filter(
       (pedido) => !["RECIBIDO_CONFORME", "ENTREGADO"].includes(pedido.estado),
     ).length;
-    const standby = pedidos.filter((pedido) => pedido.estado === "STANDBY_ENTREGA").length;
-    const listos = pedidos.filter((pedido) => pedido.estado === "LISTO").length;
+    const standby = pedidosOperativos.filter((pedido) => pedido.estado === "STANDBY_ENTREGA").length;
+    const listos = pedidosOperativos.filter((pedido) => pedido.estado === "LISTO").length;
 
     return {
       activos,
       standby,
       listos,
-      total: pedidos.length,
+      total: pedidosOperativos.length,
     };
   }, [pedidos]);
 

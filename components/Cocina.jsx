@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { ref, update } from "firebase/database";
-import { formatOrderNumber } from "@/lib/orderUtils";
+import { formatOrderNumber, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 
 const Icons = {
   chef: (
@@ -127,8 +127,10 @@ export default function Cocina({ user, pedidos, personalCocina }) {
   const pedidosEnProceso = pedidos.filter(
     (pedido) =>
       pedido.sucursalDestino === user &&
+      isPedidoAfterOperativeReset(pedido) &&
       pedido.estado !== "ENVIADO" &&
-      pedido.estado !== "ENTREGADO",
+      pedido.estado !== "ENTREGADO" &&
+      pedido.estado !== "RECIBIDO_CONFORME",
   );
 
   const actualizarPesoReal = (firebaseId, itemIdx, valor) => {
