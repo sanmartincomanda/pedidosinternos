@@ -85,9 +85,57 @@ const STATUS_CONFIG = {
 const isPedidoVacuna = (pedido) => pedido?.tipoPedido === 'VACUNA';
 const getSendingBranch = (pedido) => pedido?.sucursalDestino || '';
 const getReceivingBranch = (pedido) => pedido?.sucursalOrigen || '';
+const isSendingBranch = (pedido, user) => getSendingBranch(pedido) === user;
+const isReceivingBranch = (pedido, user) => getReceivingBranch(pedido) === user;
+
+const VIEW_THEMES = {
+  enviar: {
+    title: 'Modo enviar',
+    helper: 'Veo lo que esta sucursal prepara y despacha.',
+    primary: '#2563eb',
+    secondary: '#60a5fa',
+    border: 'rgba(96, 165, 250, 0.28)',
+    background: 'linear-gradient(180deg, rgba(239,246,255,0.98) 0%, rgba(255,255,255,0.98) 42%, rgba(219,234,254,0.88) 100%)',
+    shadow: '0 28px 60px rgba(37, 99, 235, 0.12)',
+    emptyBorder: 'rgba(96, 165, 250, 0.24)',
+    emptyBackground: 'rgba(239, 246, 255, 0.72)',
+  },
+  recibir: {
+    title: 'Modo recibir',
+    helper: 'Veo lo que otras sucursales me deben enviar.',
+    primary: '#0891b2',
+    secondary: '#67e8f9',
+    border: 'rgba(34, 211, 238, 0.3)',
+    background: 'linear-gradient(180deg, rgba(236,254,255,0.98) 0%, rgba(255,255,255,0.98) 42%, rgba(207,250,254,0.9) 100%)',
+    shadow: '0 28px 60px rgba(8, 145, 178, 0.12)',
+    emptyBorder: 'rgba(34, 211, 238, 0.24)',
+    emptyBackground: 'rgba(236, 254, 255, 0.76)',
+  }
+};
+
+const STATUS_TABS = [
+  { key: 'preparacion', label: 'En preparacion (Cocina)', shortLabel: 'Preparacion' },
+  { key: 'por_enviar', label: 'Por enviar', shortLabel: 'Por enviar' },
+  { key: 'enviados', label: 'Enviados', shortLabel: 'Enviados' }
+];
+
+const getMainStatusBucket = (pedido) => {
+  switch (pedido.estado) {
+    case 'LISTO':
+      return 'por_enviar';
+    case 'ENVIADO':
+      return 'enviados';
+    case 'NUEVO':
+    case 'STANDBY_ENTREGA':
+    case 'PREPARACION':
+    default:
+      return 'preparacion';
+  }
+};
 
 export default function EstadoPedidos({ user, pedidos, personalTransporte, setView = () => {}, setPedidoEditar = () => {} }) {
-  const [filtro, setFiltro] = useState('activos');
+  const [filtro, setFiltro] = useState('preparacion');
+  const [modoVista, setModoVista] = useState('enviar');
   const [modalRepartidor, setModalRepartidor] = useState(null);
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState(null);
   const [animatingCards, setAnimatingCards] = useState(new Set());
@@ -100,6 +148,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
   const [, setNotificaciones] = useState([]);
   const [modalNotificacion, setModalNotificacion] = useState(null);
   const hoy = getLocalDateString();
+  const temaVista = VIEW_THEMES[modoVista];
 
   // Escuchar notificaciones para esta sucursal
   useEffect(() => {
@@ -131,7 +180,9 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
 
   // Filtrar pedidos relevantes para el usuario
   const pedidosRelevantes = pedidos.filter((pedido) => {
-    const participaEnPedido = pedido.sucursalOrigen === user || pedido.sucursalDestino === user;
+    const participaEnPedido = modoVista === 'enviar'
+      ? isSendingBranch(pedido, user)
+      : isReceivingBranch(pedido, user);
     const estaFinalizado = ['RECIBIDO_CONFORME', 'ENTREGADO', 'ANULADO'].includes(pedido.estado);
 
     if (!participaEnPedido || estaFinalizado || !isPedidoAfterOperativeReset(pedido)) {
@@ -146,20 +197,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
   });
 
   // Aplicar filtros de pestaña
-  const filtrarPedidos = () => {
-    switch (filtro) {
-      case 'activos':
-        return pedidosRelevantes.filter(p => p.estado !== 'STANDBY_ENTREGA');
-      case 'enviados':
-        return pedidosRelevantes.filter(p => p.estado === 'ENVIADO');
-      case 'standby':
-        return pedidosRelevantes.filter(p => p.estado === 'STANDBY_ENTREGA');
-      case 'todos':
-        return pedidosRelevantes;
-      default:
-        return pedidosRelevantes;
-    }
-  };
+  const filtrarPedidos = () => pedidosRelevantes.filter((pedido) => getMainStatusBucket(pedido) === filtro);
 
   const pedidosFiltrados = filtrarPedidos();
 
@@ -356,14 +394,22 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
 
   // Contadores para tabs
   const contadores = {
-    activos: pedidosRelevantes.filter(p => p.estado !== 'STANDBY_ENTREGA').length,
-    enviados: pedidosRelevantes.filter(p => p.estado === 'ENVIADO').length,
-    standby: pedidosRelevantes.filter(p => p.estado === 'STANDBY_ENTREGA').length,
-    todos: pedidosRelevantes.length
+    preparacion: pedidosRelevantes.filter((pedido) => getMainStatusBucket(pedido) === 'preparacion').length,
+    por_enviar: pedidosRelevantes.filter((pedido) => getMainStatusBucket(pedido) === 'por_enviar').length,
+    enviados: pedidosRelevantes.filter((pedido) => getMainStatusBucket(pedido) === 'enviados').length
   };
 
+  const tituloFiltroActivo = STATUS_TABS.find((tab) => tab.key === filtro)?.shortLabel || 'Pedidos';
+
   return (
-    <div style={{ animation: 'slideIn 0.4s ease-out' }}>
+    <div style={{
+      animation: 'slideIn 0.4s ease-out',
+      background: temaVista.background,
+      border: `1px solid ${temaVista.border}`,
+      borderRadius: '32px',
+      padding: '24px',
+      boxShadow: temaVista.shadow
+    }}>
       <style>{`
         @keyframes slideIn {
           from { opacity: 0; transform: translateY(20px); }
@@ -478,11 +524,11 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
             width: '48px',
             height: '48px',
             borderRadius: '16px',
-            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+            background: `linear-gradient(135deg, ${temaVista.secondary} 0%, ${temaVista.primary} 100%)`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 14px 30px rgba(37, 99, 235, 0.22)',
+            boxShadow: `0 14px 30px ${temaVista.primary}33`,
             color: 'white'
           }}>
             {Icons.truck}
@@ -492,8 +538,57 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
               Estado de Pedidos
             </h1>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
-              {user} • Seguimiento en tiempo real
+              {user} - {temaVista.helper}
             </p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
+          <div style={{
+            display: 'inline-flex',
+            gap: '8px',
+            padding: '6px',
+            borderRadius: '18px',
+            background: 'rgba(255,255,255,0.88)',
+            border: `1px solid ${temaVista.border}`,
+            boxShadow: '0 10px 24px rgba(15, 23, 42, 0.08)'
+          }}>
+            {[
+              { key: 'enviar', label: 'Enviar' },
+              { key: 'recibir', label: 'Recibir' }
+            ].map((modo) => (
+              <button
+                key={modo.key}
+                type="button"
+                onClick={() => setModoVista(modo.key)}
+                style={{
+                  border: 'none',
+                  borderRadius: '14px',
+                  padding: '12px 18px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  background: modoVista === modo.key
+                    ? `linear-gradient(135deg, ${temaVista.primary} 0%, ${temaVista.secondary} 100%)`
+                    : 'transparent',
+                  color: modoVista === modo.key ? 'white' : '#475569',
+                  boxShadow: modoVista === modo.key ? `0 8px 18px ${temaVista.primary}30` : 'none',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {modo.label}
+              </button>
+            ))}
+          </div>
+          <div style={{
+            padding: '8px 14px',
+            borderRadius: '999px',
+            background: 'rgba(255,255,255,0.7)',
+            border: `1px solid ${temaVista.border}`,
+            color: temaVista.primary,
+            fontSize: '12px',
+            fontWeight: 800
+          }}>
+            {temaVista.title}
           </div>
         </div>
       </div>
@@ -506,12 +601,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
         overflowX: 'auto',
         paddingBottom: '8px'
       }}>
-        {[
-          { key: 'activos', label: 'En Proceso', count: contadores.activos, color: '#3b82f6' },
-          { key: 'enviados', label: 'Enviados', count: contadores.enviados, color: '#6366f1' },
-          { key: 'standby', label: 'Standby', count: contadores.standby, color: '#f59e0b' },
-          { key: 'todos', label: 'Todos', count: contadores.todos, color: '#10b981' }
-        ].map((tab) => (
+        {STATUS_TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setFiltro(tab.key)}
@@ -520,7 +610,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
               borderRadius: '12px',
               border: 'none',
               background: filtro === tab.key 
-                ? `linear-gradient(135deg, ${tab.color} 0%, ${tab.color}dd 100%)` 
+                ? `linear-gradient(135deg, ${temaVista.primary} 0%, ${temaVista.secondary} 100%)` 
                 : 'rgba(255,255,255,0.92)',
               color: filtro === tab.key ? 'white' : '#475569',
               fontWeight: 700,
@@ -531,7 +621,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
               gap: '8px',
               transition: 'all 0.2s',
               whiteSpace: 'nowrap',
-              boxShadow: filtro === tab.key ? `0 8px 20px ${tab.color}40` : 'none'
+              boxShadow: filtro === tab.key ? `0 8px 20px ${temaVista.primary}35` : 'none'
             }}
           >
             {tab.label}
@@ -543,7 +633,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
               minWidth: '20px',
               textAlign: 'center'
             }}>
-              {tab.count}
+              {contadores[tab.key]}
             </span>
           </button>
         ))}
@@ -1105,16 +1195,18 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
         <div style={{
           textAlign: 'center',
           padding: '80px 20px',
-          background: 'rgba(255,255,255,0.8)',
+          background: temaVista.emptyBackground,
           borderRadius: '24px',
-          border: '2px dashed rgba(148, 163, 184, 0.22)'
+          border: `2px dashed ${temaVista.emptyBorder}`
         }}>
           <div style={{ fontSize: '64px', marginBottom: '16px' }}>📋</div>
           <h3 style={{ fontSize: '24px', margin: '0 0 8px 0', color: '#0f172a' }}>
-            No hay pedidos en este filtro
+            No hay pedidos en {tituloFiltroActivo.toLowerCase()}
           </h3>
           <p style={{ margin: 0, color: '#64748b' }}>
-            Los pedidos aparecerán aquí según su estado
+            {modoVista === 'enviar'
+              ? 'Aqui apareceran los pedidos que tu sucursal debe preparar, enviar o que ya salieron hoy.'
+              : 'Aqui apareceran los pedidos que tu sucursal esta esperando recibir en este momento.'}
           </p>
         </div>
       ) : (
@@ -1504,7 +1596,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
                     {/* Acciones */}
                     <div style={{ marginTop: '16px' }}>
                       {(puedeEditarPedido || puedeAnularPedido) && (
-                        <div className="action-stack" style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                        <div style={{ marginBottom: '12px' }}>
                           {puedeEditarPedido && (
                             <button
                               onClick={() => {
@@ -1513,7 +1605,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
                               }}
                               className="btn-hover"
                               style={{
-                                flex: 1,
+                                width: '100%',
                                 padding: '16px 24px',
                                 borderRadius: '14px',
                                 border: '2px solid #3b82f6',
@@ -1533,28 +1625,31 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
                             </button>
                           )}
                           {puedeAnularPedido && (
-                            <button
-                              onClick={() => anularPedido(pedido)}
-                              className="btn-hover"
-                              style={{
-                                flex: 1,
-                                padding: '16px 24px',
-                                borderRadius: '14px',
-                                border: '2px solid rgba(220, 38, 38, 0.2)',
-                                background: 'rgba(254, 242, 242, 0.98)',
-                                color: '#b91c1c',
-                                fontWeight: 800,
-                                fontSize: '15px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '10px'
-                              }}
-                            >
-                              {Icons.close}
-                              Anular pedido
-                            </button>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                              <button
+                                onClick={() => anularPedido(pedido)}
+                                className="btn-hover"
+                                style={{
+                                  padding: '9px 14px',
+                                  borderRadius: '12px',
+                                  border: '1px solid rgba(220, 38, 38, 0.18)',
+                                  background: 'rgba(254, 242, 242, 0.94)',
+                                  color: '#b91c1c',
+                                  fontWeight: 700,
+                                  fontSize: '12px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '6px',
+                                  minWidth: 'auto',
+                                  boxShadow: '0 4px 12px rgba(220, 38, 38, 0.08)'
+                                }}
+                              >
+                                {Icons.close}
+                                Anular
+                              </button>
+                            </div>
                           )}
                         </div>
                       )}
