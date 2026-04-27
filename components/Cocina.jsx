@@ -130,7 +130,8 @@ export default function Cocina({ user, pedidos, personalCocina }) {
       isPedidoAfterOperativeReset(pedido) &&
       pedido.estado !== "ENVIADO" &&
       pedido.estado !== "ENTREGADO" &&
-      pedido.estado !== "RECIBIDO_CONFORME",
+      pedido.estado !== "RECIBIDO_CONFORME" &&
+      pedido.estado !== "ANULADO",
   );
 
   const actualizarPesoReal = (firebaseId, itemIdx, valor) => {

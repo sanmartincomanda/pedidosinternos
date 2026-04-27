@@ -2,9 +2,10 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
-import { off, onValue, push, ref, runTransaction } from "firebase/database";
+import { off, onValue, push, ref, runTransaction, update } from "firebase/database";
 import {
   buildOrderNumber,
+  formatOrderNumber,
   getHighestBranchSequence,
   getLocalDateString,
   getUserCounterKey,
@@ -235,7 +236,15 @@ function FieldLabel({ icon, label, badge }) {
   );
 }
 
-export default function Formulario({ user, setView, sucursales = [], productosCSV = [], pedidos = [] }) {
+export default function Formulario({
+  user,
+  setView,
+  sucursales = [],
+  productosCSV = [],
+  pedidos = [],
+  pedidoEditar = null,
+  setPedidoEditar = () => {},
+}) {
   const MAX_LINEAS = 25;
   const catalogoProductos = productosCSV.length > 0 ? productosCSV : PRODUCTOS_EJEMPLO;
   const catalogoBusqueda = useMemo(
@@ -276,13 +285,53 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
   const esStandby = fechaEntrega > hoy;
   const highestBranchSequence = getHighestBranchSequence(pedidos, user);
   const nextOrderSequence = Math.min(MAX_ORDER_NUMBER, Math.max(counterValue, highestBranchSequence) + 1);
-  const orderPreview = cargandoId ? "..." : buildOrderNumber(userPrefix, nextOrderSequence);
+  const isEditing = Boolean(pedidoEditar?.firebaseId);
+  const orderPreview = isEditing
+    ? buildOrderNumber(pedidoEditar.prefijoOrden || userPrefix, pedidoEditar.consecutivoOrden || nextOrderSequence)
+    : cargandoId
+      ? "..."
+      : buildOrderNumber(userPrefix, nextOrderSequence);
+
+  const resetFormulario = () => {
+    setItems([createEmptyItem()]);
+    setNotaGeneral("");
+    setNotaTemporal("");
+    setShowNoteModal(false);
+    cerrarNotaArticulo();
+    setUnitPickerIndex(null);
+    setFechaEntrega(hoy);
+    setPedidoEditar(null);
+  };
 
   useEffect(() => {
     if (!sucursales.includes(destino)) {
       setDestino(sucursales[0] || "Cedi");
     }
   }, [destino, sucursales]);
+
+  useEffect(() => {
+    if (!pedidoEditar?.firebaseId) {
+      return;
+    }
+
+    const itemsEditables = (pedidoEditar.items?.length ? pedidoEditar.items : [createEmptyItem()]).map((item) => ({
+      clave: item.clave || "",
+      producto: item.producto || "",
+      cantidad: item.cantidad || "",
+      unidad: item.unidad || "",
+      nota: item.nota || "",
+      mostrarDropdown: false,
+    }));
+
+    setDestino(pedidoEditar.sucursalDestino || sucursales[0] || "Cedi");
+    setFechaEntrega(pedidoEditar.fechaEntrega || pedidoEditar.fechaPedido || hoy);
+    setNotaGeneral(pedidoEditar.notaGeneral || "");
+    setNotaTemporal(pedidoEditar.notaGeneral || "");
+    setItems(itemsEditables);
+    setShowNoteModal(false);
+    cerrarNotaArticulo();
+    setUnitPickerIndex(null);
+  }, [hoy, pedidoEditar, sucursales]);
 
   useEffect(() => {
     const contadorRef = ref(db, `configuracion/contadores_pedidos_por_sucursal/${userCounterKey}`);
@@ -639,13 +688,23 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
     setShowNoteModal(false);
   };
 
-  const enviar = async (event) => {
-    event.preventDefault();
+  const construirItemsActualizados = (validos) =>
+    validos.map((item) => ({
+      clave: item.clave,
+      producto: item.producto,
+      cantidad: item.cantidad,
+      unidad: item.unidad,
+      nota: item.nota,
+      pesoReal: "",
+      preparadoPor: "",
+      listo: false,
+    }));
 
+  const validarPedido = () => {
     const validos = items.filter((item) => item.producto.trim() !== "");
     if (validos.length === 0) {
       alert("Error: el pedido esta vacio. Agrega al menos un producto.");
-      return;
+      return null;
     }
 
     const incompletos = validos.some(
@@ -653,6 +712,81 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
     );
     if (incompletos) {
       alert("Completa cantidad y unidad en todas las lineas antes de enviar.");
+      return null;
+    }
+
+    return validos;
+  };
+
+  const actualizarPedido = async () => {
+    const validos = validarPedido();
+    if (!validos || !pedidoEditar?.firebaseId) {
+      return;
+    }
+
+    if (!db) {
+      alert("Error: no hay conexion con la base de datos.");
+      return;
+    }
+
+    const requiereReinicio = ["PREPARACION", "LISTO", "ENVIADO"].includes(pedidoEditar.estado);
+    if (requiereReinicio) {
+      const confirmado = window.confirm(
+        "Este pedido ya tuvo avance en cocina o envio. Si lo editas, volvera a pendiente para prepararse otra vez. ¿Deseas continuar?",
+      );
+
+      if (!confirmado) {
+        return;
+      }
+    }
+
+    setCargando(true);
+
+    try {
+      const estadoActualizado = fechaEntrega > hoy ? "STANDBY_ENTREGA" : "NUEVO";
+      const itemsActualizados = construirItemsActualizados(validos);
+
+      await update(ref(db, `pedidos_internos/${pedidoEditar.firebaseId}`), {
+        sucursalDestino: destino,
+        fechaEntrega,
+        esStandby: fechaEntrega > hoy,
+        items: itemsActualizados,
+        notaGeneral,
+        estado: estadoActualizado,
+        preparadoPor: "",
+        enviadoCon: "",
+        timestampEnviado: null,
+        fechaRecepcion: null,
+        horaRecepcion: null,
+        recibidoPor: null,
+        pesosCorregidos: null,
+        timestampCambio: null,
+        fechaEdicion: new Date().toISOString(),
+        editadoPor: user,
+        timestamp: Date.now(),
+      });
+
+      alert(`Pedido ${formatOrderNumber(pedidoEditar)} actualizado con exito.`);
+      resetFormulario();
+      setView("estados");
+    } catch (error) {
+      console.error("Fallo la edicion:", error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const enviar = async (event) => {
+    event.preventDefault();
+
+    if (isEditing) {
+      await actualizarPedido();
+      return;
+    }
+
+    const validos = validarPedido();
+    if (!validos) {
       return;
     }
 
@@ -684,16 +818,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
           hour: "2-digit",
           minute: "2-digit",
         }),
-        items: validos.map((item) => ({
-          clave: item.clave,
-          producto: item.producto,
-          cantidad: item.cantidad,
-          unidad: item.unidad,
-          nota: item.nota,
-          pesoReal: "",
-          preparadoPor: "",
-          listo: false,
-        })),
+        items: construirItemsActualizados(validos),
         notaGeneral,
         estado: estadoInicial,
         preparadoPor: "",
@@ -706,13 +831,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
       setCounterValue(nuevoId);
       alert(`Pedido ${numeroOrden} ${esStandby ? "guardado en standby" : "enviado"} con exito.`);
 
-      setItems([createEmptyItem()]);
-      setNotaGeneral("");
-      setNotaTemporal("");
-      setShowNoteModal(false);
-      cerrarNotaArticulo();
-      setUnitPickerIndex(null);
-      setFechaEntrega(hoy);
+      resetFormulario();
       setView("estados");
     } catch (error) {
       console.error("Fallo el envio:", error);
@@ -724,6 +843,31 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
 
   return (
     <div className="page-enter space-y-4">
+      {isEditing ? (
+        <section className="app-panel border border-amber-200 bg-amber-50 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-amber-700">Editando pedido</div>
+              <div className="mt-1 text-lg font-black text-slate-900">{formatOrderNumber(pedidoEditar)}</div>
+              <div className="mt-1 text-sm font-semibold text-slate-600">
+                Al guardar, el pedido vuelve a pendiente para reprocesarse con los cambios nuevos.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                resetFormulario();
+                setView("estados");
+              }}
+              className="app-button-ghost border-amber-300 bg-white text-amber-800"
+            >
+              Cancelar edicion
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="app-panel p-4 sm:p-5">
         <div className="grid gap-3 md:grid-cols-3">
           <div>
@@ -903,7 +1047,7 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
         <div className="grid gap-3 sm:grid-cols-2">
           <button type="button" onClick={abrirNotaGeneral} className="app-button-secondary">
             {Icons.note}
-            Agregar nota
+            {notaGeneral ? "Editar nota" : "Agregar nota"}
           </button>
 
           <button
@@ -929,12 +1073,12 @@ export default function Formulario({ user, setView, sucursales = [], productosCS
             {cargando ? (
               <>
                 {Icons.sync}
-                Enviando pedido...
+                {isEditing ? "Guardando cambios..." : "Enviando pedido..."}
               </>
             ) : (
               <>
-                {Icons.send}
-                Enviar pedido
+                {isEditing ? Icons.key : Icons.send}
+                {isEditing ? "Guardar cambios" : "Enviar pedido"}
               </>
             )}
           </button>

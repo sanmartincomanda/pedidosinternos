@@ -30,7 +30,8 @@ const STATUS_COLORS = {
   'LISTO': '#10b981',
   'ENVIADO': '#6366f1',
   'RECIBIDO_CONFORME': '#059669',
-  'ENTREGADO': '#059669'
+  'ENTREGADO': '#059669',
+  'ANULADO': '#dc2626'
 };
 
 const isPedidoVacuna = (pedido) => pedido?.tipoPedido === 'VACUNA';
@@ -1788,6 +1789,21 @@ export default function Historial({ user, pedidos }) {
                     }}>
                       {Icons.clock}
                       Entrega: {pedido.fechaEntrega}
+                    </div>
+                  )}
+                  {pedido.estado === 'ANULADO' && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 12px',
+                      background: 'rgba(220, 38, 38, 0.1)',
+                      borderRadius: '8px',
+                      color: '#b91c1c'
+                    }}>
+                      <span>✕</span>
+                      Anulado por: {pedido.anuladoPor || 'Sucursal origen'}
+                      {pedido.fechaAnulacion ? ` · ${pedido.fechaAnulacion}` : ''}
                     </div>
                   )}
                 </div>

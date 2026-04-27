@@ -71,6 +71,14 @@ const STATUS_CONFIG = {
     icon: Icons.checkCircle,
     label: 'Recibido Conforme',
     pulse: false
+  },
+  'ANULADO': {
+    color: '#dc2626',
+    bg: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+    border: '#f87171',
+    icon: Icons.close,
+    label: 'Anulado',
+    pulse: false
   }
 };
 
@@ -78,7 +86,7 @@ const isPedidoVacuna = (pedido) => pedido?.tipoPedido === 'VACUNA';
 const getSendingBranch = (pedido) => pedido?.sucursalDestino || '';
 const getReceivingBranch = (pedido) => pedido?.sucursalOrigen || '';
 
-export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
+export default function EstadoPedidos({ user, pedidos, personalTransporte, setView = () => {}, setPedidoEditar = () => {} }) {
   const [filtro, setFiltro] = useState('activos');
   const [modalRepartidor, setModalRepartidor] = useState(null);
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState(null);
@@ -124,7 +132,7 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
   // Filtrar pedidos relevantes para el usuario
   const pedidosRelevantes = pedidos.filter((pedido) => {
     const participaEnPedido = pedido.sucursalOrigen === user || pedido.sucursalDestino === user;
-    const estaFinalizado = ['RECIBIDO_CONFORME', 'ENTREGADO'].includes(pedido.estado);
+    const estaFinalizado = ['RECIBIDO_CONFORME', 'ENTREGADO', 'ANULADO'].includes(pedido.estado);
 
     if (!participaEnPedido || estaFinalizado || !isPedidoAfterOperativeReset(pedido)) {
       return false;
@@ -186,6 +194,38 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
 
     setModalRepartidor(null);
     setRepartidorSeleccionado(null);
+  };
+
+  const anularPedido = (pedido) => {
+    const codigoPedido = formatOrderNumber(pedido);
+    const confirmado = window.confirm(
+      `Vas a anular el pedido ${codigoPedido}. El numero quedara reservado como ANULADO y el pedido saldra de Estados y Cocina.`
+    );
+
+    if (!confirmado) {
+      return;
+    }
+
+    const marcaAnulacion = new Date();
+
+    setAnimatingCards(prev => new Set([...prev, pedido.firebaseId]));
+
+    update(ref(db, `pedidos_internos/${pedido.firebaseId}`), {
+      estado: 'ANULADO',
+      anuladoPor: user,
+      fechaAnulacion: marcaAnulacion.toISOString().split('T')[0],
+      horaAnulacion: marcaAnulacion.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      motivoAnulacion: 'Anulado desde sucursal origen',
+      timestamp: marcaAnulacion.getTime()
+    });
+
+    setTimeout(() => {
+      setAnimatingCards(prev => {
+        const next = new Set(prev);
+        next.delete(pedido.firebaseId);
+        return next;
+      });
+    }, 300);
   };
 
   // Abrir modal de recepción
@@ -1090,6 +1130,8 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
             const esOrigen = pedido.sucursalOrigen === user;
             const esDestino = pedido.sucursalDestino === user;
             const esVacuna = isPedidoVacuna(pedido);
+            const puedeEditarPedido = esOrigen && !esVacuna && status !== 'RECIBIDO_CONFORME';
+            const puedeAnularPedido = esOrigen && !esVacuna && status !== 'RECIBIDO_CONFORME';
             const mostrarPeso = mostrarPesos[pedido.firebaseId];
             const rutaOrigen = esVacuna ? getSendingBranch(pedido) : pedido.sucursalOrigen;
             const rutaDestino = esVacuna ? getReceivingBranch(pedido) : pedido.sucursalDestino;
@@ -1461,6 +1503,62 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte }) {
 
                     {/* Acciones */}
                     <div style={{ marginTop: '16px' }}>
+                      {(puedeEditarPedido || puedeAnularPedido) && (
+                        <div className="action-stack" style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                          {puedeEditarPedido && (
+                            <button
+                              onClick={() => {
+                                setPedidoEditar(pedido);
+                                setView('formulario');
+                              }}
+                              className="btn-hover"
+                              style={{
+                                flex: 1,
+                                padding: '16px 24px',
+                                borderRadius: '14px',
+                                border: '2px solid #3b82f6',
+                                background: 'white',
+                                color: '#2563eb',
+                                fontWeight: 800,
+                                fontSize: '15px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '10px'
+                              }}
+                            >
+                              {Icons.edit}
+                              Editar pedido
+                            </button>
+                          )}
+                          {puedeAnularPedido && (
+                            <button
+                              onClick={() => anularPedido(pedido)}
+                              className="btn-hover"
+                              style={{
+                                flex: 1,
+                                padding: '16px 24px',
+                                borderRadius: '14px',
+                                border: '2px solid rgba(220, 38, 38, 0.2)',
+                                background: 'rgba(254, 242, 242, 0.98)',
+                                color: '#b91c1c',
+                                fontWeight: 800,
+                                fontSize: '15px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '10px'
+                              }}
+                            >
+                              {Icons.close}
+                              Anular pedido
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       {/* Botón Enviar (solo si es LISTO y soy el destino) */}
                       {status === 'LISTO' && esDestino && (
                         <button

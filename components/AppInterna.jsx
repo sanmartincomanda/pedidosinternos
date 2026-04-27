@@ -176,6 +176,7 @@ export default function AppInterna() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState("formulario");
   const [pedidos, setPedidos] = useState([]);
+  const [pedidoEditar, setPedidoEditar] = useState(null);
   const [config, setConfig] = useState(() => {
     if (typeof window === "undefined") return INITIAL_CONFIG;
 
@@ -277,6 +278,7 @@ export default function AppInterna() {
     setUser(encontrado.nombre);
     setError("");
     setPassword("");
+    setPedidoEditar(null);
     setView("formulario");
   };
 
@@ -288,7 +290,7 @@ export default function AppInterna() {
   const stats = useMemo(() => {
     const pedidosOperativos = pedidos.filter(isPedidoAfterOperativeReset);
     const activos = pedidosOperativos.filter(
-      (pedido) => !["RECIBIDO_CONFORME", "ENTREGADO"].includes(pedido.estado),
+      (pedido) => !["RECIBIDO_CONFORME", "ENTREGADO", "ANULADO"].includes(pedido.estado),
     ).length;
     const standby = pedidosOperativos.filter((pedido) => pedido.estado === "STANDBY_ENTREGA").length;
     const listos = pedidosOperativos.filter((pedido) => pedido.estado === "LISTO").length;
@@ -464,6 +466,7 @@ export default function AppInterna() {
                   onClick={() => {
                     setUser(null);
                     setPassword("");
+                    setPedidoEditar(null);
                     setView("formulario");
                   }}
                   className="app-button-ghost whitespace-nowrap border-white/24 bg-white/14 text-sm text-white"
@@ -499,6 +502,7 @@ export default function AppInterna() {
                     onClick={() => {
                       setUser(null);
                       setPassword("");
+                      setPedidoEditar(null);
                       setView("formulario");
                     }}
                     className="app-button-ghost whitespace-nowrap border-white/24 bg-white/14 text-sm text-white"
@@ -547,6 +551,8 @@ export default function AppInterna() {
               user={sharedProps.user}
               pedidos={sharedProps.pedidos}
               setView={setView}
+              pedidoEditar={pedidoEditar}
+              setPedidoEditar={setPedidoEditar}
               sucursales={SUCURSALES_REGISTRADAS.map((item) => item.nombre).filter((name) => name !== user)}
               productosCSV={config.productos || []}
             />
@@ -571,6 +577,8 @@ export default function AppInterna() {
               user={sharedProps.user}
               pedidos={sharedProps.pedidos}
               personalTransporte={config.personalTransporte || []}
+              setView={setView}
+              setPedidoEditar={setPedidoEditar}
             />
           ) : null}
 
