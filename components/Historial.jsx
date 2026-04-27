@@ -43,6 +43,7 @@ export default function Historial({ user, pedidos }) {
   const [fechaHasta, setFechaHasta] = useState(hoy);
   const [vista, setVista] = useState('ambos');
   const [mostrarConsolidado, setMostrarConsolidado] = useState(false);
+  const [pedidoDetalleAbierto, setPedidoDetalleAbierto] = useState(null);
   
   // 🆕 Filtro de sucursal para el consolidado
   const [sucursalFiltro, setSucursalFiltro] = useState('todas');
@@ -316,6 +317,32 @@ export default function Historial({ user, pedidos }) {
     : formatearFecha(fechaSeleccionada);
 
   const getEstadoColor = (estado) => STATUS_COLORS[estado] || '#6b7280';
+  const toggleDetallePedido = (firebaseId) => {
+    setPedidoDetalleAbierto((current) => (current === firebaseId ? null : firebaseId));
+  };
+
+  const formatearSolicitadoDetalle = (pedido, item) => {
+    if (isPedidoVacuna(pedido)) {
+      return 'Envio directo';
+    }
+
+    const cantidad = `${item?.cantidad ?? ''}`.trim();
+    const unidad = `${item?.unidad ?? ''}`.trim();
+    const valor = [cantidad, unidad].filter(Boolean).join(' ');
+
+    return valor || 'Sin dato';
+  };
+
+  const formatearPesoRealDetalle = (pedido, item) => {
+    const valorBase = isPedidoVacuna(pedido) ? item?.pesoReal || item?.cantidad : item?.pesoReal;
+    const numero = Number.parseFloat(valorBase);
+
+    if (!Number.isFinite(numero)) {
+      return 'Pendiente';
+    }
+
+    return `${numero.toFixed(2)} lb`;
+  };
 
   return (
     <div style={{ animation: 'slideIn 0.4s ease-out' }}>
@@ -1374,6 +1401,7 @@ export default function Historial({ user, pedidos }) {
             const meHicieronElPedido = pedido.sucursalDestino === user;
             const esVacuna = isPedidoVacuna(pedido);
             const estadoColor = getEstadoColor(pedido.estado);
+            const detalleAbierto = pedidoDetalleAbierto === pedido.firebaseId;
             const descripcionPedido = esVacuna
               ? meHicieronElPedido
                 ? <>Yo ({user}) envié vacuna directa → <strong>{pedido.sucursalOrigen}</strong></>
@@ -1580,6 +1608,138 @@ export default function Historial({ user, pedidos }) {
                     )}
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => toggleDetallePedido(pedido.firebaseId)}
+                  style={{
+                    width: '100%',
+                    marginBottom: '16px',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                    background: detalleAbierto ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255,255,255,0.92)',
+                    color: '#2563eb',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {detalleAbierto ? 'Ocultar detalle completo' : 'Ver detalle completo'}
+                </button>
+
+                {detalleAbierto && (
+                  <div style={{
+                    marginBottom: '16px',
+                    background: 'rgba(255,255,255,0.94)',
+                    borderRadius: '16px',
+                    border: '1px solid rgba(148, 163, 184, 0.18)',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                      gap: '10px',
+                      padding: '16px',
+                      borderBottom: '1px solid rgba(148, 163, 184, 0.14)',
+                      background: 'rgba(248,250,252,0.92)'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>
+                          Solicita
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 700, marginTop: '4px' }}>
+                          {pedido.sucursalOrigen}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>
+                          Envía
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 700, marginTop: '4px' }}>
+                          {pedido.sucursalDestino}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>
+                          Fecha entrega
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 700, marginTop: '4px' }}>
+                          {pedido.fechaEntrega || 'Sin fecha'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+                      <div className="history-table" style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(220px, 1.3fr) minmax(120px, 0.85fr) minmax(120px, 0.85fr)',
+                        gap: '12px',
+                        padding: '12px 16px',
+                        background: 'rgba(59, 130, 246, 0.08)',
+                        color: '#2563eb',
+                        fontSize: '10px',
+                        fontWeight: 800,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em'
+                      }}>
+                        <div>Producto</div>
+                        <div style={{ textAlign: 'center' }}>Solicitado</div>
+                        <div style={{ textAlign: 'center' }}>Peso real</div>
+                      </div>
+
+                      {pedido.items.map((item, idx) => (
+                        <div
+                          key={`${pedido.firebaseId}-detalle-${idx}`}
+                          className="history-table"
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'minmax(220px, 1.3fr) minmax(120px, 0.85fr) minmax(120px, 0.85fr)',
+                            gap: '12px',
+                            padding: '14px 16px',
+                            borderTop: idx === 0 ? 'none' : '1px solid rgba(148, 163, 184, 0.14)',
+                            alignItems: 'center',
+                            background: item.pesoCorregido ? 'rgba(245, 158, 11, 0.08)' : 'transparent'
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 700 }}>
+                              {item.producto}
+                            </div>
+                            {item.clave ? (
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px' }}>
+                                Clave: {item.clave}
+                              </div>
+                            ) : null}
+                            {item.nota ? (
+                              <div style={{ fontSize: '11px', color: '#d97706', marginTop: '4px', fontWeight: 700 }}>
+                                Nota: {item.nota}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div style={{
+                            textAlign: 'center',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            color: '#0f172a'
+                          }}>
+                            {formatearSolicitadoDetalle(pedido, item)}
+                          </div>
+
+                          <div style={{
+                            textAlign: 'center',
+                            fontSize: '13px',
+                            fontWeight: 800,
+                            color: item.pesoCorregido ? '#b45309' : '#059669'
+                          }}>
+                            {formatearPesoRealDetalle(pedido, item)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Footer con info adicional */}
                 <div style={{
