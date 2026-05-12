@@ -176,7 +176,7 @@ function EmptyState({ title, text }) {
   );
 }
 
-function OrderCard({ pedido, role, isOpen, onToggle }) {
+function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
   const counterpart = role === "recibidos" ? getPhysicalSender(pedido) : getPhysicalReceiver(pedido);
   const roleLabel = role === "recibidos" ? "Enviado por" : "Recibe";
 
@@ -307,7 +307,7 @@ function OrderCard({ pedido, role, isOpen, onToggle }) {
           </button>
           <button
             type="button"
-            onClick={() => printTransferRequisition(pedido)}
+            onClick={() => printTransferRequisition(pedido, printerSettings)}
             style={{
               padding: "11px 16px",
               borderRadius: "12px",
@@ -323,7 +323,7 @@ function OrderCard({ pedido, role, isOpen, onToggle }) {
             }}
           >
             {Icons.print}
-            Imprimir requisa
+            Imprimir 80mm
           </button>
         </div>
       </div>
@@ -432,7 +432,7 @@ function OrderCard({ pedido, role, isOpen, onToggle }) {
   );
 }
 
-function OrderList({ title, pedidos, role, expandedId, onToggle }) {
+function OrderList({ title, pedidos, role, expandedId, onToggle, printerSettings }) {
   if (!pedidos.length) {
     return (
       <EmptyState
@@ -455,6 +455,7 @@ function OrderList({ title, pedidos, role, expandedId, onToggle }) {
           role={role}
           isOpen={expandedId === pedido.firebaseId}
           onToggle={() => onToggle(pedido.firebaseId)}
+          printerSettings={printerSettings}
         />
       ))}
     </div>
@@ -502,7 +503,7 @@ function ReportActionCard({ title, description, accent, onClick, disabled }) {
   );
 }
 
-export default function Historial({ user, pedidos }) {
+export default function Historial({ user, pedidos, printerSettings = {} }) {
   const today = new Date().toISOString().split("T")[0];
   const [modoFecha, setModoFecha] = useState("dia");
   const [fechaSeleccionada, setFechaSeleccionada] = useState(today);
@@ -885,11 +886,11 @@ export default function Historial({ user, pedidos }) {
       </div>
 
       {activeTab === "recibidos" ? (
-        <OrderList title="Pedidos recibidos" pedidos={pedidosRecibidos} role="recibidos" expandedId={expandedId} onToggle={handleToggleOrder} />
+        <OrderList title="Pedidos recibidos" pedidos={pedidosRecibidos} role="recibidos" expandedId={expandedId} onToggle={handleToggleOrder} printerSettings={printerSettings} />
       ) : null}
 
       {activeTab === "enviados" ? (
-        <OrderList title="Pedidos enviados" pedidos={pedidosEnviados} role="enviados" expandedId={expandedId} onToggle={handleToggleOrder} />
+        <OrderList title="Pedidos enviados" pedidos={pedidosEnviados} role="enviados" expandedId={expandedId} onToggle={handleToggleOrder} printerSettings={printerSettings} />
       ) : null}
 
       {activeTab === "reportes" ? (

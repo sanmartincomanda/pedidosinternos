@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { ref, update, push, set } from "firebase/database";
 import { formatOrderNumber, getLocalDateString, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
+import { printTransferRequisition } from "@/lib/historialPdf";
 
 // Iconos SVG estilo delivery
 const Icons = {
@@ -144,7 +145,14 @@ const formatRequestedDetail = (pedido, item) => {
   return [cantidad, unidad].filter(Boolean).join(' ') || 'Pendiente';
 };
 
-export default function EstadoPedidos({ user, pedidos, personalTransporte, setView = () => {}, setPedidoEditar = () => {} }) {
+export default function EstadoPedidos({
+  user,
+  pedidos,
+  personalTransporte,
+  printerSettings = {},
+  setView = () => {},
+  setPedidoEditar = () => {},
+}) {
   const [filtro, setFiltro] = useState('preparacion');
   const [modoVista, setModoVista] = useState('enviar');
   const [modalRepartidor, setModalRepartidor] = useState(null);
@@ -212,15 +220,30 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
 
   const pedidosFiltrados = filtrarPedidos();
 
-  const despacharPedido = (firebaseId, repartidor) => {
+  const despacharPedido = async (firebaseId, repartidor) => {
     setAnimatingCards(prev => new Set([...prev, firebaseId]));
 
-    update(ref(db, `pedidos_internos/${firebaseId}`), {
+    const marcaEnvio = {
       estado: 'ENVIADO',
       enviadoCon: repartidor,
       timestampEnviado: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
       timestamp: Date.now()
-    });
+    };
+
+    await update(ref(db, `pedidos_internos/${firebaseId}`), marcaEnvio);
+
+    const pedidoActual = pedidos.find((pedido) => pedido.firebaseId === firebaseId);
+    if (pedidoActual && printerSettings?.impresionAutomaticaEnvio !== false) {
+      printTransferRequisition(
+        {
+          ...pedidoActual,
+          ...marcaEnvio,
+          historyDate: pedidoActual.fechaEntrega || pedidoActual.fechaPedido,
+          statusMeta: STATUS_CONFIG.ENVIADO,
+        },
+        printerSettings,
+      );
+    }
 
     setTimeout(() => {
       setAnimatingCards(prev => {

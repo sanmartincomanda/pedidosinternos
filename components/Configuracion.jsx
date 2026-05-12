@@ -72,6 +72,13 @@ const Icons = {
       <path d="M3 9h18M3 15h18M9 9v12M15 9v12" />
     </svg>
   ),
+  print: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="6 9 6 2 18 2 18 9" />
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <rect x="6" y="14" width="12" height="8" />
+    </svg>
+  ),
   cloud: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M20 17.5a4.5 4.5 0 0 0-.8-8.9A6 6 0 0 0 7.3 7.1 4 4 0 0 0 6 15h14Z" />
@@ -145,6 +152,11 @@ export default function Configuracion({ setConfig }) {
   const [cocinaLocal, setCocinaLocal] = useState([]);
   const [transporteLocal, setTransporteLocal] = useState([]);
   const [productosCSV, setProductosCSV] = useState([]);
+  const [impresionLocal, setImpresionLocal] = useState({
+    impresoraPredeterminada: "",
+    impresionAutomaticaEnvio: true,
+    formato: "80mm",
+  });
   const [previewCSV, setPreviewCSV] = useState([]);
   const [mostrarPreview, setMostrarPreview] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -168,11 +180,24 @@ export default function Configuracion({ setConfig }) {
           setCocinaLocal(data.personalCocina || []);
           setTransporteLocal(data.personalTransporte || []);
           setProductosCSV(data.productos || []);
+          setImpresionLocal({
+            impresoraPredeterminada: data.impresion?.impresoraPredeterminada || "",
+            impresionAutomaticaEnvio:
+              typeof data.impresion?.impresionAutomaticaEnvio === "boolean"
+                ? data.impresion.impresionAutomaticaEnvio
+                : true,
+            formato: data.impresion?.formato || "80mm",
+          });
           if (setConfig) setConfig(data);
         } else {
           setCocinaLocal([]);
           setTransporteLocal([]);
           setProductosCSV([]);
+          setImpresionLocal({
+            impresoraPredeterminada: "",
+            impresionAutomaticaEnvio: true,
+            formato: "80mm",
+          });
         }
       },
       (error) => {
@@ -198,6 +223,7 @@ export default function Configuracion({ setConfig }) {
         personalCocina: cocinaLocal,
         personalTransporte: transporteLocal,
         productos: productosCSV,
+        impresion: impresionLocal,
         ultimaActualizacion: new Date().toISOString(),
       };
 
@@ -399,7 +425,12 @@ export default function Configuracion({ setConfig }) {
           <StatCard label="Cocina" value={cocinaLocal.length} helper="Personas registradas" accent="#fb923c" />
           <StatCard label="Transporte" value={transporteLocal.length} helper="Repartidores activos" accent="#818cf8" />
           <StatCard label="Catalogo" value={productosCSV.length} helper="Productos cargados" accent="#38bdf8" />
-          <StatCard label="Estado" value={guardando ? "Sync" : "Listo"} helper="Firebase conectado" accent="#22c55e" />
+          <StatCard
+            label="Impresion"
+            value={impresionLocal.impresionAutomaticaEnvio ? "Auto" : "Manual"}
+            helper={impresionLocal.impresoraPredeterminada || "Sin impresora"}
+            accent="#22c55e"
+          />
         </div>
 
         {mensaje ? (
@@ -413,6 +444,7 @@ export default function Configuracion({ setConfig }) {
             { key: "cocina", label: "Cocina", icon: Icons.chef, color: "#fb923c" },
             { key: "transporte", label: "Transporte", icon: Icons.truck, color: "#818cf8" },
             { key: "productos", label: "Catalogo", icon: Icons.table, color: "#38bdf8" },
+            { key: "impresion", label: "Impresion", icon: Icons.print, color: "#22c55e" },
           ].map((tab) => (
             <button
               type="button"
@@ -614,6 +646,88 @@ export default function Configuracion({ setConfig }) {
               </div>
             </div>
           )}
+        </section>
+      ) : null}
+
+      {activeTab === "impresion" ? (
+        <section className="app-panel space-y-5 p-5 sm:p-6">
+          <div>
+            <h3 className="app-title text-2xl font-black text-slate-900">Impresion de requisas</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Configura la impresora termica sugerida y activa la impresion automatica cuando un pedido se marque como enviado.
+            </p>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <FieldLabel icon={Icons.print} label="Impresora sugerida" />
+              <input
+                type="text"
+                value={impresionLocal.impresoraPredeterminada}
+                onChange={(event) =>
+                  setImpresionLocal((prev) => ({
+                    ...prev,
+                    impresoraPredeterminada: event.target.value,
+                  }))
+                }
+                placeholder="Ej. EPSON TM-T20III / Bluetooth 80mm"
+                className="app-input"
+              />
+            </div>
+
+            <div>
+              <FieldLabel icon={Icons.file} label="Formato" />
+              <select
+                value={impresionLocal.formato}
+                onChange={(event) =>
+                  setImpresionLocal((prev) => ({
+                    ...prev,
+                    formato: event.target.value,
+                  }))
+                }
+                className="app-select"
+              >
+                <option value="80mm" style={{ background: "#ffffff", color: "#12324e" }}>
+                  Termica 80mm
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div className="app-card-soft space-y-4 p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-base font-black text-slate-900">Impresion automatica al enviar</div>
+                <div className="mt-1 text-sm text-slate-600">
+                  Al marcar un pedido como <strong>ENVIADO</strong>, la app abrira automaticamente la requisa termica para imprimir.
+                </div>
+              </div>
+
+              <label className="flex shrink-0 items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2">
+                <input
+                  type="checkbox"
+                  checked={impresionLocal.impresionAutomaticaEnvio}
+                  onChange={(event) =>
+                    setImpresionLocal((prev) => ({
+                      ...prev,
+                      impresionAutomaticaEnvio: event.target.checked,
+                    }))
+                  }
+                />
+                <span className="text-sm font-black text-slate-900">
+                  {impresionLocal.impresionAutomaticaEnvio ? "Activada" : "Desactivada"}
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-emerald-300/35 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+            <div className="mb-2 font-black uppercase tracking-[0.16em] text-emerald-700">Importante</div>
+            <p className="leading-6">
+              La app guarda la impresora sugerida y abre la impresion automaticamente, pero Android o el navegador siguen siendo quienes eligen
+              la impresora fisica final segun la ultima seleccion del sistema.
+            </p>
+          </div>
         </section>
       ) : null}
 

@@ -154,6 +154,11 @@ const SUCURSALES_REGISTRADAS = [
 const INITIAL_CONFIG = {
   personalCocina: ["Marcos Ramirez", "Miguel Bustamante", "David", "Roberto Marin"],
   personalTransporte: ["Noel Hernandez", "Noel Bendana", "Vladimir", "David", "Nelson", "Julio Amador", "Carlos Mora"],
+  impresion: {
+    impresoraPredeterminada: "",
+    impresionAutomaticaEnvio: true,
+    formato: "80mm",
+  },
 };
 
 function MetricCard({ label, value, accent, helper }) {
@@ -218,6 +223,10 @@ export default function AppInterna() {
           personalCocina: data.personalCocina || INITIAL_CONFIG.personalCocina,
           personalTransporte: data.personalTransporte || INITIAL_CONFIG.personalTransporte,
           productos: data.productos || [],
+          impresion: {
+            ...INITIAL_CONFIG.impresion,
+            ...(data.impresion || {}),
+          },
         });
       },
       (error) => {
@@ -550,6 +559,7 @@ export default function AppInterna() {
             <Formulario
               user={sharedProps.user}
               pedidos={sharedProps.pedidos}
+              printerSettings={config.impresion || INITIAL_CONFIG.impresion}
               setView={setView}
               pedidoEditar={pedidoEditar}
               setPedidoEditar={setPedidoEditar}
@@ -562,6 +572,7 @@ export default function AppInterna() {
             <PedidoVacuna
               user={sharedProps.user}
               pedidos={sharedProps.pedidos}
+              printerSettings={config.impresion || INITIAL_CONFIG.impresion}
               setView={setView}
               sucursales={SUCURSALES_REGISTRADAS.map((item) => item.nombre).filter((name) => name !== user)}
               productosCSV={config.productos || []}
@@ -577,12 +588,13 @@ export default function AppInterna() {
               user={sharedProps.user}
               pedidos={sharedProps.pedidos}
               personalTransporte={config.personalTransporte || []}
+              printerSettings={config.impresion || INITIAL_CONFIG.impresion}
               setView={setView}
               setPedidoEditar={setPedidoEditar}
             />
           ) : null}
 
-          {view === "historial" ? <Historial user={sharedProps.user} pedidos={sharedProps.pedidos} /> : null}
+          {view === "historial" ? <Historial user={sharedProps.user} pedidos={sharedProps.pedidos} printerSettings={config.impresion || INITIAL_CONFIG.impresion} /> : null}
 
           {view === "configuracion" ? <Configuracion config={config} setConfig={setConfig} /> : null}
         </section>

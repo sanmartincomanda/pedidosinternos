@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
 import { off, onValue, push, ref, runTransaction } from "firebase/database";
+import { printTransferRequisition } from "@/lib/historialPdf";
 import {
   buildOrderNumber,
   getHighestBranchSequence,
@@ -217,7 +218,14 @@ function FieldLabel({ icon, label }) {
   );
 }
 
-export default function PedidoVacuna({ user, setView, sucursales = [], productosCSV = [], pedidos = [] }) {
+export default function PedidoVacuna({
+  user,
+  setView,
+  sucursales = [],
+  productosCSV = [],
+  pedidos = [],
+  printerSettings = {},
+}) {
   const MAX_LINEAS = 25;
   const catalogoProductos = productosCSV.length > 0 ? productosCSV : PRODUCTOS_EJEMPLO;
   const catalogoBusqueda = useMemo(
@@ -639,6 +647,17 @@ export default function PedidoVacuna({ user, setView, sucursales = [], productos
       };
 
       await push(ref(db, "pedidos_internos"), nuevaOrden);
+
+      if (printerSettings?.impresionAutomaticaEnvio !== false) {
+        printTransferRequisition(
+          {
+            ...nuevaOrden,
+            historyDate: nuevaOrden.fechaEntrega || nuevaOrden.fechaPedido,
+            statusMeta: { label: "Enviado" },
+          },
+          printerSettings,
+        );
+      }
 
       setCounterValue(nuevoId);
       alert(`Pedido vacuna ${numeroOrden} enviado con exito.`);
