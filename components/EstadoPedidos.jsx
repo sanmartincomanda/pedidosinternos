@@ -133,6 +133,17 @@ const getMainStatusBucket = (pedido) => {
   }
 };
 
+const formatRequestedDetail = (pedido, item) => {
+  const cantidad = `${item?.cantidad ?? ''}`.trim();
+  const unidad = `${item?.unidad ?? ''}`.trim();
+
+  if (isPedidoVacuna(pedido)) {
+    return [cantidad, unidad || 'lb'].filter(Boolean).join(' ') || 'Envio directo';
+  }
+
+  return [cantidad, unidad].filter(Boolean).join(' ') || 'Pendiente';
+};
+
 export default function EstadoPedidos({ user, pedidos, personalTransporte, setView = () => {}, setPedidoEditar = () => {} }) {
   const [filtro, setFiltro] = useState('preparacion');
   const [modoVista, setModoVista] = useState('enviar');
@@ -826,6 +837,29 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
               </div>
             )}
 
+            {modalRecepcion.notaGeneral && (
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '2px solid rgba(59, 130, 246, 0.18)',
+                borderRadius: '14px',
+                padding: '14px 16px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px'
+              }}>
+                <span style={{ fontSize: '18px' }}>📝</span>
+                <div>
+                  <div style={{ fontSize: '11px', color: '#2563eb', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Nota general
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#1e293b', fontWeight: 700 }}>
+                    {modalRecepcion.notaGeneral}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Tabla de productos */}
             <div className="status-table" style={{
               background: '#f8fafc',
@@ -1395,6 +1429,60 @@ export default function EstadoPedidos({ user, pedidos, personalTransporte, setVi
                         </div>
                       </div>
                     )}
+
+                    <div style={{
+                      background: 'rgba(255,255,255,0.92)',
+                      border: '2px solid rgba(148, 163, 184, 0.18)',
+                      borderRadius: '16px',
+                      marginBottom: '20px',
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 12px rgba(15, 23, 42, 0.04)'
+                    }}>
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(180px, 1fr) 110px',
+                        gap: '12px',
+                        padding: '12px 16px',
+                        background: 'rgba(226, 232, 240, 0.38)',
+                        fontSize: '10px',
+                        fontWeight: 800,
+                        color: '#64748b',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        <div>Detalle del pedido</div>
+                        <div style={{ textAlign: 'center' }}>Solicitado</div>
+                      </div>
+                      {pedido.items.map((item, idx) => (
+                        <div
+                          key={`${pedido.firebaseId}-solicitado-${idx}`}
+                          className="status-table"
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'minmax(180px, 1fr) 110px',
+                            gap: '12px',
+                            padding: '12px 16px',
+                            borderTop: idx === 0 ? 'none' : '1px solid rgba(148, 163, 184, 0.14)',
+                            alignItems: 'center',
+                            background: idx % 2 === 0 ? 'rgba(255,255,255,0.96)' : 'rgba(248,250,252,0.96)'
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                              {item.producto}
+                            </div>
+                            {item.nota && (
+                              <div style={{ fontSize: '10px', color: '#d97706', marginTop: '2px' }}>
+                                ⚠️ {item.nota}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ textAlign: 'center', fontSize: '13px', fontWeight: 700, color: '#2563eb' }}>
+                            {formatRequestedDetail(pedido, item)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
 
                     {/* Info de preparación y envío */}
                     <div className="status-meta" style={{

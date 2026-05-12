@@ -1,503 +1,702 @@
 "use client";
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import * as XLSX from 'xlsx';
-import { db } from '../firebase';
-import { ref, onValue } from "firebase/database";
+
+import React, { useMemo, useState } from "react";
 import { formatOrderNumber } from "@/lib/orderUtils";
+import {
+  buildConsolidatedRows,
+  buildHistoryStats,
+  buildOrderDescriptor,
+  filterPedidosByDate,
+  formatDateLabel,
+  getPhysicalReceiver,
+  getPhysicalSender,
+  getRealText,
+  getRequestedText,
+  getStatusMeta,
+  isPedidoVacuna,
+  matchesSearch,
+  matchesStatus,
+  sortPedidosDesc,
+} from "@/lib/historialUtils";
+import {
+  downloadConsolidatedHistoryPdf,
+  downloadDetailedHistoryPdf,
+  downloadTransferRequisitionPdf,
+  printTransferRequisition,
+} from "@/lib/historialPdf";
 
-// Iconos SVG
 const Icons = {
-  calendar: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
-  inbox: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>,
-  send: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
-  trendUp: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
-  trendDown: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>,
-  package: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
-  scale: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>,
-  check: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>,
-  clock: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
-  download: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-  fileText: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
-  truck: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>,
-  filter: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+  calendar: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  ),
+  list: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  ),
+  download: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  ),
+  print: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="6 9 6 2 18 2 18 9" />
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <rect x="6" y="14" width="12" height="8" />
+    </svg>
+  ),
+  file: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  ),
+  package: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+      <polyline points="3.29 7 12 12 20.71 7" />
+      <line x1="12" y1="22" x2="12" y2="12" />
+    </svg>
+  ),
+  truck: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="1" y="3" width="15" height="13" />
+      <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+      <circle cx="5.5" cy="18.5" r="2.5" />
+      <circle cx="18.5" cy="18.5" r="2.5" />
+    </svg>
+  ),
+  inbox: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z" />
+    </svg>
+  ),
+  search: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  ),
 };
 
-// Configuración de estados
-const STATUS_COLORS = {
-  'NUEVO': '#3b82f6',
-  'STANDBY_ENTREGA': '#f59e0b',
-  'PREPARACION': '#f97316',
-  'LISTO': '#10b981',
-  'ENVIADO': '#6366f1',
-  'RECIBIDO_CONFORME': '#059669',
-  'ENTREGADO': '#059669',
-  'ANULADO': '#dc2626'
-};
+const STATUS_OPTIONS = [
+  { value: "todos", label: "Todos" },
+  { value: "NUEVO", label: "Nuevo" },
+  { value: "STANDBY_ENTREGA", label: "Standby" },
+  { value: "PREPARACION", label: "Preparacion" },
+  { value: "LISTO", label: "Listo" },
+  { value: "ENVIADO", label: "Enviado" },
+  { value: "RECIBIDO_CONFORME", label: "Recibido conforme" },
+  { value: "ENTREGADO", label: "Entregado" },
+  { value: "ANULADO", label: "Anulado" },
+];
 
-const isPedidoVacuna = (pedido) => pedido?.tipoPedido === 'VACUNA';
+const SECTION_TABS = [
+  { key: "recibidos", label: "Recibidos" },
+  { key: "enviados", label: "Enviados" },
+  { key: "reportes", label: "Reportes" },
+];
+
+function SectionTabButton({ active, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: "12px 16px",
+        borderRadius: "14px",
+        border: active ? "none" : "1px solid rgba(148, 163, 184, 0.22)",
+        background: active ? "linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)" : "rgba(255,255,255,0.95)",
+        color: active ? "#ffffff" : "#475569",
+        fontWeight: 800,
+        fontSize: "13px",
+        cursor: "pointer",
+        boxShadow: active ? "0 18px 28px -22px rgba(37, 99, 235, 0.85)" : "none",
+        transition: "all 0.2s ease",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function StatCard({ label, value, helper, accent }) {
+  return (
+    <div
+      style={{
+        padding: "18px",
+        borderRadius: "18px",
+        background: `linear-gradient(180deg, ${accent}12 0%, rgba(255,255,255,0.98) 100%)`,
+        border: `1px solid ${accent}2d`,
+        boxShadow: "0 20px 36px -30px rgba(15, 23, 42, 0.22)",
+      }}
+    >
+      <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b" }}>
+        {label}
+      </div>
+      <div style={{ marginTop: "10px", fontSize: "28px", fontWeight: 900, color: accent }}>
+        {value}
+      </div>
+      {helper ? <div style={{ marginTop: "6px", fontSize: "12px", color: "#475569" }}>{helper}</div> : null}
+    </div>
+  );
+}
+
+function EmptyState({ title, text }) {
+  return (
+    <div
+      style={{
+        textAlign: "center",
+        padding: "56px 24px",
+        borderRadius: "24px",
+        background: "rgba(255,255,255,0.82)",
+        border: "1px dashed rgba(148, 163, 184, 0.32)",
+      }}
+    >
+      <div style={{ fontSize: "52px", marginBottom: "14px" }}>📦</div>
+      <div style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", marginBottom: "8px" }}>{title}</div>
+      <div style={{ fontSize: "14px", color: "#64748b" }}>{text}</div>
+    </div>
+  );
+}
+
+function OrderCard({ pedido, role, isOpen, onToggle }) {
+  const counterpart = role === "recibidos" ? getPhysicalSender(pedido) : getPhysicalReceiver(pedido);
+  const roleLabel = role === "recibidos" ? "Enviado por" : "Recibe";
+
+  return (
+    <article
+      style={{
+        background: "linear-gradient(180deg, rgba(255,255,255,0.99) 0%, rgba(248,250,252,0.97) 100%)",
+        borderRadius: "22px",
+        border: "1px solid rgba(148, 163, 184, 0.16)",
+        boxShadow: "0 22px 40px -34px rgba(15, 23, 42, 0.24)",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ padding: "20px 20px 14px 20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  padding: "6px 10px",
+                  borderRadius: "999px",
+                  background: pedido.statusMeta.bg,
+                  color: pedido.statusMeta.color,
+                  fontSize: "12px",
+                  fontWeight: 800,
+                }}
+              >
+                {pedido.statusMeta.label}
+              </span>
+              {isPedidoVacuna(pedido) ? (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                    background: "rgba(14, 116, 144, 0.12)",
+                    color: "#0f766e",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                  }}
+                >
+                  Vacuna
+                </span>
+              ) : null}
+            </div>
+            <div style={{ fontSize: "24px", fontWeight: 900, color: "#0f172a", lineHeight: 1.05 }}>
+              {formatOrderNumber(pedido)}
+            </div>
+            <div style={{ marginTop: "8px", fontSize: "14px", fontWeight: 700, color: "#334155" }}>
+              {roleLabel}: {counterpart || "Sin sucursal"}
+            </div>
+          </div>
+
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8" }}>
+              Fecha
+            </div>
+            <div style={{ marginTop: "6px", fontSize: "16px", fontWeight: 800, color: "#0f172a" }}>
+              {formatDateLabel(pedido.historyDate)}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "16px" }}>
+          {[
+            { label: "Items", value: pedido.itemsCount },
+            { label: "Peso real", value: `${pedido.totalReal.toFixed(2)} lb` },
+            { label: "Entrega", value: getPhysicalSender(pedido) || "-" },
+            { label: "Recibe", value: getPhysicalReceiver(pedido) || "-" },
+          ].map((item) => (
+            <div
+              key={`${pedido.firebaseId}-${item.label}`}
+              style={{
+                minWidth: "118px",
+                padding: "10px 12px",
+                borderRadius: "14px",
+                background: "rgba(241, 245, 249, 0.92)",
+                border: "1px solid rgba(148, 163, 184, 0.18)",
+              }}
+            >
+              <div style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8" }}>
+                {item.label}
+              </div>
+              <div style={{ marginTop: "5px", fontSize: "13px", fontWeight: 800, color: "#0f172a" }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "18px" }}>
+          <button
+            type="button"
+            onClick={onToggle}
+            style={{
+              padding: "11px 16px",
+              borderRadius: "12px",
+              border: "1px solid rgba(59, 130, 246, 0.22)",
+              background: isOpen ? "rgba(37, 99, 235, 0.12)" : "#ffffff",
+              color: "#2563eb",
+              fontWeight: 800,
+              fontSize: "13px",
+              cursor: "pointer",
+            }}
+          >
+            {isOpen ? "Ocultar detalle" : "Ver detalle"}
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadTransferRequisitionPdf({ pedido })}
+            style={{
+              padding: "11px 16px",
+              borderRadius: "12px",
+              border: "1px solid rgba(5, 150, 105, 0.22)",
+              background: "rgba(5, 150, 105, 0.08)",
+              color: "#047857",
+              fontWeight: 800,
+              fontSize: "13px",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            {Icons.file}
+            PDF requisa
+          </button>
+          <button
+            type="button"
+            onClick={() => printTransferRequisition(pedido)}
+            style={{
+              padding: "11px 16px",
+              borderRadius: "12px",
+              border: "1px solid rgba(71, 85, 105, 0.2)",
+              background: "rgba(255,255,255,0.98)",
+              color: "#334155",
+              fontWeight: 800,
+              fontSize: "13px",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            {Icons.print}
+            Imprimir requisa
+          </button>
+        </div>
+      </div>
+
+      {isOpen ? (
+        <div style={{ borderTop: "1px solid rgba(148, 163, 184, 0.14)", background: "rgba(248,250,252,0.82)" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+              gap: "12px",
+              padding: "18px 20px",
+            }}
+          >
+            {[
+              { label: "Preparado por", value: pedido.preparadoPor || "-" },
+              { label: "Enviado con", value: pedido.enviadoCon || "-" },
+              { label: "Recibido por", value: pedido.recibidoPor || "-" },
+              { label: "Hora envio", value: pedido.timestampEnviado || "-" },
+              { label: "Hora recepcion", value: pedido.horaRecepcion || "-" },
+              { label: "Entrega", value: pedido.fechaEntrega || "Sin fecha" },
+            ].map((info) => (
+              <div
+                key={`${pedido.firebaseId}-${info.label}`}
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  background: "#ffffff",
+                  border: "1px solid rgba(148, 163, 184, 0.16)",
+                }}
+              >
+                <div style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8" }}>
+                  {info.label}
+                </div>
+                <div style={{ marginTop: "6px", fontSize: "13px", fontWeight: 800, color: "#0f172a" }}>{info.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {(pedido.notaGeneral || "").trim() ? (
+            <div
+              style={{
+                margin: "0 20px 18px 20px",
+                padding: "14px 16px",
+                borderRadius: "16px",
+                background: "rgba(37, 99, 235, 0.08)",
+                border: "1px solid rgba(37, 99, 235, 0.16)",
+                color: "#1d4ed8",
+                fontSize: "13px",
+                fontWeight: 700,
+              }}
+            >
+              Nota general: {pedido.notaGeneral}
+            </div>
+          ) : null}
+
+          <div style={{ padding: "0 20px 20px 20px", overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: "760px", borderCollapse: "collapse", background: "#ffffff", borderRadius: "18px", overflow: "hidden" }}>
+              <thead>
+                <tr>
+                  {["Clave", "Producto", "Solicitado", "Real", "Nota"].map((header) => (
+                    <th
+                      key={header}
+                      style={{
+                        padding: "12px 14px",
+                        textAlign: "left",
+                        fontSize: "11px",
+                        fontWeight: 800,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.08em",
+                        color: "#475569",
+                        background: "rgba(37, 99, 235, 0.08)",
+                      }}
+                    >
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(pedido.items || []).map((item, index) => (
+                  <tr key={`${pedido.firebaseId}-item-${index}`}>
+                    <td style={{ padding: "13px 14px", borderTop: "1px solid rgba(226, 232, 240, 0.8)", fontFamily: "monospace", fontSize: "12px", color: "#475569" }}>
+                      {item?.clave || "-"}
+                    </td>
+                    <td style={{ padding: "13px 14px", borderTop: "1px solid rgba(226, 232, 240, 0.8)", fontSize: "13px", fontWeight: 800, color: "#0f172a" }}>
+                      {item?.producto || "-"}
+                    </td>
+                    <td style={{ padding: "13px 14px", borderTop: "1px solid rgba(226, 232, 240, 0.8)", fontSize: "13px", color: "#334155" }}>
+                      {getRequestedText(pedido, item)}
+                    </td>
+                    <td style={{ padding: "13px 14px", borderTop: "1px solid rgba(226, 232, 240, 0.8)", fontSize: "13px", fontWeight: 800, color: "#047857" }}>
+                      {getRealText(item, pedido)}
+                    </td>
+                    <td style={{ padding: "13px 14px", borderTop: "1px solid rgba(226, 232, 240, 0.8)", fontSize: "12px", color: item?.nota ? "#b45309" : "#94a3b8", fontWeight: item?.nota ? 700 : 600 }}>
+                      {item?.nota || "Sin nota"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function OrderList({ title, pedidos, role, expandedId, onToggle }) {
+  if (!pedidos.length) {
+    return (
+      <EmptyState
+        title={`Sin ${title.toLowerCase()}`}
+        text="No hay movimientos con este filtro en el periodo seleccionado."
+      />
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: "18px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ fontSize: "24px", fontWeight: 900, color: "#0f172a" }}>{title}</div>
+        <div style={{ fontSize: "13px", fontWeight: 800, color: "#64748b" }}>{pedidos.length} pedidos</div>
+      </div>
+      {pedidos.map((pedido) => (
+        <OrderCard
+          key={pedido.firebaseId}
+          pedido={pedido}
+          role={role}
+          isOpen={expandedId === pedido.firebaseId}
+          onToggle={() => onToggle(pedido.firebaseId)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ReportActionCard({ title, description, accent, onClick, disabled }) {
+  return (
+    <div
+      style={{
+        padding: "20px",
+        borderRadius: "20px",
+        background: `linear-gradient(180deg, ${accent}10 0%, rgba(255,255,255,0.98) 100%)`,
+        border: `1px solid ${accent}24`,
+        boxShadow: "0 22px 36px -32px rgba(15, 23, 42, 0.25)",
+      }}
+    >
+      <div style={{ fontSize: "18px", fontWeight: 900, color: "#0f172a", marginBottom: "8px" }}>{title}</div>
+      <div style={{ fontSize: "13px", color: "#475569", minHeight: "38px" }}>{description}</div>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        style={{
+          width: "100%",
+          marginTop: "18px",
+          padding: "12px 16px",
+          borderRadius: "14px",
+          border: "none",
+          background: disabled ? "#cbd5e1" : accent,
+          color: "#ffffff",
+          fontWeight: 800,
+          fontSize: "13px",
+          cursor: disabled ? "not-allowed" : "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+        }}
+      >
+        {Icons.download}
+        Generar PDF
+      </button>
+    </div>
+  );
+}
 
 export default function Historial({ user, pedidos }) {
-  const hoy = new Date().toISOString().split('T')[0];
-  const [modoFecha, setModoFecha] = useState('dia');
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(hoy);
-  const [fechaDesde, setFechaDesde] = useState(hoy);
-  const [fechaHasta, setFechaHasta] = useState(hoy);
-  const [vista, setVista] = useState('ambos');
-  const [mostrarConsolidado, setMostrarConsolidado] = useState(false);
-  const [pedidoDetalleAbierto, setPedidoDetalleAbierto] = useState(null);
-  
-  // 🆕 Filtro de sucursal para el consolidado
-  const [sucursalFiltro, setSucursalFiltro] = useState('todas');
-  
-  // Catálogo de productos
-  const [catalogoProductos, setCatalogoProductos] = useState({});
-  const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
-
-  // Cargar catálogo
-  useEffect(() => {
-    const configRef = ref(db, 'configuracion/productos');
-    
-    const unsubscribe = onValue(configRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.val();
-        const mapaClaves = {};
-        
-        Object.entries(data).forEach(([key, value]) => {
-          const nombreProducto = value.nombre || value.producto || value.descripcion || key;
-          const claveProducto = value.clave || value.codigo || value.sku || value.id || value.claveProducto;
-          
-          if (nombreProducto && claveProducto) {
-            mapaClaves[nombreProducto.toString().trim().toLowerCase()] = claveProducto.toString().trim();
-          }
-        });
-        
-        setCatalogoProductos(mapaClaves);
-      }
-      setCargandoCatalogo(false);
-    }, (error) => {
-      console.error("Error cargando catálogo:", error);
-      setCargandoCatalogo(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+  const today = new Date().toISOString().split("T")[0];
+  const [modoFecha, setModoFecha] = useState("dia");
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(today);
+  const [fechaDesde, setFechaDesde] = useState(today);
+  const [fechaHasta, setFechaHasta] = useState(today);
+  const [activeTab, setActiveTab] = useState("recibidos");
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
 
   const { fechaInicioFiltro, fechaFinFiltro } = useMemo(() => {
-    if (modoFecha === 'rango') {
-      const inicio = fechaDesde || fechaHasta || hoy;
-      const fin = fechaHasta || fechaDesde || inicio;
+    if (modoFecha === "rango") {
+      const start = fechaDesde || fechaHasta || today;
+      const end = fechaHasta || fechaDesde || start;
 
-      return inicio <= fin
-        ? { fechaInicioFiltro: inicio, fechaFinFiltro: fin }
-        : { fechaInicioFiltro: fin, fechaFinFiltro: inicio };
+      return start <= end
+        ? { fechaInicioFiltro: start, fechaFinFiltro: end }
+        : { fechaInicioFiltro: end, fechaFinFiltro: start };
     }
 
     return {
       fechaInicioFiltro: fechaSeleccionada,
       fechaFinFiltro: fechaSeleccionada,
     };
-  }, [modoFecha, fechaSeleccionada, fechaDesde, fechaHasta, hoy]);
+  }, [modoFecha, fechaSeleccionada, fechaDesde, fechaHasta, today]);
 
-  const fechaEstaEnFiltro = useCallback((fecha) => {
-    if (!fecha) return false;
-    return fecha >= fechaInicioFiltro && fecha <= fechaFinFiltro;
-  }, [fechaInicioFiltro, fechaFinFiltro]);
+  const pedidosDecorados = useMemo(
+    () => pedidos.map((pedido) => buildOrderDescriptor(pedido, user)).sort(sortPedidosDesc),
+    [pedidos, user],
+  );
 
-  // Filtrar pedidos por fecha o rango
-  const pedidosFiltradosFecha = useMemo(() => {
-    return pedidos.filter(p => {
-      const fechaPedido = p.fechaPedido || '';
-      const fechaEntrega = p.fechaEntrega || '';
-      return fechaEstaEnFiltro(fechaPedido) || fechaEstaEnFiltro(fechaEntrega);
-    });
-  }, [pedidos, fechaEstaEnFiltro]);
+  const pedidosEnRango = useMemo(
+    () => filterPedidosByDate(pedidosDecorados, fechaInicioFiltro, fechaFinFiltro),
+    [pedidosDecorados, fechaInicioFiltro, fechaFinFiltro],
+  );
 
-  // Pedidos recibidos y solicitados
-  const pedidosRecibidos = pedidosFiltradosFecha.filter(p => p.sucursalDestino === user);
-  const pedidosSolicitados = pedidosFiltradosFecha.filter(p => p.sucursalOrigen === user);
+  const pedidosRecibidosPeriodo = useMemo(
+    () => pedidosEnRango.filter((pedido) => pedido.isReceivedByUser && matchesStatus(pedido, statusFilter)),
+    [pedidosEnRango, statusFilter],
+  );
 
-  // 🆕 Obtener lista de sucursales únicas para el filtro (solo las que me hicieron pedidos)
-  const sucursalesDisponibles = useMemo(() => {
-    const pedidosEnviadosPorMi = pedidosFiltradosFecha.filter(p => 
-      p.sucursalDestino === user && 
-      (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')
-    );
-    
-    const sucursales = [...new Set(pedidosEnviadosPorMi.map(p => p.sucursalOrigen))];
-    return sucursales.sort();
-  }, [pedidosFiltradosFecha, user]);
+  const pedidosEnviadosPeriodo = useMemo(
+    () => pedidosEnRango.filter((pedido) => pedido.isSentByUser && matchesStatus(pedido, statusFilter)),
+    [pedidosEnRango, statusFilter],
+  );
 
-  // 🎯 CONSOLIDADO CON FILTRO DE SUCURSAL
-  const consolidadoDia = useMemo(() => {
-    // Pedidos donde yo soy el destino y ya los envié
-    let pedidosEnviadosPorMi = pedidosFiltradosFecha.filter(p => 
-      p.sucursalDestino === user && 
-      (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')
-    );
+  const pedidosRecibidos = useMemo(
+    () => pedidosRecibidosPeriodo.filter((pedido) => matchesSearch(pedido, searchTerm)),
+    [pedidosRecibidosPeriodo, searchTerm],
+  );
 
-    // 🆕 Aplicar filtro por sucursal si no es "todas"
-    if (sucursalFiltro !== 'todas') {
-      pedidosEnviadosPorMi = pedidosEnviadosPorMi.filter(p => 
-        p.sucursalOrigen === sucursalFiltro
-      );
-    }
+  const pedidosEnviados = useMemo(
+    () => pedidosEnviadosPeriodo.filter((pedido) => matchesSearch(pedido, searchTerm)),
+    [pedidosEnviadosPeriodo, searchTerm],
+  );
 
-    const productosMap = new Map();
+  const stats = useMemo(
+    () => buildHistoryStats(pedidosRecibidosPeriodo, pedidosEnviadosPeriodo),
+    [pedidosRecibidosPeriodo, pedidosEnviadosPeriodo],
+  );
 
-    pedidosEnviadosPorMi.forEach(pedido => {
-      pedido.items.forEach(item => {
-        const key = `${item.producto}-${item.unidad}`;
-        const pesoReal = parseFloat(item.pesoReal) || parseFloat(item.cantidad) || 0;
+  const periodoEtiqueta =
+    modoFecha === "rango"
+      ? `${formatDateLabel(fechaInicioFiltro)} al ${formatDateLabel(fechaFinFiltro)}`
+      : formatDateLabel(fechaSeleccionada);
 
-        if (productosMap.has(key)) {
-          const existente = productosMap.get(key);
-          productosMap.set(key, {
-            ...existente,
-            cantidad: existente.cantidad + pesoReal,
-            cantidadPedidos: existente.cantidadPedidos + 1,
-            sucursales: [...existente.sucursales, pedido.sucursalOrigen]
-          });
-        } else {
-          productosMap.set(key, {
-            producto: item.producto,
-            unidad: item.unidad,
-            cantidad: pesoReal,
-            cantidadPedidos: 1,
-            sucursales: [pedido.sucursalOrigen]
-          });
-        }
-      });
-    });
+  const pedidosConfirmadosRecibidos = useMemo(
+    () => pedidosRecibidosPeriodo.filter((pedido) => ["RECIBIDO_CONFORME", "ENTREGADO"].includes(pedido.estado)),
+    [pedidosRecibidosPeriodo],
+  );
 
-    return Array.from(productosMap.values())
-      .sort((a, b) => b.cantidad - a.cantidad);
-  }, [pedidosFiltradosFecha, user, sucursalFiltro]);
+  const pedidosConfirmadosEnviados = useMemo(
+    () => pedidosEnviadosPeriodo.filter((pedido) => ["ENVIADO", "RECIBIDO_CONFORME", "ENTREGADO"].includes(pedido.estado)),
+    [pedidosEnviadosPeriodo],
+  );
 
-  // Totales
-  const totalesConsolidado = useMemo(() => {
-    return consolidadoDia.reduce((acc, item) => ({
-      totalCantidad: acc.totalCantidad + item.cantidad,
-      totalLineas: acc.totalLineas + 1
-    }), { totalCantidad: 0, totalLineas: 0 });
-  }, [consolidadoDia]);
+  const consolidatedRecibidos = useMemo(
+    () => buildConsolidatedRows(pedidosConfirmadosRecibidos),
+    [pedidosConfirmadosRecibidos],
+  );
 
-  // Contador de pedidos
-  const pedidosFisicamenteEnviados = useMemo(() => {
-    let filtrados = pedidosFiltradosFecha.filter(p => 
-      p.sucursalDestino === user && 
-      (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')
-    );
-    
-    if (sucursalFiltro !== 'todas') {
-      filtrados = filtrados.filter(p => p.sucursalOrigen === sucursalFiltro);
-    }
-    
-    return filtrados;
-  }, [pedidosFiltradosFecha, user, sucursalFiltro]);
+  const consolidatedEnviados = useMemo(
+    () => buildConsolidatedRows(pedidosConfirmadosEnviados),
+    [pedidosConfirmadosEnviados],
+  );
 
-  // Obtener clave del catálogo
-  const obtenerClaveProducto = (nombreProducto) => {
-    if (!nombreProducto) return '';
-    const clave = catalogoProductos[nombreProducto.toString().trim().toLowerCase()];
-    return clave || '';
-  };
-
-  const construirCeldaClaveExcel = (clave) => {
-    const claveLimpia = `${clave || ''}`.trim();
-
-    if (!claveLimpia) {
-      return { t: 's', v: '' };
-    }
-
-    if (/^\d+$/.test(claveLimpia)) {
-      return {
-        t: 'n',
-        v: Number(claveLimpia),
-        z: '00000',
-      };
-    }
-
-    return {
-      t: 's',
-      v: claveLimpia,
-    };
-  };
-
-  // 📝 Exportar Excel real con CLAVE en formato tipo codigo postal
-  const exportarExcel = () => {
-    if (consolidadoDia.length === 0) return;
-
-    const productosSinClave = consolidadoDia.filter(item => !obtenerClaveProducto(item.producto));
-    
-    if (productosSinClave.length > 0) {
-      const nombres = productosSinClave.map(p => p.producto).join(', ');
-      const confirmar = window.confirm(
-        `Los siguientes productos no tienen clave en el catálogo:\n${nombres}\n\n` +
-        `Se exportarán con CLAVE vacía. ¿Deseas continuar?`
-      );
-      if (!confirmar) return;
-    }
-
-    const headers = ['CLAVE', 'CANTIDAD'];
-
-    const sheetData = [
-      headers,
-      ...consolidadoDia.map(item => [
-        obtenerClaveProducto(item.producto),
-        Number(item.cantidad.toFixed(2))
-      ])
-    ];
-
-    const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
-
-    consolidadoDia.forEach((item, index) => {
-      const claveReal = obtenerClaveProducto(item.producto);
-      const claveCellAddress = XLSX.utils.encode_cell({ r: index + 1, c: 0 });
-      const cantidadCellAddress = XLSX.utils.encode_cell({ r: index + 1, c: 1 });
-
-      worksheet[claveCellAddress] = construirCeldaClaveExcel(claveReal);
-      worksheet[cantidadCellAddress] = {
-        t: 'n',
-        v: Number(item.cantidad.toFixed(2)),
-        z: '0.00',
-      };
-    });
-
-    worksheet['!cols'] = [
-      { wch: 14 },
-      { wch: 14 },
-    ];
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Consolidado');
-
-    const nombreSucursal = sucursalFiltro === 'todas' ? 'TODAS' : sucursalFiltro;
-    const nombreFecha = modoFecha === 'rango'
-      ? `${fechaInicioFiltro}_a_${fechaFinFiltro}`
-      : fechaSeleccionada;
-    XLSX.writeFile(
-      workbook,
-      `Consolidado_${nombreFecha}_${nombreSucursal}_${user}.xlsx`,
-      { compression: true }
-    );
-  };
-
-  // Determinar qué mostrar según vista
-  const pedidosMostrar = useMemo(() => {
-    switch (vista) {
-      case 'recibidos':
-        return pedidosRecibidos;
-      case 'enviados':
-        return pedidosSolicitados;
-      case 'ambos':
-      default:
-        return pedidosFiltradosFecha;
-    }
-  }, [vista, pedidosRecibidos, pedidosSolicitados, pedidosFiltradosFecha]);
-
-  // Estadísticas
-  const stats = {
-    totalRecibidos: pedidosRecibidos.length,
-    totalSolicitados: pedidosSolicitados.length,
-    totalEnviadosPorMi: pedidosFisicamenteEnviados.length,
-    pesoTotalEnviado: pedidosFisicamenteEnviados.reduce((acc, p) => 
-      acc + p.items.reduce((sum, item) => sum + (parseFloat(item.pesoReal) || 0), 0), 0
-    ),
-    completados: pedidosFiltradosFecha.filter(p => p.estado === 'RECIBIDO_CONFORME' || p.estado === 'ENTREGADO').length,
-    enProceso: pedidosFiltradosFecha.filter(p => ['NUEVO', 'PREPARACION', 'LISTO'].includes(p.estado)).length
-  };
-
-  const formatearFecha = (fechaStr) => {
-    if (!fechaStr) return '';
-    const [year, month, day] = fechaStr.split('-');
-    return `${day}/${month}/${year}`;
-  };
-
-  const etiquetaFiltroFecha = modoFecha === 'rango'
-    ? `${formatearFecha(fechaInicioFiltro)} al ${formatearFecha(fechaFinFiltro)}`
-    : formatearFecha(fechaSeleccionada);
-
-  const getEstadoColor = (estado) => STATUS_COLORS[estado] || '#6b7280';
-  const toggleDetallePedido = (firebaseId) => {
-    setPedidoDetalleAbierto((current) => (current === firebaseId ? null : firebaseId));
-  };
-
-  const formatearSolicitadoDetalle = (pedido, item) => {
-    if (isPedidoVacuna(pedido)) {
-      return 'Envio directo';
-    }
-
-    const cantidad = `${item?.cantidad ?? ''}`.trim();
-    const unidad = `${item?.unidad ?? ''}`.trim();
-    const valor = [cantidad, unidad].filter(Boolean).join(' ');
-
-    return valor || 'Sin dato';
-  };
-
-  const formatearPesoRealDetalle = (pedido, item) => {
-    const valorBase = isPedidoVacuna(pedido) ? item?.pesoReal || item?.cantidad : item?.pesoReal;
-    const numero = Number.parseFloat(valorBase);
-
-    if (!Number.isFinite(numero)) {
-      return 'Pendiente';
-    }
-
-    return `${numero.toFixed(2)} lb`;
+  const handleToggleOrder = (firebaseId) => {
+    setExpandedId((current) => (current === firebaseId ? null : firebaseId));
   };
 
   return (
-    <div style={{ animation: 'slideIn 0.4s ease-out' }}>
+    <div style={{ animation: "slideIn 0.35s ease-out" }}>
       <style>{`
         @keyframes slideIn {
-          from { opacity: 0; transform: translateY(20px); }
+          from { opacity: 0; transform: translateY(14px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .card-enter { animation: slideIn 0.4s ease-out forwards; }
-        .btn-hover { transition: all 0.2s ease; }
-        .btn-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
         @media (max-width: 768px) {
-          .history-grid {
+          .historial-filter-grid {
             grid-template-columns: 1fr !important;
           }
-          .history-header {
-            flex-direction: column !important;
-            align-items: flex-start !important;
+          .historial-stats-grid {
+            grid-template-columns: 1fr 1fr !important;
           }
-          .history-table {
-            min-width: 620px;
+          .historial-report-grid {
+            grid-template-columns: 1fr !important;
           }
         }
       `}</style>
 
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '24px',
-        flexWrap: 'wrap',
-        gap: '16px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 14px 30px rgba(37, 99, 235, 0.22)',
-            color: 'white'
-          }}>
-            {Icons.calendar}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "16px",
+          marginBottom: "24px",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "16px",
+              background: "linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#ffffff",
+              boxShadow: "0 18px 30px -24px rgba(37, 99, 235, 0.85)",
+            }}
+          >
+            {Icons.list}
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
-              Historial
-            </h1>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
-              {user} • Centro de Distribución
-            </p>
+            <div style={{ fontSize: "28px", fontWeight: 900, color: "#0f172a" }}>Historial</div>
+            <div style={{ marginTop: "4px", fontSize: "13px", color: "#64748b", fontWeight: 700 }}>
+              {user} · Recibidos, enviados y reportes
+            </div>
           </div>
         </div>
 
-        <button
-          onClick={() => setMostrarConsolidado(!mostrarConsolidado)}
+        <div
           style={{
-            padding: '14px 24px',
-            borderRadius: '14px',
-            border: 'none',
-            background: mostrarConsolidado 
-              ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' 
-              : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            color: 'white',
-            fontWeight: 700,
-            fontSize: '14px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            boxShadow: mostrarConsolidado 
-              ? '0 10px 25px rgba(245, 158, 11, 0.4)' 
-              : '0 10px 25px rgba(16, 185, 129, 0.4)',
-            transition: 'all 0.3s ease'
+            padding: "14px 18px",
+            borderRadius: "18px",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,245,249,0.94) 100%)",
+            border: "1px solid rgba(148, 163, 184, 0.18)",
+            boxShadow: "0 20px 40px -34px rgba(15, 23, 42, 0.24)",
           }}
-          className="btn-hover"
         >
-          {Icons.fileText}
-          {mostrarConsolidado ? 'Ocultar Consolidado' : 'Ver Consolidado de Envíos'}
-          {consolidadoDia.length > 0 && !mostrarConsolidado && (
-            <span style={{
-              background: 'rgba(255,255,255,0.2)',
-              padding: '2px 8px',
-              borderRadius: '10px',
-              fontSize: '12px'
-            }}>
-              {consolidadoDia.length}
-            </span>
-          )}
-        </button>
+          <div style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8" }}>
+            Periodo
+          </div>
+          <div style={{ marginTop: "6px", fontSize: "18px", fontWeight: 900, color: "#0f172a" }}>{periodoEtiqueta}</div>
+        </div>
       </div>
 
-      {/* Selector de Fecha y Vista */}
-      <div style={{
-        background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,245,249,0.96) 100%)',
-        borderRadius: '20px',
-        padding: '24px',
-        marginBottom: '24px',
-        border: '1px solid rgba(148, 163, 184, 0.18)',
-        boxShadow: '0 20px 40px -28px rgba(15, 23, 42, 0.28)'
-      }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: '20px',
-          marginBottom: '20px'
-        }}>
+      <section
+        style={{
+          background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,245,249,0.96) 100%)",
+          borderRadius: "24px",
+          padding: "24px",
+          marginBottom: "24px",
+          border: "1px solid rgba(148, 163, 184, 0.18)",
+          boxShadow: "0 22px 44px -34px rgba(15, 23, 42, 0.28)",
+        }}
+      >
+        <div className="historial-filter-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: "14px" }}>
           <div>
-            <label style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              color: '#64748b',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              marginBottom: '8px',
-              display: 'block'
-            }}>
-              Modo de Fecha
-            </label>
-            <div style={{
-              display: 'flex',
-              gap: '8px',
-              background: '#e2e8f0',
-              padding: '6px',
-              borderRadius: '12px'
-            }}>
+            <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", marginBottom: "8px" }}>
+              Modo
+            </div>
+            <div style={{ display: "flex", gap: "8px", background: "#e2e8f0", padding: "6px", borderRadius: "14px" }}>
               {[
-                { key: 'dia', label: 'Fecha' },
-                { key: 'rango', label: 'Intervalo' }
+                { key: "dia", label: "Fecha" },
+                { key: "rango", label: "Intervalo" },
               ].map((option) => (
                 <button
                   key={option.key}
                   type="button"
-                  onClick={() => {
-                    setModoFecha(option.key);
-                    setSucursalFiltro('todas');
-                  }}
+                  onClick={() => setModoFecha(option.key)}
                   style={{
                     flex: 1,
-                    padding: '12px 16px',
-                    borderRadius: '10px',
-                    border: 'none',
-                    background: modoFecha === option.key
-                      ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
-                      : 'transparent',
-                    color: modoFecha === option.key ? 'white' : '#475569',
-                    fontWeight: 700,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    border: "none",
+                    background: modoFecha === option.key ? "linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)" : "transparent",
+                    color: modoFecha === option.key ? "#ffffff" : "#475569",
+                    fontWeight: 800,
+                    fontSize: "13px",
+                    cursor: "pointer",
                   }}
                 >
                   {option.label}
@@ -507,1327 +706,358 @@ export default function Historial({ user, pedidos }) {
           </div>
 
           <div>
-            <label style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              color: '#64748b',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              marginBottom: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              {Icons.calendar}
-              {modoFecha === 'rango' ? 'Fecha Desde' : 'Seleccionar Fecha'}
-            </label>
+            <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", marginBottom: "8px" }}>
+              {modoFecha === "rango" ? "Desde" : "Fecha"}
+            </div>
             <input
               type="date"
-              value={modoFecha === 'rango' ? fechaDesde : fechaSeleccionada}
-              onChange={(e) => {
-                if (modoFecha === 'rango') {
-                  setFechaDesde(e.target.value);
+              value={modoFecha === "rango" ? fechaDesde : fechaSeleccionada}
+              onChange={(event) => {
+                if (modoFecha === "rango") {
+                  setFechaDesde(event.target.value);
                 } else {
-                  setFechaSeleccionada(e.target.value);
+                  setFechaSeleccionada(event.target.value);
                 }
-                setSucursalFiltro('todas'); // Resetear filtro al cambiar fecha
               }}
               style={{
-                width: '100%',
-                padding: '14px 16px',
-                background: '#ffffff',
-                border: '2px solid #cbd5e1',
-                borderRadius: '12px',
-                color: '#0f172a',
+                width: "100%",
+                padding: "13px 14px",
+                borderRadius: "14px",
+                border: "1px solid rgba(148, 163, 184, 0.3)",
+                background: "#ffffff",
+                color: "#0f172a",
+                fontSize: "14px",
                 fontWeight: 700,
-                fontSize: '15px',
-                cursor: 'pointer'
               }}
             />
           </div>
 
-          {modoFecha === 'rango' ? (
-            <div>
-              <label style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: '#64748b',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                marginBottom: '8px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                {Icons.calendar}
-                Fecha Hasta
-              </label>
+          <div>
+            <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", marginBottom: "8px" }}>
+              {modoFecha === "rango" ? "Hasta" : "Estado"}
+            </div>
+            {modoFecha === "rango" ? (
               <input
                 type="date"
                 value={fechaHasta}
-                onChange={(e) => {
-                  setFechaHasta(e.target.value);
-                  setSucursalFiltro('todas');
-                }}
+                onChange={(event) => setFechaHasta(event.target.value)}
                 style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  background: '#ffffff',
-                  border: '2px solid #cbd5e1',
-                  borderRadius: '12px',
-                  color: '#0f172a',
+                  width: "100%",
+                  padding: "13px 14px",
+                  borderRadius: "14px",
+                  border: "1px solid rgba(148, 163, 184, 0.3)",
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  fontSize: "14px",
                   fontWeight: 700,
-                  fontSize: '15px',
-                  cursor: 'pointer'
                 }}
               />
-            </div>
-          ) : null}
-
-          <div>
-            <label style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              color: '#64748b',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              marginBottom: '8px',
-              display: 'block'
-            }}>
-              Tipo de Vista
-            </label>
-            <div style={{
-              display: 'flex',
-              gap: '8px',
-              background: '#e2e8f0',
-              padding: '6px',
-              borderRadius: '12px'
-            }}>
-              {[
-                { key: 'recibidos', label: 'Me pidieron', icon: Icons.inbox, color: '#10b981' },
-                { key: 'enviados', label: 'Yo pedí', icon: Icons.send, color: '#3b82f6' },
-                { key: 'ambos', label: 'Ambos', icon: Icons.package, color: '#8b5cf6' }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setVista(tab.key)}
-                  style={{
-                    flex: 1,
-                    padding: '12px 16px',
-                    borderRadius: '10px',
-                    border: 'none',
-                    background: vista === tab.key 
-                      ? `linear-gradient(135deg, ${tab.color} 0%, ${tab.color}dd 100%)` 
-                      : 'transparent',
-                    color: vista === tab.key ? 'white' : '#475569',
-                    fontWeight: 700,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  {tab.icon}
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '12px',
-          padding: '16px',
-          background: 'rgba(59, 130, 246, 0.08)',
-          borderRadius: '12px',
-          border: '1px solid rgba(59, 130, 246, 0.18)'
-        }}>
-          <span style={{ fontSize: '24px' }}>📅</span>
-          <span style={{
-            fontSize: '20px',
-            fontWeight: 800,
-            color: '#2563eb'
-          }}>
-            {etiquetaFiltroFecha}
-          </span>
-        </div>
-      </div>
-
-      {/* 🎯 SECCIÓN CONSOLIDADO */}
-      {mostrarConsolidado && (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)',
-          borderRadius: '24px',
-          padding: '28px',
-          marginBottom: '32px',
-          border: '2px solid rgba(16, 185, 129, 0.3)',
-          boxShadow: '0 20px 40px -30px rgba(5, 150, 105, 0.32)'
-        }}>
-          {/* Header */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '24px',
-            flexWrap: 'wrap',
-            gap: '16px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '16px',
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 10px 25px rgba(16, 185, 129, 0.4)',
-                color: 'white'
-              }}>
-                {Icons.truck}
-              </div>
-              <div>
-                <h2 style={{ 
-                  margin: 0, 
-                  fontSize: '22px', 
-                  fontWeight: 800, 
-                  color: '#10b981',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px'
-                }}>
-                  Consolidado de Productos Enviados
-                  <span style={{
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    color: '#047857',
-                    padding: '4px 12px',
-                    borderRadius: '20px',
-                    fontSize: '12px'
-                  }}>
-                    {pedidosFisicamenteEnviados.length} pedidos
-                  </span>
-                </h2>
-                <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: '#475569' }}>
-                  {sucursalFiltro === 'todas' 
-                    ? `Todos los pedidos recibidos en ${user}` 
-                    : `Solo pedidos de: ${sucursalFiltro}`}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={exportarExcel}
-              disabled={consolidadoDia.length === 0 || cargandoCatalogo}
-              style={{
-                padding: '14px 24px',
-                borderRadius: '12px',
-                border: 'none',
-                background: consolidadoDia.length === 0 || cargandoCatalogo ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                color: 'white',
-                fontWeight: 700,
-                fontSize: '14px',
-                cursor: consolidadoDia.length === 0 || cargandoCatalogo ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                opacity: consolidadoDia.length === 0 || cargandoCatalogo ? 0.5 : 1,
-                transition: 'all 0.3s ease'
-              }}
-              className={consolidadoDia.length > 0 && !cargandoCatalogo ? 'btn-hover' : ''}
-            >
-              {Icons.download}
-              {cargandoCatalogo ? 'Cargando...' : 'Exportar Excel (.xls)'}
-            </button>
-          </div>
-
-          {/* 🆕 FILTRO POR SUCURSAL */}
-          {sucursalesDisponibles.length > 0 && (
-            <div style={{
-              background: 'rgba(255,255,255,0.72)',
-              borderRadius: '12px',
-              padding: '16px',
-              marginBottom: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              flexWrap: 'wrap',
-              border: '1px solid rgba(148, 163, 184, 0.18)'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                color: '#475569',
-                fontSize: '14px',
-                fontWeight: 600
-              }}>
-                {Icons.filter}
-                Filtrar por sucursal:
-              </div>
-              
+            ) : (
               <select
-                value={sucursalFiltro}
-                onChange={(e) => setSucursalFiltro(e.target.value)}
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
                 style={{
-                  flex: 1,
-                  minWidth: '200px',
-                  padding: '10px 14px',
-                  background: '#ffffff',
-                  border: '2px solid #cbd5e1',
-                  borderRadius: '8px',
-                  color: '#0f172a',
+                  width: "100%",
+                  padding: "13px 14px",
+                  borderRadius: "14px",
+                  border: "1px solid rgba(148, 163, 184, 0.3)",
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  fontSize: "14px",
                   fontWeight: 700,
-                  fontSize: '14px',
-                  cursor: 'pointer'
                 }}
               >
-                <option value="todas" style={{ background: '#ffffff', color: '#0f172a' }}>
-                  Todas las sucursales ({pedidosFiltradosFecha.filter(p => p.sucursalDestino === user && (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME')).length} pedidos)
-                </option>
-                {sucursalesDisponibles.map(sucursal => {
-                  const count = pedidosFiltradosFecha.filter(p => 
-                    p.sucursalDestino === user && 
-                    (p.estado === 'ENVIADO' || p.estado === 'RECIBIDO_CONFORME') &&
-                    p.sucursalOrigen === sucursal
-                  ).length;
-                  return (
-                    <option key={sucursal} value={sucursal} style={{ background: '#ffffff', color: '#0f172a' }}>
-                      {sucursal} ({count} pedidos)
-                    </option>
-                  );
-                })}
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
-
-              {sucursalFiltro !== 'todas' && (
-                <button
-                  onClick={() => setSucursalFiltro('todas')}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    border: '1px solid #cbd5e1',
-                    background: '#ffffff',
-                    color: '#475569',
-                    fontSize: '12px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Limpiar filtro
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Tabla de Consolidado */}
-          {consolidadoDia.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '40px',
-              background: 'rgba(255,255,255,0.82)',
-              borderRadius: '16px',
-              border: '1px solid rgba(148, 163, 184, 0.18)'
-            }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📭</div>
-              <p style={{ margin: 0, color: '#334155', fontSize: '16px', fontWeight: 600 }}>
-                {sucursalFiltro === 'todas' 
-                  ? 'No has enviado productos en esta fecha' 
-                  : `No hay envíos para ${sucursalFiltro} en esta fecha`}
-              </p>
-              <p style={{ margin: '8px 0 0 0', color: '#64748b', fontSize: '14px' }}>
-                Los pedidos deben estar marcados como Enviado o Recibido Conforme
-              </p>
-            </div>
-          ) : (
-            <>
-              <div style={{
-                background: 'rgba(255,255,255,0.88)',
-                borderRadius: '16px',
-                overflowX: 'auto',
-                overflowY: 'hidden',
-                border: '1px solid rgba(148, 163, 184, 0.18)',
-                boxShadow: '0 18px 38px -28px rgba(15, 23, 42, 0.3)'
-              }}>
-                {/* Header de tabla */}
-                <div className="history-table" style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(220px, 2fr) minmax(80px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)',
-                  gap: '16px',
-                  padding: '16px 20px',
-                  background: 'rgba(16, 185, 129, 0.2)',
-                  borderBottom: '2px solid rgba(16, 185, 129, 0.3)',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  color: '#047857',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
-                }}>
-                  <div>Producto</div>
-                  <div style={{ textAlign: 'center' }}>Unidad</div>
-                  <div style={{ textAlign: 'center' }}>Clave Catálogo</div>
-                  <div style={{ textAlign: 'right' }}>Cantidad (Peso Real)</div>
-                </div>
-
-                {/* Filas */}
-                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                  {consolidadoDia.map((item, index) => {
-                    const claveProducto = obtenerClaveProducto(item.producto);
-                    return (
-                      <div
-                        key={index}
-                        className="history-table"
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'minmax(220px, 2fr) minmax(80px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)',
-                          gap: '16px',
-                          padding: '16px 20px',
-                          borderBottom: '1px solid rgba(148, 163, 184, 0.12)',
-                          background: index % 2 === 0 ? 'rgba(241, 245, 249, 0.82)' : 'rgba(255,255,255,0.92)',
-                          transition: 'all 0.2s',
-                          cursor: 'default'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(219, 234, 254, 0.72)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = index % 2 === 0 ? 'rgba(241, 245, 249, 0.82)' : 'rgba(255,255,255,0.92)';
-                        }}
-                      >
-                        <div style={{ 
-                          fontWeight: 700, 
-                          color: '#0f172a',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
-                        }}>
-                          <span style={{ color: '#10b981', fontSize: '20px' }}>•</span>
-                          {item.producto}
-                        </div>
-                        <div style={{ textAlign: 'center', color: '#475569' }}>
-                          {item.unidad}
-                        </div>
-                        <div style={{ 
-                          textAlign: 'center', 
-                          color: claveProducto ? '#60a5fa' : '#ef4444',
-                          fontWeight: claveProducto ? 600 : 700,
-                          fontSize: '13px',
-                          fontFamily: 'monospace'
-                        }}>
-                          {claveProducto || '⚠️ Sin clave'}
-                        </div>
-                        <div style={{ 
-                          textAlign: 'right', 
-                          fontWeight: 800, 
-                          color: '#10b981',
-                          fontFamily: 'monospace',
-                          fontSize: '16px'
-                        }}>
-                          {item.cantidad.toFixed(2)} lb
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Footer */}
-                <div className="history-table" style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(220px, 2fr) minmax(80px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr)',
-                  gap: '16px',
-                  padding: '20px',
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  borderTop: '2px solid rgba(16, 185, 129, 0.4)',
-                  fontWeight: 800
-                }}>
-                  <div style={{ color: '#10b981', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {Icons.truck}
-                    TOTALES
-                  </div>
-                  <div style={{ textAlign: 'center', color: '#64748b' }}>
-                    {totalesConsolidado.totalLineas} productos
-                  </div>
-                  <div></div>
-                  <div style={{ 
-                    textAlign: 'right', 
-                    color: '#10b981',
-                    fontFamily: 'monospace',
-                    fontSize: '18px'
-                  }}>
-                    {totalesConsolidado.totalCantidad.toFixed(2)} lb
-                  </div>
-                </div>
-              </div>
-
-              {/* Info del Excel */}
-              <div style={{
-                marginTop: '16px',
-                padding: '12px 16px',
-                background: 'rgba(59, 130, 246, 0.1)',
-                borderRadius: '10px',
-                border: '1px solid rgba(59, 130, 246, 0.2)',
-                fontSize: '13px',
-                color: '#1d4ed8',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span>ℹ️</span>
-                El archivo Excel contendrá CLAVE y CANTIDAD.
-                Si la clave es numérica, se exporta con formato 00000 para conservar ceros al inicio.
-              </div>
-            </>
-          )}
-        </div>
-      )}
-      {/* 🎯 SECCIÓN CONSOLIDADO: Productos que YO envié (como centro de distribución) */}
-      {mostrarConsolidado && (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%)',
-          borderRadius: '24px',
-          padding: '28px',
-          marginBottom: '32px',
-          border: '2px solid rgba(16, 185, 129, 0.3)',
-          boxShadow: '0 20px 40px -30px rgba(5, 150, 105, 0.32)'
-        }}>
-          {/* Header del Consolidado */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '24px',
-            flexWrap: 'wrap',
-            gap: '16px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '16px',
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 10px 25px rgba(16, 185, 129, 0.4)',
-                color: 'white'
-              }}>
-                {Icons.truck}
-              </div>
-              <div>
-                <h2 style={{ 
-                  margin: 0, 
-                  fontSize: '22px', 
-                  fontWeight: 800, 
-                  color: '#10b981',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px'
-                }}>
-                  Consolidado de Productos Enviados
-                  <span style={{
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    color: '#047857',
-                    padding: '4px 12px',
-                    borderRadius: '20px',
-                    fontSize: '12px'
-                  }}>
-                    {pedidosFisicamenteEnviados.length} pedidos
-                  </span>
-                </h2>
-                <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: '#475569' }}>
-                  Productos que salieron físicamente de {user} hacia otras sucursales
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={exportarExcel}
-              disabled={consolidadoDia.length === 0 || cargandoCatalogo}
-              style={{
-                padding: '14px 24px',
-                borderRadius: '12px',
-                border: 'none',
-                background: consolidadoDia.length === 0 || cargandoCatalogo ? '#cbd5e1' : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                color: 'white',
-                fontWeight: 700,
-                fontSize: '14px',
-                cursor: consolidadoDia.length === 0 || cargandoCatalogo ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                opacity: consolidadoDia.length === 0 || cargandoCatalogo ? 0.5 : 1,
-                transition: 'all 0.3s ease'
-              }}
-              className={consolidadoDia.length > 0 && !cargandoCatalogo ? 'btn-hover' : ''}
-            >
-              {Icons.download}
-              {cargandoCatalogo ? 'Cargando catálogo...' : 'Exportar Excel (.xlsx)'}
-            </button>
+            )}
           </div>
 
-          {/* Tabla de Consolidado */}
-          {consolidadoDia.length === 0 ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '40px',
-              background: 'rgba(255,255,255,0.82)',
-              borderRadius: '16px',
-              border: '1px solid rgba(148, 163, 184, 0.18)'
-            }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📭</div>
-              <p style={{ margin: 0, color: '#334155', fontSize: '16px', fontWeight: 600 }}>
-                No has enviado productos en esta fecha
-              </p>
-              <p style={{ margin: '8px 0 0 0', color: '#64748b', fontSize: '14px' }}>
-                Los pedidos deben estar marcados como Enviado o Recibido Conforme
-              </p>
-            </div>
-          ) : (
-            <>
-              <div style={{
-                background: 'rgba(255,255,255,0.88)',
-                borderRadius: '16px',
-                overflow: 'hidden',
-                border: '1px solid rgba(148, 163, 184, 0.18)',
-                boxShadow: '0 18px 38px -28px rgba(15, 23, 42, 0.3)'
-              }}>
-                {/* Header de tabla */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                  gap: '16px',
-                  padding: '16px 20px',
-                  background: 'rgba(16, 185, 129, 0.2)',
-                  borderBottom: '2px solid rgba(16, 185, 129, 0.3)',
-                  fontSize: '12px',
-                  fontWeight: 800,
-                  color: '#047857',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px'
-                }}>
-                  <div>Producto</div>
-                  <div style={{ textAlign: 'center' }}>Unidad</div>
-                  <div style={{ textAlign: 'center' }}>Clave Catálogo</div>
-                  <div style={{ textAlign: 'right' }}>Cantidad (Peso Real)</div>
-                </div>
-
-                {/* Filas de productos */}
-                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                  {consolidadoDia.map((item, index) => {
-                    const claveProducto = obtenerClaveProducto(item.producto);
-                    return (
-                      <div
-                        key={index}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                          gap: '16px',
-                          padding: '16px 20px',
-                          borderBottom: '1px solid rgba(148, 163, 184, 0.12)',
-                          background: index % 2 === 0 ? 'rgba(241, 245, 249, 0.82)' : 'rgba(255,255,255,0.92)',
-                          transition: 'all 0.2s',
-                          cursor: 'default'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(219, 234, 254, 0.72)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = index % 2 === 0 ? 'rgba(241, 245, 249, 0.82)' : 'rgba(255,255,255,0.92)';
-                        }}
-                      >
-                        <div style={{ 
-                          fontWeight: 700, 
-                          color: '#0f172a',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px'
-                        }}>
-                          <span style={{ color: '#10b981', fontSize: '20px' }}>•</span>
-                          {item.producto}
-                        </div>
-                        <div style={{ textAlign: 'center', color: '#475569' }}>
-                          {item.unidad}
-                        </div>
-                        <div style={{ 
-                          textAlign: 'center', 
-                          color: claveProducto ? '#60a5fa' : '#ef4444',
-                          fontWeight: claveProducto ? 600 : 700,
-                          fontSize: '13px'
-                        }}>
-                          {claveProducto || '⚠️ Sin clave'}
-                        </div>
-                        <div style={{ 
-                          textAlign: 'right', 
-                          fontWeight: 800, 
-                          color: '#10b981',
-                          fontFamily: 'monospace',
-                          fontSize: '16px'
-                        }}>
-                          {item.cantidad.toFixed(2)} lb
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Footer con totales */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                  gap: '16px',
-                  padding: '20px',
-                  background: 'rgba(16, 185, 129, 0.15)',
-                  borderTop: '2px solid rgba(16, 185, 129, 0.4)',
-                  fontWeight: 800
-                }}>
-                  <div style={{ color: '#10b981', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {Icons.truck}
-                    TOTALES
-                  </div>
-                  <div style={{ textAlign: 'center', color: '#64748b' }}>
-                    {totalesConsolidado.totalLineas} productos
-                  </div>
-                  <div></div>
-                  <div style={{ 
-                    textAlign: 'right', 
-                    color: '#10b981',
-                    fontFamily: 'monospace',
-                    fontSize: '18px'
-                  }}>
-                    {totalesConsolidado.totalCantidad.toFixed(2)} lb
-                  </div>
-                </div>
-              </div>
-
-              {/* Info del Excel */}
-              <div style={{
-                marginTop: '16px',
-                padding: '12px 16px',
-                background: 'rgba(59, 130, 246, 0.1)',
-                borderRadius: '10px',
-                border: '1px solid rgba(59, 130, 246, 0.2)',
-                fontSize: '13px',
-                color: '#1d4ed8',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span>ℹ️</span>
-                El archivo Excel exportado contendrá 2 columnas: CLAVE (desde catálogo) y CANTIDAD (peso real).
-                Las claves numéricas salen con formato 00000 y los productos sin clave aparecerán con celda vacía.
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Estadísticas del Día */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '16px',
-        marginBottom: '24px'
-      }}>
-        {/* Pedidos que me hicieron a mí */}
-        {(vista === 'recibidos' || vista === 'ambos') && (
-          <div style={{
-            background: 'rgba(16, 185, 129, 0.1)',
-            borderRadius: '16px',
-            padding: '20px',
-            border: '2px solid rgba(16, 185, 129, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px'
-          }}>
-            <div style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '12px',
-              background: 'rgba(16, 185, 129, 0.2)',
-              color: '#10b981',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {Icons.inbox}
-            </div>
-            <div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>
-                {stats.totalRecibidos}
-              </div>
-              <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
-                Pedidos Recibidos
-              </div>
-              <div style={{ fontSize: '11px', color: '#047857', marginTop: '4px' }}>
-                Me pidieron {stats.totalRecibidos} pedidos
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Pedidos que yo envié físicamente */}
-        {(vista === 'recibidos' || vista === 'ambos') && (
-          <div style={{
-            background: 'rgba(59, 130, 246, 0.1)',
-            borderRadius: '16px',
-            padding: '20px',
-            border: '2px solid rgba(59, 130, 246, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px'
-          }}>
-            <div style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '12px',
-              background: 'rgba(59, 130, 246, 0.2)',
-              color: '#3b82f6',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {Icons.send}
-            </div>
-            <div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#3b82f6' }}>
-                {stats.totalEnviadosPorMi}
-              </div>
-              <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
-                Pedidos Enviados por Mí
-              </div>
-              <div style={{ fontSize: '11px', color: '#60a5fa', marginTop: '4px' }}>
-                {stats.pesoTotalEnviado.toFixed(2)} lb total
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Pedidos que yo hice a otros */}
-        {(vista === 'enviados' || vista === 'ambos') && (
-          <div style={{
-            background: 'rgba(139, 92, 246, 0.1)',
-            borderRadius: '16px',
-            padding: '20px',
-            border: '2px solid rgba(139, 92, 246, 0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px'
-          }}>
-            <div style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '12px',
-              background: 'rgba(139, 92, 246, 0.2)',
-              color: '#8b5cf6',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {Icons.package}
-            </div>
-            <div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#8b5cf6' }}>
-                {stats.totalSolicitados}
-              </div>
-              <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
-                Pedidos que Hice
-              </div>
-              <div style={{ fontSize: '11px', color: '#6d28d9', marginTop: '4px' }}>
-                A otras sucursales
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Completados */}
-        <div style={{
-          background: 'rgba(99, 102, 241, 0.1)',
-          borderRadius: '16px',
-          padding: '20px',
-          border: '2px solid rgba(99, 102, 241, 0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px'
-        }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '12px',
-            background: 'rgba(99, 102, 241, 0.2)',
-            color: '#6366f1',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            {Icons.check}
-          </div>
           <div>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: '#6366f1' }}>
-              {stats.completados}
+            <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", marginBottom: "8px" }}>
+              {modoFecha === "rango" ? "Estado" : "Buscar"}
             </div>
-            <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
-              Completados
+            {modoFecha === "rango" ? (
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "13px 14px",
+                  borderRadius: "14px",
+                  border: "1px solid rgba(148, 163, 184, 0.3)",
+                  background: "#ffffff",
+                  color: "#0f172a",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                }}
+              >
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: "12px", top: "13px", color: "#94a3b8" }}>{Icons.search}</span>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Pedido, producto o sucursal"
+                  style={{
+                    width: "100%",
+                    padding: "13px 14px 13px 40px",
+                    borderRadius: "14px",
+                    border: "1px solid rgba(148, 163, 184, 0.3)",
+                    background: "#ffffff",
+                    color: "#0f172a",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748b", marginBottom: "8px" }}>
+              {modoFecha === "rango" ? "Buscar" : "Periodo"}
             </div>
+            {modoFecha === "rango" ? (
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: "12px", top: "13px", color: "#94a3b8" }}>{Icons.search}</span>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Pedido, producto o sucursal"
+                  style={{
+                    width: "100%",
+                    padding: "13px 14px 13px 40px",
+                    borderRadius: "14px",
+                    border: "1px solid rgba(148, 163, 184, 0.3)",
+                    background: "#ffffff",
+                    color: "#0f172a",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                  }}
+                />
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "13px 14px",
+                  borderRadius: "14px",
+                  border: "1px solid rgba(148, 163, 184, 0.18)",
+                  background: "rgba(37, 99, 235, 0.06)",
+                  color: "#1d4ed8",
+                  fontSize: "14px",
+                  fontWeight: 800,
+                }}
+              >
+                {Icons.calendar}
+                {periodoEtiqueta}
+              </div>
+            )}
           </div>
         </div>
+      </section>
+
+      <div className="historial-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "14px", marginBottom: "22px" }}>
+        <StatCard label="Recibidos" value={stats.recibidos} helper={`${stats.totalRecibido.toFixed(2)} lb confirmados`} accent="#047857" />
+        <StatCard label="Enviados" value={stats.enviados} helper={`${stats.totalEnviado.toFixed(2)} lb con movimiento`} accent="#2563eb" />
+        <StatCard label="Consolidado recibidos" value={consolidatedRecibidos.length} helper="Productos agrupados" accent="#7c3aed" />
+        <StatCard label="Consolidado envios" value={consolidatedEnviados.length} helper="Productos agrupados" accent="#d97706" />
       </div>
 
-      {/* Lista de Pedidos */}
-      {pedidosMostrar.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '80px 20px',
-          background: 'rgba(255,255,255,0.8)',
-          borderRadius: '24px',
-          border: '2px dashed rgba(148, 163, 184, 0.22)'
-        }}>
-          <div style={{ fontSize: '64px', marginBottom: '16px' }}>📭</div>
-          <h3 style={{ fontSize: '24px', margin: '0 0 8px 0', color: '#0f172a' }}>
-            No hay pedidos para este filtro
-          </h3>
-          <p style={{ margin: 0, color: '#64748b' }}>
-            No tienes actividad registrada en {etiquetaFiltroFecha}
-          </p>
-        </div>
-      ) : (
-        <div className="history-grid" style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
-          gap: '20px'
-        }}>
-          {pedidosMostrar.map((pedido, index) => {
-            const meHicieronElPedido = pedido.sucursalDestino === user;
-            const esVacuna = isPedidoVacuna(pedido);
-            const estadoColor = getEstadoColor(pedido.estado);
-            const detalleAbierto = pedidoDetalleAbierto === pedido.firebaseId;
-            const descripcionPedido = esVacuna
-              ? meHicieronElPedido
-                ? <>Yo ({user}) envié vacuna directa → <strong>{pedido.sucursalOrigen}</strong></>
-                : <><strong>{pedido.sucursalDestino}</strong> me envió vacuna directa</>
-              : meHicieronElPedido
-                ? <><strong>{pedido.sucursalOrigen}</strong> me pidió → Yo ({user}) preparé y envié</>
-                : <>Yo ({user}) pedí → <strong>{pedido.sucursalDestino}</strong> me enviará</>;
-            
-            return (
-              <div
-                key={pedido.firebaseId}
-                className="card-enter"
-                style={{
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)',
-                  borderRadius: '20px',
-                  padding: '24px',
-                  border: '1px solid rgba(148, 163, 184, 0.14)',
-                  animationDelay: `${index * 0.05}s`,
-                  position: 'relative',
-                  overflow: 'hidden',
-                  borderLeft: `4px solid ${meHicieronElPedido ? '#10b981' : '#3b82f6'}`,
-                  boxShadow: '0 18px 36px -28px rgba(15, 23, 42, 0.28)'
-                }}
-              >
-                {/* Badge de rol */}
-                <div style={{
-                  position: 'absolute',
-                  top: '12px',
-                  right: '12px',
-                  padding: '4px 12px',
-                  borderRadius: '20px',
-                  fontSize: '11px',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  background: meHicieronElPedido ? 'rgba(16, 185, 129, 0.2)' : 'rgba(139, 92, 246, 0.2)',
-                  color: meHicieronElPedido ? '#10b981' : '#8b5cf6',
-                  border: `1px solid ${meHicieronElPedido ? 'rgba(16, 185, 129, 0.4)' : 'rgba(139, 92, 246, 0.4)'}`
-                }}>
-                  {meHicieronElPedido ? '↙ Me pidieron' : '↗ Yo pedí'}
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "24px" }}>
+        {SECTION_TABS.map((tab) => (
+          <SectionTabButton key={tab.key} active={activeTab === tab.key} label={tab.label} onClick={() => setActiveTab(tab.key)} />
+        ))}
+      </div>
+
+      {activeTab === "recibidos" ? (
+        <OrderList title="Pedidos recibidos" pedidos={pedidosRecibidos} role="recibidos" expandedId={expandedId} onToggle={handleToggleOrder} />
+      ) : null}
+
+      {activeTab === "enviados" ? (
+        <OrderList title="Pedidos enviados" pedidos={pedidosEnviados} role="enviados" expandedId={expandedId} onToggle={handleToggleOrder} />
+      ) : null}
+
+      {activeTab === "reportes" ? (
+        <div style={{ display: "grid", gap: "22px" }}>
+          <section
+            style={{
+              padding: "24px",
+              borderRadius: "24px",
+              background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)",
+              border: "1px solid rgba(148, 163, 184, 0.18)",
+              boxShadow: "0 22px 44px -34px rgba(15, 23, 42, 0.28)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "14px", flexWrap: "wrap", marginBottom: "18px" }}>
+              <div>
+                <div style={{ fontSize: "24px", fontWeight: 900, color: "#0f172a" }}>Reportes PDF</div>
+                <div style={{ marginTop: "6px", fontSize: "13px", color: "#64748b", fontWeight: 700 }}>
+                  Periodo activo: {periodoEtiqueta}
                 </div>
+              </div>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", color: "#475569", fontWeight: 700, fontSize: "13px" }}>
+                {Icons.file}
+                Firmas incluidas en todos los PDF
+              </div>
+            </div>
 
-                {/* Badge de enviado físicamente */}
-                {meHicieronElPedido && (pedido.estado === 'ENVIADO' || pedido.estado === 'RECIBIDO_CONFORME') && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '12px',
-                    right: meHicieronElPedido ? '140px' : '12px',
-                    padding: '4px 12px',
-                    background: 'rgba(16, 185, 129, 0.2)',
-                    border: '1px solid rgba(16, 185, 129, 0.4)',
-                    borderRadius: '20px',
-                    color: '#10b981',
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}>
-                    {Icons.check}
-                    Enviado Físicamente
-                  </div>
-                )}
+            <div className="historial-report-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
+              <ReportActionCard
+                title="Recibidos detallado"
+                description="Pedido por pedido, con solicitado, peso real y estado para firma."
+                accent="#047857"
+                disabled={!pedidosRecibidosPeriodo.length}
+                onClick={() =>
+                  downloadDetailedHistoryPdf({
+                    title: `Recibidos_${user}`,
+                    pedidos: pedidosRecibidosPeriodo,
+                    fechaInicio: fechaInicioFiltro,
+                    fechaFin: fechaFinFiltro,
+                    user,
+                    role: "recibidos",
+                  })
+                }
+              />
+              <ReportActionCard
+                title="Enviados detallado"
+                description="Movimientos enviados por tu sucursal, listos para control y firma."
+                accent="#2563eb"
+                disabled={!pedidosEnviadosPeriodo.length}
+                onClick={() =>
+                  downloadDetailedHistoryPdf({
+                    title: `Enviados_${user}`,
+                    pedidos: pedidosEnviadosPeriodo,
+                    fechaInicio: fechaInicioFiltro,
+                    fechaFin: fechaFinFiltro,
+                    user,
+                    role: "enviados",
+                  })
+                }
+              />
+              <ReportActionCard
+                title="Consolidado recibidos"
+                description="Agrupado por producto y unidad en el intervalo actual."
+                accent="#7c3aed"
+                disabled={!pedidosConfirmadosRecibidos.length}
+                onClick={() =>
+                  downloadConsolidatedHistoryPdf({
+                    title: `Consolidado_Recibidos_${user}`,
+                    pedidos: pedidosConfirmadosRecibidos,
+                    fechaInicio: fechaInicioFiltro,
+                    fechaFin: fechaFinFiltro,
+                    user,
+                  })
+                }
+              />
+              <ReportActionCard
+                title="Consolidado envios"
+                description="Total por producto de los envios con movimiento real en el periodo."
+                accent="#d97706"
+                disabled={!pedidosConfirmadosEnviados.length}
+                onClick={() =>
+                  downloadConsolidatedHistoryPdf({
+                    title: `Consolidado_Envios_${user}`,
+                    pedidos: pedidosConfirmadosEnviados,
+                    fechaInicio: fechaInicioFiltro,
+                    fechaFin: fechaFinFiltro,
+                    user,
+                  })
+                }
+              />
+            </div>
+          </section>
 
-                {/* Header */}
-                <div className="history-header" style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: '16px',
-                  marginTop: '8px'
-                }}>
-                  <div>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: '8px',
-                      marginBottom: '8px'
-                    }}>
-                      <span style={{
-                        padding: '4px 12px',
-                        borderRadius: '20px',
-                        background: `${estadoColor}20`,
-                        color: estadoColor,
-                        fontSize: '11px',
-                        fontWeight: 800,
-                        textTransform: 'uppercase'
-                      }}>
-                        {pedido.estado === 'RECIBIDO_CONFORME' ? 'Recibido Conf.' : pedido.estado}
-                      </span>
-                      {esVacuna && (
-                        <span style={{
-                          padding: '4px 12px',
-                          borderRadius: '20px',
-                          background: 'rgba(15, 118, 110, 0.12)',
-                          color: '#0f766e',
-                          fontSize: '11px',
-                          fontWeight: 800,
-                          textTransform: 'uppercase'
-                        }}>
-                          Vacuna directa
-                        </span>
-                      )}
-                    </div>
-                    <h3 style={{
-                      margin: 0,
-                      fontSize: '20px',
-                      fontWeight: 800,
-                      color: '#0f172a'
-                    }}>
-                      Pedido {formatOrderNumber(pedido)}
-                    </h3>
-                    <p style={{
-                      margin: '4px 0 0 0',
-                      fontSize: '13px',
-                      color: '#64748b'
-                    }}>
-                      {meHicieronElPedido ? (
-                        <><strong>{pedido.sucursalOrigen}</strong> me pidió → Yo ({user}) preparé y envié</>
-                      ) : (
-                        <>Yo ({user}) pedí → <strong>{pedido.sucursalDestino}</strong> me enviará</>
-                      )}
-                    </p>
-                    {esVacuna && (
-                      <p style={{
-                        margin: '8px 0 0 0',
-                        fontSize: '12px',
-                        color: '#0f766e',
-                        fontWeight: 700
-                      }}>
-                        {descripcionPedido}
-                      </p>
-                    )}
-                  </div>
-                  <div style={{
-                    textAlign: 'right',
-                    fontSize: '12px',
-                    color: '#64748b'
-                  }}>
-                    <div>{pedido.fechaPedido}</div>
-                    <div style={{ marginTop: '4px', fontWeight: 600 }}>{pedido.hora}</div>
-                  </div>
+          <section
+            style={{
+              padding: "24px",
+              borderRadius: "24px",
+              background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)",
+              border: "1px solid rgba(148, 163, 184, 0.18)",
+              boxShadow: "0 22px 44px -34px rgba(15, 23, 42, 0.28)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "14px", flexWrap: "wrap", marginBottom: "18px" }}>
+              <div>
+                <div style={{ fontSize: "24px", fontWeight: 900, color: "#0f172a" }}>Vista rapida</div>
+                <div style={{ marginTop: "6px", fontSize: "13px", color: "#64748b", fontWeight: 700 }}>
+                  Consolidado actual para validar antes de exportar
                 </div>
+              </div>
+            </div>
 
-                {/* Items resumidos */}
-                <div style={{
-                  background: '#f8fafc',
-                  borderRadius: '12px',
-                  padding: '16px',
-                  marginBottom: '16px',
-                  border: '1px solid rgba(148, 163, 184, 0.18)'
-                }}>
-                  <div style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: '#64748b',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                    marginBottom: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}>
-                    {Icons.package}
-                    {pedido.items.length} productos
+            {!consolidatedEnviados.length && !consolidatedRecibidos.length ? (
+              <EmptyState title="Sin movimientos confirmados" text="Necesitas pedidos con movimiento real para generar consolidados." />
+            ) : (
+              <div className="historial-report-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "18px" }}>
+                <div
+                  style={{
+                    borderRadius: "20px",
+                    border: "1px solid rgba(148, 163, 184, 0.16)",
+                    overflow: "hidden",
+                    background: "#ffffff",
+                  }}
+                >
+                  <div style={{ padding: "16px 18px", borderBottom: "1px solid rgba(148, 163, 184, 0.12)", fontSize: "16px", fontWeight: 900, color: "#0f172a" }}>
+                    Consolidado recibidos
                   </div>
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px'
-                  }}>
-                    {pedido.items.slice(0, 3).map((item, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        fontSize: '13px'
-                      }}>
-                        <span style={{ color: '#0f172a', fontWeight: 600 }}>
-                          {item.producto}
-                        </span>
-                        <span style={{ color: '#60a5fa', fontWeight: 700 }}>
-                          {item.cantidad} {item.unidad}
-                          {item.pesoReal && meHicieronElPedido && (
-                            <span style={{ color: '#10b981', marginLeft: '8px' }}>
-                              (Real: {item.pesoReal} lb)
-                            </span>
-                          )}
-                        </span>
+                  <div style={{ maxHeight: "320px", overflow: "auto" }}>
+                    {consolidatedRecibidos.slice(0, 10).map((row) => (
+                      <div key={`rec-${row.clave}-${row.producto}`} style={{ display: "grid", gridTemplateColumns: "1.4fr 0.5fr 0.8fr", gap: "12px", padding: "14px 16px", borderTop: "1px solid rgba(226, 232, 240, 0.8)" }}>
+                        <div>
+                          <div style={{ fontSize: "13px", fontWeight: 800, color: "#0f172a" }}>{row.producto}</div>
+                          <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>{row.clave || "Sin clave"}</div>
+                        </div>
+                        <div style={{ fontSize: "13px", fontWeight: 800, color: "#334155", alignSelf: "center" }}>{row.unidad}</div>
+                        <div style={{ fontSize: "13px", fontWeight: 900, color: "#047857", alignSelf: "center", textAlign: "right" }}>{row.cantidad.toFixed(2)}</div>
                       </div>
                     ))}
-                    {pedido.items.length > 3 && (
-                      <div style={{
-                        fontSize: '12px',
-                        color: '#94a3b8',
-                        fontStyle: 'italic',
-                        textAlign: 'center',
-                        marginTop: '4px'
-                      }}>
-                        +{pedido.items.length - 3} productos más...
-                      </div>
-                    )}
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => toggleDetallePedido(pedido.firebaseId)}
+                <div
                   style={{
-                    width: '100%',
-                    marginBottom: '16px',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(59, 130, 246, 0.2)',
-                    background: detalleAbierto ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255,255,255,0.92)',
-                    color: '#2563eb',
-                    fontSize: '13px',
-                    fontWeight: 800,
-                    cursor: 'pointer'
+                    borderRadius: "20px",
+                    border: "1px solid rgba(148, 163, 184, 0.16)",
+                    overflow: "hidden",
+                    background: "#ffffff",
                   }}
                 >
-                  {detalleAbierto ? 'Ocultar detalle completo' : 'Ver detalle completo'}
-                </button>
-
-                {detalleAbierto && (
-                  <div style={{
-                    marginBottom: '16px',
-                    background: 'rgba(255,255,255,0.94)',
-                    borderRadius: '16px',
-                    border: '1px solid rgba(148, 163, 184, 0.18)',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                      gap: '10px',
-                      padding: '16px',
-                      borderBottom: '1px solid rgba(148, 163, 184, 0.14)',
-                      background: 'rgba(248,250,252,0.92)'
-                    }}>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>
-                          Solicita
-                        </div>
-                        <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 700, marginTop: '4px' }}>
-                          {pedido.sucursalOrigen}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>
-                          Envía
-                        </div>
-                        <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 700, marginTop: '4px' }}>
-                          {pedido.sucursalDestino}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>
-                          Fecha entrega
-                        </div>
-                        <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 700, marginTop: '4px' }}>
-                          {pedido.fechaEntrega || 'Sin fecha'}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-                      <div className="history-table" style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'minmax(220px, 1.3fr) minmax(120px, 0.85fr) minmax(120px, 0.85fr)',
-                        gap: '12px',
-                        padding: '12px 16px',
-                        background: 'rgba(59, 130, 246, 0.08)',
-                        color: '#2563eb',
-                        fontSize: '10px',
-                        fontWeight: 800,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em'
-                      }}>
-                        <div>Producto</div>
-                        <div style={{ textAlign: 'center' }}>Solicitado</div>
-                        <div style={{ textAlign: 'center' }}>Peso real</div>
-                      </div>
-
-                      {pedido.items.map((item, idx) => (
-                        <div
-                          key={`${pedido.firebaseId}-detalle-${idx}`}
-                          className="history-table"
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'minmax(220px, 1.3fr) minmax(120px, 0.85fr) minmax(120px, 0.85fr)',
-                            gap: '12px',
-                            padding: '14px 16px',
-                            borderTop: idx === 0 ? 'none' : '1px solid rgba(148, 163, 184, 0.14)',
-                            alignItems: 'center',
-                            background: item.pesoCorregido ? 'rgba(245, 158, 11, 0.08)' : 'transparent'
-                          }}
-                        >
-                          <div>
-                            <div style={{ fontSize: '13px', color: '#0f172a', fontWeight: 700 }}>
-                              {item.producto}
-                            </div>
-                            {item.clave ? (
-                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px' }}>
-                                Clave: {item.clave}
-                              </div>
-                            ) : null}
-                            {item.nota ? (
-                              <div style={{ fontSize: '11px', color: '#d97706', marginTop: '4px', fontWeight: 700 }}>
-                                Nota: {item.nota}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div style={{
-                            textAlign: 'center',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            color: '#0f172a'
-                          }}>
-                            {formatearSolicitadoDetalle(pedido, item)}
-                          </div>
-
-                          <div style={{
-                            textAlign: 'center',
-                            fontSize: '13px',
-                            fontWeight: 800,
-                            color: item.pesoCorregido ? '#b45309' : '#059669'
-                          }}>
-                            {formatearPesoRealDetalle(pedido, item)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                  <div style={{ padding: "16px 18px", borderBottom: "1px solid rgba(148, 163, 184, 0.12)", fontSize: "16px", fontWeight: 900, color: "#0f172a" }}>
+                    Consolidado envios
                   </div>
-                )}
-
-                {/* Footer con info adicional */}
-                <div style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '12px',
-                  fontSize: '12px'
-                }}>
-                  {meHicieronElPedido && pedido.preparadoPor && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '8px 12px',
-                      background: 'rgba(249, 115, 22, 0.1)',
-                      borderRadius: '8px',
-                      color: '#c2410c'
-                    }}>
-                      <span>👨‍🍳</span>
-                      Preparado: {pedido.preparadoPor}
-                    </div>
-                  )}
-                  {meHicieronElPedido && pedido.enviadoCon && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '8px 12px',
-                      background: 'rgba(99, 102, 241, 0.1)',
-                      borderRadius: '8px',
-                      color: '#4f46e5'
-                    }}>
-                      <span>🛵</span>
-                      Enviado con: {pedido.enviadoCon}
-                    </div>
-                  )}
-                  {pedido.esStandby && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '8px 12px',
-                      background: 'rgba(245, 158, 11, 0.1)',
-                      borderRadius: '8px',
-                      color: '#b45309'
-                    }}>
-                      {Icons.clock}
-                      Entrega: {pedido.fechaEntrega}
-                    </div>
-                  )}
-                  {pedido.estado === 'ANULADO' && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '8px 12px',
-                      background: 'rgba(220, 38, 38, 0.1)',
-                      borderRadius: '8px',
-                      color: '#b91c1c'
-                    }}>
-                      <span>✕</span>
-                      Anulado por: {pedido.anuladoPor || 'Sucursal origen'}
-                      {pedido.fechaAnulacion ? ` · ${pedido.fechaAnulacion}` : ''}
-                    </div>
-                  )}
+                  <div style={{ maxHeight: "320px", overflow: "auto" }}>
+                    {consolidatedEnviados.slice(0, 10).map((row) => (
+                      <div key={`env-${row.clave}-${row.producto}`} style={{ display: "grid", gridTemplateColumns: "1.4fr 0.5fr 0.8fr", gap: "12px", padding: "14px 16px", borderTop: "1px solid rgba(226, 232, 240, 0.8)" }}>
+                        <div>
+                          <div style={{ fontSize: "13px", fontWeight: 800, color: "#0f172a" }}>{row.producto}</div>
+                          <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>{row.clave || "Sin clave"}</div>
+                        </div>
+                        <div style={{ fontSize: "13px", fontWeight: 800, color: "#334155", alignSelf: "center" }}>{row.unidad}</div>
+                        <div style={{ fontSize: "13px", fontWeight: 900, color: "#2563eb", alignSelf: "center", textAlign: "right" }}>{row.cantidad.toFixed(2)}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-
-                {/* Nota general */}
-                {pedido.notaGeneral && (
-                  <div style={{
-                    marginTop: '16px',
-                    padding: '12px 16px',
-                    background: 'rgba(59, 130, 246, 0.1)',
-                    borderRadius: '10px',
-                    border: '1px solid rgba(59, 130, 246, 0.2)',
-                    fontSize: '13px',
-                    color: '#1d4ed8',
-                    fontStyle: 'italic'
-                  }}>
-                    📝 {pedido.notaGeneral}
-                  </div>
-                )}
               </div>
-            );
-          })}
+            )}
+          </section>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
