@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { ref, update } from "firebase/database";
+import { getBranchDisplayName, isSameBranch } from "@/lib/branchUtils";
 import { formatOrderNumber, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 
 const Icons = {
@@ -126,7 +127,7 @@ export default function Cocina({ user, pedidos, personalCocina }) {
 
   const pedidosEnProceso = pedidos.filter(
     (pedido) =>
-      pedido.sucursalDestino === user &&
+      isSameBranch(pedido.sucursalDestino, user) &&
       isPedidoAfterOperativeReset(pedido) &&
       pedido.estado !== "ENVIADO" &&
       pedido.estado !== "ENTREGADO" &&
@@ -299,9 +300,9 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                       </div>
                       <h3 className="app-title text-2xl font-black text-slate-900">Pedido {formatOrderNumber(pedido)}</h3>
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                        <span>{pedido.sucursalOrigen}</span>
+                        <span>{getBranchDisplayName(pedido.sucursalOrigen)}</span>
                         <span className="text-slate-300">/</span>
-                        <span>{pedido.sucursalDestino}</span>
+                        <span>{getBranchDisplayName(pedido.sucursalDestino)}</span>
                         <span className="text-slate-300">/</span>
                         <span>{getTimeElapsed(pedido.timestamp)}</span>
                       </div>
@@ -502,7 +503,7 @@ export default function Cocina({ user, pedidos, personalCocina }) {
             </button>
             <div className="app-chip border-slate-200 bg-slate-50 text-slate-700">
               {Icons.clock}
-              {user}
+              {getBranchDisplayName(user)}
             </div>
           </div>
         </div>

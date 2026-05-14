@@ -3,6 +3,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { db } from "../firebase";
 import { onValue, ref } from "firebase/database";
+import {
+  authenticateBranch,
+  getBranchDisplayName,
+  getSelectableBranches,
+  isSameBranch,
+} from "@/lib/branchUtils";
 import { isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 import Cocina from "./Cocina";
 import Configuracion from "./Configuracion";
@@ -143,14 +149,6 @@ const NAV_ITEMS = [
   },
 ];
 
-const SUCURSALES_REGISTRADAS = [
-  { nombre: "Granada Gold", pass: "granada2026" },
-  { nombre: "Masaya Gold", pass: "masaya2026" },
-  { nombre: "Carnes Amparito", pass: "amparito2026" },
-  { nombre: "Cedi", pass: "cedi2026" },
-  { nombre: "Luis Saenz", pass: "admin123" },
-];
-
 const INITIAL_CONFIG = {
   personalCocina: ["Marcos Ramirez", "Miguel Bustamante", "David", "Roberto Marin"],
   personalTransporte: ["Noel Hernandez", "Noel Bendana", "Vladimir", "David", "Nelson", "Julio Amador", "Carlos Mora"],
@@ -259,8 +257,8 @@ export default function AppInterna() {
 
       const pedidosRelevantes = lista.filter(
         (pedido) =>
-          pedido.sucursalOrigen === user ||
-          pedido.sucursalDestino === user ||
+          isSameBranch(pedido.sucursalOrigen, user) ||
+          isSameBranch(pedido.sucursalDestino, user) ||
           user === "Luis Saenz",
       );
 
@@ -273,18 +271,14 @@ export default function AppInterna() {
   const handleLogin = (event) => {
     event.preventDefault();
 
-    const encontrado = SUCURSALES_REGISTRADAS.find(
-      (sucursal) =>
-        sucursal.nombre.toLowerCase() === username.trim().toLowerCase() &&
-        sucursal.pass === password,
-    );
+    const encontrado = authenticateBranch(username, password);
 
     if (!encontrado) {
       setError("Usuario o contrasena incorrectos.");
       return;
     }
 
-    setUser(encontrado.nombre);
+    setUser(encontrado.id);
     setError("");
     setPassword("");
     setPedidoEditar(null);
@@ -469,7 +463,7 @@ export default function AppInterna() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="rounded-[22px] border border-white/24 bg-white/14 px-4 py-3 text-white">
                   <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-sky-50/80">Sesion</div>
-                  <div className="mt-1 text-lg font-black text-white">{user}</div>
+                  <div className="mt-1 text-lg font-black text-white">{getBranchDisplayName(user)}</div>
                 </div>
                 <button
                   onClick={() => {
@@ -505,7 +499,7 @@ export default function AppInterna() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <div className="rounded-[22px] border border-white/24 bg-white/14 px-4 py-3 text-white">
                     <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-sky-50/80">Sesion</div>
-                    <div className="mt-1 text-lg font-black text-white">{user}</div>
+                    <div className="mt-1 text-lg font-black text-white">{getBranchDisplayName(user)}</div>
                   </div>
                   <button
                     onClick={() => {
@@ -563,7 +557,7 @@ export default function AppInterna() {
               setView={setView}
               pedidoEditar={pedidoEditar}
               setPedidoEditar={setPedidoEditar}
-              sucursales={SUCURSALES_REGISTRADAS.map((item) => item.nombre).filter((name) => name !== user)}
+              sucursales={getSelectableBranches(user)}
               productosCSV={config.productos || []}
             />
           ) : null}
@@ -574,7 +568,7 @@ export default function AppInterna() {
               pedidos={sharedProps.pedidos}
               printerSettings={config.impresion || INITIAL_CONFIG.impresion}
               setView={setView}
-              sucursales={SUCURSALES_REGISTRADAS.map((item) => item.nombre).filter((name) => name !== user)}
+              sucursales={getSelectableBranches(user)}
               productosCSV={config.productos || []}
             />
           ) : null}

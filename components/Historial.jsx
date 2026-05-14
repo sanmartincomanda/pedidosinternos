@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { getBranchDisplayName } from "@/lib/branchUtils";
 import { formatOrderNumber } from "@/lib/orderUtils";
 import {
   buildConsolidatedRows,
@@ -24,6 +25,10 @@ import {
   downloadTransferRequisitionPdf,
   printTransferRequisition,
 } from "@/lib/historialPdf";
+import {
+  downloadConsolidatedHistoryExcel,
+  downloadDetailedHistoryExcel,
+} from "@/lib/historialExcel";
 
 const Icons = {
   calendar: (
@@ -462,7 +467,7 @@ function OrderList({ title, pedidos, role, expandedId, onToggle, printerSettings
   );
 }
 
-function ReportActionCard({ title, description, accent, onClick, disabled }) {
+function ReportActionCard({ title, description, accent, onPdfClick, onExcelClick, disabled }) {
   return (
     <div
       style={{
@@ -475,36 +480,59 @@ function ReportActionCard({ title, description, accent, onClick, disabled }) {
     >
       <div style={{ fontSize: "18px", fontWeight: 900, color: "#0f172a", marginBottom: "8px" }}>{title}</div>
       <div style={{ fontSize: "13px", color: "#475569", minHeight: "38px" }}>{description}</div>
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        style={{
-          width: "100%",
-          marginTop: "18px",
-          padding: "12px 16px",
-          borderRadius: "14px",
-          border: "none",
-          background: disabled ? "#cbd5e1" : accent,
-          color: "#ffffff",
-          fontWeight: 800,
-          fontSize: "13px",
-          cursor: disabled ? "not-allowed" : "pointer",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "8px",
-        }}
-      >
-        {Icons.download}
-        Generar PDF
-      </button>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "18px" }}>
+        <button
+          type="button"
+          onClick={onPdfClick}
+          disabled={disabled}
+          style={{
+            padding: "12px 14px",
+            borderRadius: "14px",
+            border: "none",
+            background: disabled ? "#cbd5e1" : accent,
+            color: "#ffffff",
+            fontWeight: 800,
+            fontSize: "13px",
+            cursor: disabled ? "not-allowed" : "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+          }}
+        >
+          {Icons.file}
+          PDF
+        </button>
+        <button
+          type="button"
+          onClick={onExcelClick}
+          disabled={disabled}
+          style={{
+            padding: "12px 14px",
+            borderRadius: "14px",
+            border: `1px solid ${disabled ? "#cbd5e1" : `${accent}40`}`,
+            background: disabled ? "#e2e8f0" : "rgba(255,255,255,0.94)",
+            color: disabled ? "#64748b" : accent,
+            fontWeight: 800,
+            fontSize: "13px",
+            cursor: disabled ? "not-allowed" : "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+          }}
+        >
+          {Icons.table}
+          Excel
+        </button>
+      </div>
     </div>
   );
 }
 
 export default function Historial({ user, pedidos, printerSettings = {} }) {
   const today = new Date().toISOString().split("T")[0];
+  const branchLabel = getBranchDisplayName(user);
   const [modoFecha, setModoFecha] = useState("dia");
   const [fechaSeleccionada, setFechaSeleccionada] = useState(today);
   const [fechaDesde, setFechaDesde] = useState(today);
@@ -643,7 +671,7 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
           <div>
             <div style={{ fontSize: "28px", fontWeight: 900, color: "#0f172a" }}>Historial</div>
             <div style={{ marginTop: "4px", fontSize: "13px", color: "#64748b", fontWeight: 700 }}>
-              {user} · Recibidos, enviados y reportes
+              {branchLabel} · Recibidos, enviados y reportes
             </div>
           </div>
         </div>
@@ -906,14 +934,14 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: "14px", flexWrap: "wrap", marginBottom: "18px" }}>
               <div>
-                <div style={{ fontSize: "24px", fontWeight: 900, color: "#0f172a" }}>Reportes PDF</div>
+                <div style={{ fontSize: "24px", fontWeight: 900, color: "#0f172a" }}>Reportes exportables</div>
                 <div style={{ marginTop: "6px", fontSize: "13px", color: "#64748b", fontWeight: 700 }}>
                   Periodo activo: {periodoEtiqueta}
                 </div>
               </div>
               <div style={{ display: "flex", gap: "10px", alignItems: "center", color: "#475569", fontWeight: 700, fontSize: "13px" }}>
-                {Icons.file}
-                Firmas incluidas en todos los PDF
+                {Icons.download}
+                PDF y Excel listos para descargar
               </div>
             </div>
 
@@ -923,8 +951,18 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
                 description="Pedido por pedido, con solicitado, peso real y estado para firma."
                 accent="#047857"
                 disabled={!pedidosRecibidosPeriodo.length}
-                onClick={() =>
+                onPdfClick={() =>
                   downloadDetailedHistoryPdf({
+                    title: `Recibidos_${user}`,
+                    pedidos: pedidosRecibidosPeriodo,
+                    fechaInicio: fechaInicioFiltro,
+                    fechaFin: fechaFinFiltro,
+                    user,
+                    role: "recibidos",
+                  })
+                }
+                onExcelClick={() =>
+                  downloadDetailedHistoryExcel({
                     title: `Recibidos_${user}`,
                     pedidos: pedidosRecibidosPeriodo,
                     fechaInicio: fechaInicioFiltro,
@@ -939,8 +977,18 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
                 description="Movimientos enviados por tu sucursal, listos para control y firma."
                 accent="#2563eb"
                 disabled={!pedidosEnviadosPeriodo.length}
-                onClick={() =>
+                onPdfClick={() =>
                   downloadDetailedHistoryPdf({
+                    title: `Enviados_${user}`,
+                    pedidos: pedidosEnviadosPeriodo,
+                    fechaInicio: fechaInicioFiltro,
+                    fechaFin: fechaFinFiltro,
+                    user,
+                    role: "enviados",
+                  })
+                }
+                onExcelClick={() =>
+                  downloadDetailedHistoryExcel({
                     title: `Enviados_${user}`,
                     pedidos: pedidosEnviadosPeriodo,
                     fechaInicio: fechaInicioFiltro,
@@ -955,7 +1003,7 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
                 description="Agrupado por producto y unidad en el intervalo actual."
                 accent="#7c3aed"
                 disabled={!pedidosConfirmadosRecibidos.length}
-                onClick={() =>
+                onPdfClick={() =>
                   downloadConsolidatedHistoryPdf({
                     title: `Consolidado_Recibidos_${user}`,
                     pedidos: pedidosConfirmadosRecibidos,
@@ -964,19 +1012,39 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
                     user,
                   })
                 }
+                onExcelClick={() =>
+                  downloadConsolidatedHistoryExcel({
+                    title: `Consolidado_Recibidos_${user}`,
+                    pedidos: pedidosConfirmadosRecibidos,
+                    fechaInicio: fechaInicioFiltro,
+                    fechaFin: fechaFinFiltro,
+                    user,
+                    sheetName: "Consolidado recibidos",
+                  })
+                }
               />
               <ReportActionCard
                 title="Consolidado envios"
                 description="Total por producto de los envios con movimiento real en el periodo."
                 accent="#d97706"
                 disabled={!pedidosConfirmadosEnviados.length}
-                onClick={() =>
+                onPdfClick={() =>
                   downloadConsolidatedHistoryPdf({
                     title: `Consolidado_Envios_${user}`,
                     pedidos: pedidosConfirmadosEnviados,
                     fechaInicio: fechaInicioFiltro,
                     fechaFin: fechaFinFiltro,
                     user,
+                  })
+                }
+                onExcelClick={() =>
+                  downloadConsolidatedHistoryExcel({
+                    title: `Consolidado_Envios_${user}`,
+                    pedidos: pedidosConfirmadosEnviados,
+                    fechaInicio: fechaInicioFiltro,
+                    fechaFin: fechaFinFiltro,
+                    user,
+                    sheetName: "Consolidado envios",
                   })
                 }
               />

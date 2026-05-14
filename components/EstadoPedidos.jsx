@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { ref, update, push, set } from "firebase/database";
+import { getBranchDisplayName, getCanonicalBranchId, isSameBranch } from "@/lib/branchUtils";
 import { formatOrderNumber, getLocalDateString, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 import { printTransferRequisition } from "@/lib/historialPdf";
 
@@ -84,10 +85,10 @@ const STATUS_CONFIG = {
 };
 
 const isPedidoVacuna = (pedido) => pedido?.tipoPedido === 'VACUNA';
-const getSendingBranch = (pedido) => pedido?.sucursalDestino || '';
-const getReceivingBranch = (pedido) => pedido?.sucursalOrigen || '';
-const isSendingBranch = (pedido, user) => getSendingBranch(pedido) === user;
-const isReceivingBranch = (pedido, user) => getReceivingBranch(pedido) === user;
+const getSendingBranch = (pedido) => getCanonicalBranchId(pedido?.sucursalDestino || '');
+const getReceivingBranch = (pedido) => getCanonicalBranchId(pedido?.sucursalOrigen || '');
+const isSendingBranch = (pedido, user) => isSameBranch(getSendingBranch(pedido), user);
+const isReceivingBranch = (pedido, user) => isSameBranch(getReceivingBranch(pedido), user);
 
 const VIEW_THEMES = {
   enviar: {
@@ -168,6 +169,7 @@ export default function EstadoPedidos({
   const [modalNotificacion, setModalNotificacion] = useState(null);
   const hoy = getLocalDateString();
   const temaVista = VIEW_THEMES[modoVista];
+  const userLabel = getBranchDisplayName(user);
 
   // Escuchar notificaciones para esta sucursal
   useEffect(() => {
@@ -384,7 +386,7 @@ export default function EstadoPedidos({
       sucursalOrigen: getSendingBranch(modalRecepcion),
       sucursalDestino: user,
       fecha: new Date().toISOString(),
-      mensaje: `La sucursal ${user} reportó diferencias en el pedido ${formatOrderNumber(modalRecepcion)}`,
+      mensaje: `La sucursal ${userLabel} reportó diferencias en el pedido ${formatOrderNumber(modalRecepcion)}`,
       diferencias: diferencias,
       leida: false
     };
@@ -572,7 +574,7 @@ export default function EstadoPedidos({
               Estado de Pedidos
             </h1>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
-              {user} - {temaVista.helper}
+              {userLabel} - {temaVista.helper}
             </p>
           </div>
         </div>
@@ -1276,14 +1278,16 @@ export default function EstadoPedidos({
             const status = pedido.estado || 'NUEVO';
             const config = STATUS_CONFIG[status] || STATUS_CONFIG['NUEVO'];
             const isAnimating = animatingCards.has(pedido.firebaseId);
-            const esOrigen = pedido.sucursalOrigen === user;
-            const esDestino = pedido.sucursalDestino === user;
+            const esOrigen = isSameBranch(pedido.sucursalOrigen, user);
+            const esDestino = isSameBranch(pedido.sucursalDestino, user);
             const esVacuna = isPedidoVacuna(pedido);
             const puedeEditarPedido = esOrigen && !esVacuna && status !== 'RECIBIDO_CONFORME';
             const puedeAnularPedido = esOrigen && !esVacuna && status !== 'RECIBIDO_CONFORME';
             const mostrarPeso = mostrarPesos[pedido.firebaseId];
-            const rutaOrigen = esVacuna ? getSendingBranch(pedido) : pedido.sucursalOrigen;
-            const rutaDestino = esVacuna ? getReceivingBranch(pedido) : pedido.sucursalDestino;
+            const rutaOrigen = esVacuna ? getSendingBranch(pedido) : getCanonicalBranchId(pedido.sucursalOrigen);
+            const rutaDestino = esVacuna ? getReceivingBranch(pedido) : getCanonicalBranchId(pedido.sucursalDestino);
+            const rutaOrigenLabel = getBranchDisplayName(rutaOrigen);
+            const rutaDestinoLabel = getBranchDisplayName(rutaDestino);
 
             return (
               <div
@@ -1388,9 +1392,9 @@ export default function EstadoPedidos({
                           alignItems: 'center',
                           gap: '8px'
                         }}>
-                          {rutaOrigen} 
+                          {rutaOrigenLabel} 
                           <span style={{ color: config.color }}>{Icons.arrowRight}</span>
-                          {rutaDestino}
+                          {rutaDestinoLabel}
                         </div>
                       </div>
                     </div>
@@ -1867,8 +1871,8 @@ export default function EstadoPedidos({
                           textAlign: 'center'
                         }}>
                           {esVacuna
-                            ? `💉 Vacuna lista para envio directo a ${getReceivingBranch(pedido)}`
-                            : `📦 Pedido recibido de ${pedido.sucursalOrigen} • Preparar y enviar`}
+                            ? `💉 Vacuna lista para envio directo a ${getBranchDisplayName(getReceivingBranch(pedido))}`
+                            : `📦 Pedido recibido de ${rutaOrigenLabel} • Preparar y enviar`}
                         </div>
                       )}
 
@@ -1890,8 +1894,8 @@ export default function EstadoPedidos({
                         }}>
                           {Icons.check}
                           {esVacuna
-                            ? `Vacuna enviada${pedido.enviadoCon ? ` con ${pedido.enviadoCon}` : ''} - Esperando confirmación de ${getReceivingBranch(pedido)}`
-                            : `Pedido enviado con ${pedido.enviadoCon || 'transporte interno'} - Esperando confirmación de ${pedido.sucursalOrigen}`}
+                            ? `Vacuna enviada${pedido.enviadoCon ? ` con ${pedido.enviadoCon}` : ''} - Esperando confirmación de ${getBranchDisplayName(getReceivingBranch(pedido))}`
+                            : `Pedido enviado con ${pedido.enviadoCon || 'transporte interno'} - Esperando confirmación de ${rutaOrigenLabel}`}
                         </div>
                       )}
 
@@ -1965,7 +1969,7 @@ export default function EstadoPedidos({
                           fontWeight: 700,
                           textAlign: 'center'
                         }}>
-                          ⏳ Pedido enviado a {pedido.sucursalDestino} - Esperando preparación
+                          ⏳ Pedido enviado a {rutaDestinoLabel} - Esperando preparación
                         </div>
                       )}
                     </div>

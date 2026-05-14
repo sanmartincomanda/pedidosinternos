@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
 import { off, onValue, push, ref, runTransaction, update } from "firebase/database";
+import { getBranchDisplayName, getCanonicalBranchId } from "@/lib/branchUtils";
 import {
   buildOrderNumber,
   formatOrderNumber,
@@ -265,7 +266,7 @@ export default function Formulario({
   const userCounterKey = getUserCounterKey(user);
 
   const [items, setItems] = useState([createEmptyItem()]);
-  const [destino, setDestino] = useState(sucursales[0] || "Cedi");
+  const [destino, setDestino] = useState(getCanonicalBranchId(sucursales[0] || "Cedi"));
   const [notaGeneral, setNotaGeneral] = useState("");
   const [notaTemporal, setNotaTemporal] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -305,7 +306,7 @@ export default function Formulario({
 
   useEffect(() => {
     if (!sucursales.includes(destino)) {
-      setDestino(sucursales[0] || "Cedi");
+      setDestino(getCanonicalBranchId(sucursales[0] || "Cedi"));
     }
   }, [destino, sucursales]);
 
@@ -323,7 +324,7 @@ export default function Formulario({
       mostrarDropdown: false,
     }));
 
-    setDestino(pedidoEditar.sucursalDestino || sucursales[0] || "Cedi");
+    setDestino(getCanonicalBranchId(pedidoEditar.sucursalDestino || sucursales[0] || "Cedi"));
     setFechaEntrega(pedidoEditar.fechaEntrega || pedidoEditar.fechaPedido || hoy);
     setNotaGeneral(pedidoEditar.notaGeneral || "");
     setNotaTemporal(pedidoEditar.notaGeneral || "");
@@ -747,7 +748,7 @@ export default function Formulario({
       const itemsActualizados = construirItemsActualizados(validos);
 
       await update(ref(db, `pedidos_internos/${pedidoEditar.firebaseId}`), {
-        sucursalDestino: destino,
+        sucursalDestino: getCanonicalBranchId(destino),
         fechaEntrega,
         esStandby: fechaEntrega > hoy,
         items: itemsActualizados,
@@ -807,9 +808,9 @@ export default function Formulario({
         numeroOrden,
         consecutivoOrden: nuevoId,
         prefijoOrden: userPrefix,
-        sucursalOrigen: user,
-        sucursalDestino: destino,
-        sucursalCreadora: user,
+        sucursalOrigen: getCanonicalBranchId(user),
+        sucursalDestino: getCanonicalBranchId(destino),
+        sucursalCreadora: getCanonicalBranchId(user),
         fechaPedido,
         fechaEntrega,
         esStandby,
@@ -882,7 +883,7 @@ export default function Formulario({
             <select className="app-select" value={destino} onChange={(event) => setDestino(event.target.value)}>
               {sucursales.filter((sucursal) => sucursal !== user).map((sucursal) => (
                 <option key={sucursal} value={sucursal} style={{ background: "#ffffff", color: "#12324e" }}>
-                  {sucursal}
+                  {getBranchDisplayName(sucursal)}
                 </option>
               ))}
             </select>

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
 import { off, onValue, push, ref, runTransaction } from "firebase/database";
+import { getBranchDisplayName, getCanonicalBranchId } from "@/lib/branchUtils";
 import { printTransferRequisition } from "@/lib/historialPdf";
 import {
   buildOrderNumber,
@@ -246,7 +247,7 @@ export default function PedidoVacuna({
   const userCounterKey = getUserCounterKey(user);
 
   const [items, setItems] = useState([createEmptyItem()]);
-  const [destino, setDestino] = useState(sucursales[0] || "Cedi");
+  const [destino, setDestino] = useState(getCanonicalBranchId(sucursales[0] || "Cedi"));
   const [notaGeneral, setNotaGeneral] = useState("");
   const [notaTemporal, setNotaTemporal] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -266,7 +267,7 @@ export default function PedidoVacuna({
 
   useEffect(() => {
     if (!sucursales.includes(destino)) {
-      setDestino(sucursales[0] || "Cedi");
+      setDestino(getCanonicalBranchId(sucursales[0] || "Cedi"));
     }
   }, [destino, sucursales]);
 
@@ -619,9 +620,9 @@ export default function PedidoVacuna({
         numeroOrden,
         consecutivoOrden: nuevoId,
         prefijoOrden: userPrefix,
-        sucursalOrigen: destino,
-        sucursalDestino: user,
-        sucursalCreadora: user,
+        sucursalOrigen: getCanonicalBranchId(destino),
+        sucursalDestino: getCanonicalBranchId(user),
+        sucursalCreadora: getCanonicalBranchId(user),
         tipoPedido: "VACUNA",
         fechaPedido: hoy,
         fechaEntrega: hoy,
@@ -703,7 +704,7 @@ export default function PedidoVacuna({
               <select className="app-select" value={destino} onChange={(event) => setDestino(event.target.value)}>
                 {sucursales.filter((sucursal) => sucursal !== user).map((sucursal) => (
                   <option key={sucursal} value={sucursal} style={{ background: "#ffffff", color: "#12324e" }}>
-                    {sucursal}
+                    {getBranchDisplayName(sucursal)}
                   </option>
                 ))}
               </select>
