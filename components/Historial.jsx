@@ -948,7 +948,7 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
             <div className="historial-report-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
               <ReportActionCard
                 title="Recibidos detallado"
-                description="Pedido por pedido, con solicitado, peso real y estado para firma."
+                description="Pedido por pedido, con solicitado, peso real, costo e importe historico."
                 accent="#047857"
                 disabled={!pedidosRecibidosPeriodo.length}
                 onPdfClick={() =>
@@ -974,7 +974,7 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
               />
               <ReportActionCard
                 title="Enviados detallado"
-                description="Movimientos enviados por tu sucursal, listos para control y firma."
+                description="Movimientos enviados por tu sucursal, con costo unitario e importe por linea."
                 accent="#2563eb"
                 disabled={!pedidosEnviadosPeriodo.length}
                 onPdfClick={() =>
@@ -1000,7 +1000,7 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
               />
               <ReportActionCard
                 title="Consolidado recibidos"
-                description="Agrupado por producto y unidad en el intervalo actual."
+                description="Agrupado por producto y unidad, con costo promedio y costo total."
                 accent="#7c3aed"
                 disabled={!pedidosConfirmadosRecibidos.length}
                 onPdfClick={() =>
@@ -1025,7 +1025,7 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
               />
               <ReportActionCard
                 title="Consolidado envios"
-                description="Total por producto de los envios con movimiento real en el periodo."
+                description="Total por producto de los envios, con costos historicos del traspaso."
                 accent="#d97706"
                 disabled={!pedidosConfirmadosEnviados.length}
                 onPdfClick={() =>
