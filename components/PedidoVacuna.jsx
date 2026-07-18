@@ -2,7 +2,8 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
-import { off, onValue, push, ref, runTransaction } from "firebase/database";
+import { off, onValue, push, ref, runTransaction, update } from "firebase/database";
+import { syncPedidoToAccounting } from "@/lib/accountingTransferSync";
 import { getBranchDisplayName, getCanonicalBranchId } from "@/lib/branchUtils";
 import { printTransferRequisition } from "@/lib/historialPdf";
 import {
@@ -247,7 +248,7 @@ export default function PedidoVacuna({
   const userCounterKey = getUserCounterKey(user);
 
   const [items, setItems] = useState([createEmptyItem()]);
-  const [destino, setDestino] = useState(getCanonicalBranchId(sucursales[0] || "Cedi"));
+  const [destino, setDestino] = useState(getCanonicalBranchId(sucursales[0] || "Nindiri"));
   const [notaGeneral, setNotaGeneral] = useState("");
   const [notaTemporal, setNotaTemporal] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -267,7 +268,7 @@ export default function PedidoVacuna({
 
   useEffect(() => {
     if (!sucursales.includes(destino)) {
-      setDestino(getCanonicalBranchId(sucursales[0] || "Cedi"));
+      setDestino(getCanonicalBranchId(sucursales[0] || "Nindiri"));
     }
   }, [destino, sucursales]);
 
@@ -586,6 +587,28 @@ export default function PedidoVacuna({
     setShowNoteModal(false);
   };
 
+  const sincronizarContabilidad = async (pedido, firebaseId, mirrorId = "") => {
+    try {
+      const syncResult = await syncPedidoToAccounting({ ...pedido, firebaseId }, mirrorId);
+      await update(ref(db, `pedidos_internos/${firebaseId}`), {
+        contabilidadSync: {
+          ...syncResult,
+          error: null,
+        },
+      });
+    } catch (error) {
+      console.error("Fallo la sincronizacion contable de vacuna:", error);
+      await update(ref(db, `pedidos_internos/${firebaseId}`), {
+        contabilidadSync: {
+          status: "error",
+          mirrorId,
+          syncedAt: new Date().toISOString(),
+          error: error.message,
+        },
+      });
+    }
+  };
+
   const enviarVacuna = async () => {
     const validos = items.filter((item) => item.producto.trim() !== "");
     if (validos.length === 0) {
@@ -647,7 +670,8 @@ export default function PedidoVacuna({
         timestamp: Date.now(),
       };
 
-      await push(ref(db, "pedidos_internos"), nuevaOrden);
+      const pedidoCreadoRef = await push(ref(db, "pedidos_internos"), nuevaOrden);
+      await sincronizarContabilidad(nuevaOrden, pedidoCreadoRef.key);
 
       if (printerSettings?.impresionAutomaticaEnvio !== false) {
         printTransferRequisition(

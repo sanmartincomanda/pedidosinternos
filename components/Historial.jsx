@@ -9,6 +9,8 @@ import {
   buildOrderDescriptor,
   filterPedidosByDate,
   formatDateLabel,
+  getItemLineCost,
+  getItemUnitCost,
   getPhysicalReceiver,
   getPhysicalSender,
   getRealText,
@@ -117,6 +119,10 @@ const SECTION_TABS = [
   { key: "enviados", label: "Enviados" },
   { key: "reportes", label: "Reportes" },
 ];
+
+function formatCurrency(value) {
+  return typeof value === "number" ? `C$ ${value.toFixed(2)}` : "Pendiente SICAR";
+}
 
 function SectionTabButton({ active, label, onClick }) {
   return (
@@ -252,8 +258,9 @@ function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
           {[
             { label: "Items", value: pedido.itemsCount },
             { label: "Peso real", value: `${pedido.totalReal.toFixed(2)} lb` },
-            { label: "Entrega", value: getPhysicalSender(pedido) || "-" },
-            { label: "Recibe", value: getPhysicalReceiver(pedido) || "-" },
+            { label: "Sale de", value: getPhysicalSender(pedido) || "-" },
+            { label: "Entra en", value: getPhysicalReceiver(pedido) || "-" },
+            { label: "Costo total", value: formatCurrency(pedido.totalCost) },
           ].map((item) => (
             <div
               key={`${pedido.firebaseId}-${item.label}`}
@@ -349,7 +356,9 @@ function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
               { label: "Recibido por", value: pedido.recibidoPor || "-" },
               { label: "Hora envio", value: pedido.timestampEnviado || "-" },
               { label: "Hora recepcion", value: pedido.horaRecepcion || "-" },
-              { label: "Entrega", value: pedido.fechaEntrega || "Sin fecha" },
+              { label: "Fecha entrega", value: pedido.fechaEntrega || "Sin fecha" },
+              { label: "Sucursal origen", value: getBranchDisplayName(pedido.sucursalOrigen) || "-" },
+              { label: "Sucursal destino", value: getBranchDisplayName(pedido.sucursalDestino) || "-" },
             ].map((info) => (
               <div
                 key={`${pedido.firebaseId}-${info.label}`}
@@ -389,7 +398,7 @@ function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
             <table style={{ width: "100%", minWidth: "760px", borderCollapse: "collapse", background: "#ffffff", borderRadius: "18px", overflow: "hidden" }}>
               <thead>
                 <tr>
-                  {["Clave", "Producto", "Solicitado", "Real", "Nota"].map((header) => (
+                  {["Clave", "Producto", "Solicitado", "Real", "Costo unit.", "Importe", "Nota"].map((header) => (
                     <th
                       key={header}
                       style={{
@@ -423,6 +432,12 @@ function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
                     <td style={{ padding: "13px 14px", borderTop: "1px solid rgba(226, 232, 240, 0.8)", fontSize: "13px", fontWeight: 800, color: "#047857" }}>
                       {getRealText(item, pedido)}
                     </td>
+                    <td style={{ padding: "13px 14px", borderTop: "1px solid rgba(226, 232, 240, 0.8)", fontSize: "12px", color: "#334155", fontWeight: 700 }}>
+                      {formatCurrency(getItemUnitCost(item, pedido))}
+                    </td>
+                    <td style={{ padding: "13px 14px", borderTop: "1px solid rgba(226, 232, 240, 0.8)", fontSize: "12px", color: "#1d4ed8", fontWeight: 800 }}>
+                      {formatCurrency(getItemLineCost(item, pedido))}
+                    </td>
                     <td style={{ padding: "13px 14px", borderTop: "1px solid rgba(226, 232, 240, 0.8)", fontSize: "12px", color: item?.nota ? "#b45309" : "#94a3b8", fontWeight: item?.nota ? 700 : 600 }}>
                       {item?.nota || "Sin nota"}
                     </td>
@@ -430,6 +445,26 @@ function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div
+            style={{
+              margin: "0 20px 20px 20px",
+              padding: "14px 16px",
+              borderRadius: "16px",
+              background: "rgba(15, 23, 42, 0.04)",
+              border: "1px solid rgba(148, 163, 184, 0.18)",
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "12px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ fontSize: "12px", fontWeight: 800, color: "#475569" }}>
+              Resumen: {pedido.itemsCount} lineas / {pedido.totalReal.toFixed(2)} lb
+            </div>
+            <div style={{ fontSize: "14px", fontWeight: 900, color: "#0f172a" }}>
+              Costo total: {formatCurrency(pedido.totalCost)}
+            </div>
           </div>
         </div>
       ) : null}
@@ -900,9 +935,11 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
         </div>
       </section>
 
-      <div className="historial-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "14px", marginBottom: "22px" }}>
+      <div className="historial-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "14px", marginBottom: "22px" }}>
         <StatCard label="Recibidos" value={stats.recibidos} helper={`${stats.totalRecibido.toFixed(2)} lb confirmados`} accent="#047857" />
         <StatCard label="Enviados" value={stats.enviados} helper={`${stats.totalEnviado.toFixed(2)} lb con movimiento`} accent="#2563eb" />
+        <StatCard label="Costo recibidos" value={formatCurrency(stats.totalCostoRecibido)} helper="Monto historico confirmado" accent="#0f766e" />
+        <StatCard label="Costo envios" value={formatCurrency(stats.totalCostoEnviado)} helper="Monto historico enviado" accent="#1d4ed8" />
         <StatCard label="Consolidado recibidos" value={consolidatedRecibidos.length} helper="Productos agrupados" accent="#7c3aed" />
         <StatCard label="Consolidado envios" value={consolidatedEnviados.length} helper="Productos agrupados" accent="#d97706" />
       </div>

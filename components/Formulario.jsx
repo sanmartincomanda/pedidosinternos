@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
 import { off, onValue, push, ref, runTransaction, update } from "firebase/database";
+import { syncPedidoToAccounting } from "@/lib/accountingTransferSync";
 import { getBranchDisplayName, getCanonicalBranchId } from "@/lib/branchUtils";
 import {
   buildOrderNumber,
@@ -266,7 +267,7 @@ export default function Formulario({
   const userCounterKey = getUserCounterKey(user);
 
   const [items, setItems] = useState([createEmptyItem()]);
-  const [destino, setDestino] = useState(getCanonicalBranchId(sucursales[0] || "Cedi"));
+  const [destino, setDestino] = useState(getCanonicalBranchId(sucursales[0] || "Nindiri"));
   const [notaGeneral, setNotaGeneral] = useState("");
   const [notaTemporal, setNotaTemporal] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -306,7 +307,7 @@ export default function Formulario({
 
   useEffect(() => {
     if (!sucursales.includes(destino)) {
-      setDestino(getCanonicalBranchId(sucursales[0] || "Cedi"));
+      setDestino(getCanonicalBranchId(sucursales[0] || "Nindiri"));
     }
   }, [destino, sucursales]);
 
@@ -324,7 +325,7 @@ export default function Formulario({
       mostrarDropdown: false,
     }));
 
-    setDestino(getCanonicalBranchId(pedidoEditar.sucursalDestino || sucursales[0] || "Cedi"));
+    setDestino(getCanonicalBranchId(pedidoEditar.sucursalDestino || sucursales[0] || "Nindiri"));
     setFechaEntrega(pedidoEditar.fechaEntrega || pedidoEditar.fechaPedido || hoy);
     setNotaGeneral(pedidoEditar.notaGeneral || "");
     setNotaTemporal(pedidoEditar.notaGeneral || "");
@@ -719,6 +720,28 @@ export default function Formulario({
     return validos;
   };
 
+  const sincronizarContabilidad = async (pedido, firebaseId, mirrorId = "") => {
+    try {
+      const syncResult = await syncPedidoToAccounting({ ...pedido, firebaseId }, mirrorId);
+      await update(ref(db, `pedidos_internos/${firebaseId}`), {
+        contabilidadSync: {
+          ...syncResult,
+          error: null,
+        },
+      });
+    } catch (error) {
+      console.error("Fallo la sincronizacion contable:", error);
+      await update(ref(db, `pedidos_internos/${firebaseId}`), {
+        contabilidadSync: {
+          status: "error",
+          mirrorId: mirrorId || pedido?.contabilidadSync?.mirrorId || "",
+          syncedAt: new Date().toISOString(),
+          error: error.message,
+        },
+      });
+    }
+  };
+
   const actualizarPedido = async () => {
     const validos = validarPedido();
     if (!validos || !pedidoEditar?.firebaseId) {
@@ -746,8 +769,9 @@ export default function Formulario({
     try {
       const estadoActualizado = fechaEntrega > hoy ? "STANDBY_ENTREGA" : "NUEVO";
       const itemsActualizados = construirItemsActualizados(validos);
-
-      await update(ref(db, `pedidos_internos/${pedidoEditar.firebaseId}`), {
+      const { firebaseId: _firebaseId, contabilidadSync: existingAccountingSync, ...pedidoBase } = pedidoEditar;
+      const pedidoActualizado = {
+        ...pedidoBase,
         sucursalDestino: getCanonicalBranchId(destino),
         fechaEntrega,
         esStandby: fechaEntrega > hoy,
@@ -765,7 +789,15 @@ export default function Formulario({
         fechaEdicion: new Date().toISOString(),
         editadoPor: user,
         timestamp: Date.now(),
-      });
+        contabilidadSync: existingAccountingSync || null,
+      };
+
+      await update(ref(db, `pedidos_internos/${pedidoEditar.firebaseId}`), pedidoActualizado);
+      await sincronizarContabilidad(
+        pedidoActualizado,
+        pedidoEditar.firebaseId,
+        pedidoEditar?.contabilidadSync?.mirrorId || "",
+      );
 
       alert(`Pedido ${formatOrderNumber(pedidoEditar)} actualizado con exito.`);
       resetFormulario();
@@ -827,7 +859,8 @@ export default function Formulario({
         timestamp: Date.now(),
       };
 
-      await push(ref(db, "pedidos_internos"), nuevaOrden);
+      const pedidoCreadoRef = await push(ref(db, "pedidos_internos"), nuevaOrden);
+      await sincronizarContabilidad(nuevaOrden, pedidoCreadoRef.key);
 
       setCounterValue(nuevoId);
       alert(`Pedido ${numeroOrden} ${esStandby ? "guardado en standby" : "enviado"} con exito.`);

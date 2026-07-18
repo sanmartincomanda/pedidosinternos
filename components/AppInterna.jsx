@@ -258,8 +258,7 @@ export default function AppInterna() {
       const pedidosRelevantes = lista.filter(
         (pedido) =>
           isSameBranch(pedido.sucursalOrigen, user) ||
-          isSameBranch(pedido.sucursalDestino, user) ||
-          user === "Luis Saenz",
+          isSameBranch(pedido.sucursalDestino, user),
       );
 
       setPedidos(pedidosRelevantes.reverse());
@@ -389,7 +388,7 @@ export default function AppInterna() {
                       type="text"
                       value={username}
                       onChange={(event) => setUsername(event.target.value)}
-                      placeholder="Ej. Granada Gold"
+                      placeholder="Ej. Granada o Nindiri"
                       className="app-input pl-12"
                     />
                   </div>
@@ -430,7 +429,7 @@ export default function AppInterna() {
               </form>
 
                 <div className="mt-6 rounded-[24px] border border-sky-100 bg-sky-50 p-4 text-sm text-slate-600">
-                  La app ya esta organizada para una experiencia movil: tarjetas claras, botoneria grande y navegacion facil.
+                  Accesos activos: Carnes San Martin Granada y Carnes San Martin Nindiri. Tambien acepta Serie A y Serie B como alias de ingreso.
                 </div>
             </div>
           </section>
