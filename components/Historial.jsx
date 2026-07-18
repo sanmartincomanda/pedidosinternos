@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { getBranchDisplayName } from "@/lib/branchUtils";
-import { formatOrderNumber } from "@/lib/orderUtils";
+import { formatOrderNumber, getPedidoItems } from "@/lib/orderUtils";
 import {
   buildConsolidatedRows,
   buildHistoryStats,
@@ -418,7 +418,7 @@ function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
                 </tr>
               </thead>
               <tbody>
-                {(pedido.items || []).map((item, index) => (
+                {getPedidoItems(pedido).map((item, index) => (
                   <tr key={`${pedido.firebaseId}-item-${index}`}>
                     <td style={{ padding: "13px 14px", borderTop: "1px solid rgba(226, 232, 240, 0.8)", fontFamily: "monospace", fontSize: "12px", color: "#475569" }}>
                       {item?.clave || "-"}

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { ref, update } from "firebase/database";
 import { getBranchDisplayName, isSameBranch } from "@/lib/branchUtils";
-import { formatOrderNumber, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
+import { formatOrderNumber, getPedidoItems, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 
 const Icons = {
   chef: (
@@ -164,7 +164,7 @@ export default function Cocina({ user, pedidos, personalCocina }) {
     const pedido = pedidos.find((item) => item.firebaseId === firebaseId);
     if (!pedido) return;
 
-    const nuevosItems = [...(pedido.items || [])];
+    const nuevosItems = [...getPedidoItems(pedido)];
     nuevosItems[itemIdx] = { ...nuevosItems[itemIdx], pesoReal: valor };
 
     update(ref(db, `pedidos_internos/${firebaseId}`), {
@@ -207,7 +207,7 @@ export default function Cocina({ user, pedidos, personalCocina }) {
     const pedido = pedidos.find((item) => item.firebaseId === firebaseId);
     if (!pedido) return;
 
-    const todosLosPesosLlenos = (pedido.items || []).every((item) => item.pesoReal && item.pesoReal !== "");
+    const todosLosPesosLlenos = getPedidoItems(pedido).every((item) => item.pesoReal && item.pesoReal !== "");
     if (!todosLosPesosLlenos) {
       alert("Debes ingresar el peso real de todos los productos antes de marcar como listo.");
       return;
@@ -261,7 +261,7 @@ export default function Cocina({ user, pedidos, personalCocina }) {
           const config = STATUS_CONFIG[status] || STATUS_CONFIG.NUEVO;
           const isAnimating = animatingCards.has(pedido.firebaseId);
           const isStandby = status === "STANDBY_ENTREGA";
-          const todosPesosLlenos = (pedido.items || []).every((item) => item.pesoReal && item.pesoReal !== "");
+          const todosPesosLlenos = getPedidoItems(pedido).every((item) => item.pesoReal && item.pesoReal !== "");
 
           return (
             <article
@@ -348,7 +348,7 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                   ) : null}
 
                   <div className="space-y-3">
-                    {(pedido.items || []).map((item, idx) => {
+                    {getPedidoItems(pedido).map((item, idx) => {
                       const pesoKey = `${pedido.firebaseId}_${idx}`;
                       const pesoEditado =
                         pesosEditando[pesoKey] !== undefined ? pesosEditando[pesoKey] : item.pesoReal || "";

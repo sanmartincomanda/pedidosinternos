@@ -9,7 +9,7 @@ import {
   getSelectableBranches,
   isSameBranch,
 } from "@/lib/branchUtils";
-import { isPedidoAfterOperativeReset } from "@/lib/orderUtils";
+import { isPedidoAfterOperativeReset, normalizePedidoForUi } from "@/lib/orderUtils";
 import Cocina from "./Cocina";
 import Configuracion from "./Configuracion";
 import EstadoPedidos from "./EstadoPedidos";
@@ -277,10 +277,7 @@ export default function AppInterna() {
         return;
       }
 
-      const lista = Object.keys(data).map((key) => ({
-        firebaseId: key,
-        ...data[key],
-      }));
+      const lista = Object.keys(data).map((key) => normalizePedidoForUi(data[key], key));
 
       const pedidosRelevantes = lista.filter(
         (pedido) =>
