@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { db } from "../firebase";
 import { off, onValue, push, ref, runTransaction, update } from "firebase/database";
 import { syncPedidoToAccounting } from "@/lib/accountingTransferSync";
@@ -207,9 +208,22 @@ const createEmptyItem = () => ({
   clave: "",
   producto: "",
   pesoReal: "",
+  bultos: [],
   nota: "",
   mostrarDropdown: false,
 });
+
+function parseBultoWeight(value) {
+  const normalized = String(value ?? "").trim().replace(",", ".");
+  const parsed = Number.parseFloat(normalized);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed * 10000) / 10000;
+}
+
+function formatBultoWeight(value) {
+  return String(Math.round(Number(value) * 10000) / 10000);
+}
 
 function FieldLabel({ icon, label }) {
   return (
@@ -257,9 +271,14 @@ export default function PedidoVacuna({
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [itemNoteModalIndex, setItemNoteModalIndex] = useState(null);
   const [itemNoteTemporal, setItemNoteTemporal] = useState("");
+  const [bultosModalIndex, setBultosModalIndex] = useState(null);
+  const [bultosTemporal, setBultosTemporal] = useState([]);
+  const [bultoTemporal, setBultoTemporal] = useState("");
+  const [bultoError, setBultoError] = useState("");
 
   const productInputRefs = useRef([]);
   const pesoInputRefs = useRef([]);
+  const bultoInputRef = useRef(null);
   const dropdownRefs = useRef({});
 
   const highestBranchSequence = getHighestBranchSequence(pedidos, user);
@@ -408,6 +427,12 @@ export default function PedidoVacuna({
       return prev > idx ? prev - 1 : prev;
     });
 
+    setBultosModalIndex((prev) => {
+      if (prev === null) return null;
+      if (prev === idx) return null;
+      return prev > idx ? prev - 1 : prev;
+    });
+
     if (items.length === 1) {
       setItems([createEmptyItem()]);
       return;
@@ -442,6 +467,95 @@ export default function PedidoVacuna({
 
       return next;
     });
+  };
+
+  const handlePesoChange = (idx, value) => {
+    setItems((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === idx
+          ? {
+              ...item,
+              pesoReal: value,
+              bultos: [],
+            }
+          : item,
+      ),
+    );
+  };
+
+  const cerrarSumaBultos = () => {
+    setBultosModalIndex(null);
+    setBultosTemporal([]);
+    setBultoTemporal("");
+    setBultoError("");
+  };
+
+  const abrirSumaBultos = (idx) => {
+    const guardados = Array.isArray(items[idx]?.bultos)
+      ? items[idx].bultos.map(parseBultoWeight).filter((peso) => peso !== null)
+      : [];
+
+    setBultosModalIndex(idx);
+    setBultosTemporal(guardados);
+    setBultoTemporal("");
+    setBultoError("");
+    setTimeout(() => focusElement(bultoInputRef.current, { select: true }), 80);
+  };
+
+  const agregarBulto = () => {
+    const peso = parseBultoWeight(bultoTemporal);
+
+    if (peso === null) {
+      setBultoError("Ingresa un peso mayor que cero.");
+      setTimeout(() => focusElement(bultoInputRef.current, { select: true }), 30);
+      return false;
+    }
+
+    setBultosTemporal((prev) => [...prev, peso]);
+    setBultoTemporal("");
+    setBultoError("");
+    setTimeout(() => focusElement(bultoInputRef.current), 30);
+    return true;
+  };
+
+  const quitarBulto = (idx) => {
+    setBultosTemporal((prev) => prev.filter((_, itemIndex) => itemIndex !== idx));
+    setBultoError("");
+    setTimeout(() => focusElement(bultoInputRef.current), 30);
+  };
+
+  const finalizarSumaBultos = () => {
+    let pesosFinales = bultosTemporal;
+
+    if (String(bultoTemporal).trim() !== "") {
+      const ultimoPeso = parseBultoWeight(bultoTemporal);
+      if (ultimoPeso === null) {
+        setBultoError("Revisa el ultimo peso antes de finalizar.");
+        setTimeout(() => focusElement(bultoInputRef.current, { select: true }), 30);
+        return;
+      }
+      pesosFinales = [...pesosFinales, ultimoPeso];
+    }
+
+    if (pesosFinales.length === 0) {
+      setBultoError("Agrega al menos un peso.");
+      setTimeout(() => focusElement(bultoInputRef.current), 30);
+      return;
+    }
+
+    const total = Math.round(pesosFinales.reduce((sum, peso) => sum + peso, 0) * 10000) / 10000;
+    setItems((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === bultosModalIndex
+          ? {
+              ...item,
+              pesoReal: formatBultoWeight(total),
+              bultos: pesosFinales,
+            }
+          : item,
+      ),
+    );
+    cerrarSumaBultos();
   };
 
   const seleccionarProducto = (idx, producto) => {
@@ -652,16 +766,28 @@ export default function PedidoVacuna({
         esStandby: false,
         fechaCreacion: ahora.toISOString(),
         hora: horaActual,
-        items: validos.map((item) => ({
-          clave: item.clave,
-          producto: item.producto,
-          cantidad: item.pesoReal,
-          unidad: "lb",
-          nota: item.nota,
-          pesoReal: item.pesoReal,
-          preparadoPor: "",
-          listo: true,
-        })),
+        items: validos.map((item) => {
+          const bultos = Array.isArray(item.bultos)
+            ? item.bultos.map(parseBultoWeight).filter((peso) => peso !== null)
+            : [];
+
+          return {
+            clave: item.clave,
+            producto: item.producto,
+            cantidad: item.pesoReal,
+            unidad: "lb",
+            nota: item.nota,
+            pesoReal: item.pesoReal,
+            ...(bultos.length > 0
+              ? {
+                  bultos,
+                  cantidadBultos: bultos.length,
+                }
+              : {}),
+            preparadoPor: "",
+            listo: true,
+          };
+        }),
         notaGeneral,
         estado: "ENVIADO",
         preparadoPor: "",
@@ -773,7 +899,7 @@ export default function PedidoVacuna({
                   </button>
                 </div>
 
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px]">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
                   <div className="relative" ref={(element) => (dropdownRefs.current[idx] = element)}>
                     <FieldLabel icon={Icons.search} label="Producto" />
                     <div className="relative">
@@ -830,7 +956,7 @@ export default function PedidoVacuna({
                       ref={(element) => (pesoInputRefs.current[idx] = element)}
                       type="number"
                       value={item.pesoReal}
-                      onChange={(event) => handleInputChange(idx, "pesoReal", event.target.value)}
+                      onChange={(event) => handlePesoChange(idx, event.target.value)}
                       onKeyDown={(event) => handleKeyDown(event, idx, "pesoReal")}
                       onFocus={(event) => event.target.select()}
                       placeholder="0.00"
@@ -840,6 +966,20 @@ export default function PedidoVacuna({
                       enterKeyHint="next"
                       className="app-input text-center text-slate-900"
                     />
+
+                    <button
+                      type="button"
+                      onClick={() => abrirSumaBultos(idx)}
+                      className="app-button-ghost mt-2 w-full justify-between px-4 text-sm"
+                    >
+                      <span className="flex items-center gap-2">
+                        {Icons.scale}
+                        Suma de bultos
+                      </span>
+                      <span className={item.bultos?.length ? "text-emerald-600" : "text-slate-400"}>
+                        {item.bultos?.length ? `${item.bultos.length}` : "Abrir"}
+                      </span>
+                    </button>
                   </div>
                 </div>
 
@@ -907,6 +1047,121 @@ export default function PedidoVacuna({
           </button>
         </div>
       </section>
+
+      {bultosModalIndex !== null && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="app-modal"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  cerrarSumaBultos();
+                }
+              }}
+            >
+          <div className="app-modal-panel w-full max-w-[560px] p-5 sm:p-6">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="app-title text-2xl font-black text-slate-900">Suma de bultos</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  {items[bultosModalIndex]?.producto || `Producto ${bultosModalIndex + 1}`}
+                </p>
+              </div>
+
+              <button type="button" onClick={cerrarSumaBultos} className="app-icon-button text-slate-700">
+                {Icons.close}
+              </button>
+            </div>
+
+            <div className="mb-4 rounded-[22px] border border-emerald-200 bg-emerald-50 px-5 py-4">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Peso total</div>
+              <div className="mt-1 flex items-end gap-2 text-slate-900">
+                <span className="font-mono text-4xl font-black">
+                  {formatBultoWeight(bultosTemporal.reduce((sum, peso) => sum + peso, 0))}
+                </span>
+                <span className="pb-1 text-base font-black text-emerald-700">lb</span>
+              </div>
+              <div className="mt-1 text-sm font-semibold text-emerald-700">
+                {bultosTemporal.length} {bultosTemporal.length === 1 ? "bulto" : "bultos"}
+              </div>
+            </div>
+
+            <FieldLabel icon={Icons.scale} label="Peso del bulto (lb)" />
+            <div className="grid grid-cols-[minmax(0,1fr)_52px] gap-2">
+              <input
+                ref={bultoInputRef}
+                type="text"
+                value={bultoTemporal}
+                onChange={(event) => {
+                  setBultoTemporal(event.target.value);
+                  setBultoError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    agregarBulto();
+                  }
+                }}
+                onFocus={(event) => event.target.select()}
+                placeholder="0.00"
+                inputMode="decimal"
+                enterKeyHint="done"
+                className="app-input font-mono text-center text-xl font-black text-slate-900"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={agregarBulto}
+                className="app-button-primary min-h-[52px] px-0"
+                aria-label="Agregar peso"
+              >
+                {Icons.plus}
+              </button>
+            </div>
+
+            <p className={`mt-2 min-h-5 text-sm font-semibold ${bultoError ? "text-rose-600" : "text-slate-500"}`}>
+              {bultoError || "Escribe un peso y presiona Enter."}
+            </p>
+
+            {bultosTemporal.length > 0 ? (
+              <div className="app-scroll-y mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
+                {[...bultosTemporal].reverse().map((peso, reverseIndex) => {
+                  const originalIndex = bultosTemporal.length - 1 - reverseIndex;
+                  return (
+                    <div
+                      key={`${originalIndex}-${peso}`}
+                      className="flex items-center justify-between gap-3 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3"
+                    >
+                      <span className="text-sm font-black text-slate-500">Bulto {originalIndex + 1}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-lg font-black text-slate-900">{formatBultoWeight(peso)} lb</span>
+                        <button
+                          type="button"
+                          onClick={() => quitarBulto(originalIndex)}
+                          className="app-icon-button h-9 w-9 text-rose-500"
+                          aria-label={`Quitar bulto ${originalIndex + 1}`}
+                        >
+                          {Icons.trash}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={cerrarSumaBultos} className="app-button-ghost">
+                Cancelar
+              </button>
+              <button type="button" onClick={finalizarSumaBultos} className="app-button-primary">
+                Finalizar
+              </button>
+            </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {showNoteModal ? (
         <div
