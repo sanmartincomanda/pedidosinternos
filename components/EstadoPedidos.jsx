@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { ref, update, push, set } from "firebase/database";
 import { getBranchDisplayName, getCanonicalBranchId, isSameBranch } from "@/lib/branchUtils";
-import { formatOrderNumber, getLocalDateString, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
+import { formatOrderNumber, getLocalDateString, getPedidoItems, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 import { printTransferRequisition } from "@/lib/historialPdf";
 
 // Iconos SVG estilo delivery
@@ -307,7 +307,7 @@ export default function EstadoPedidos({
     setModalRecepcion(pedido);
     // Inicializar pesos editados con los valores actuales
     const pesosIniciales = {};
-    pedido.items.forEach((item, idx) => {
+    getPedidoItems(pedido).forEach((item, idx) => {
       pesosIniciales[idx] = item.pesoReal || item.cantidad;
     });
     setPesosEditados(pesosIniciales);
@@ -345,7 +345,7 @@ export default function EstadoPedidos({
 
     // Calcular diferencias
     const diferencias = [];
-    modalRecepcion.items.forEach((item, idx) => {
+    getPedidoItems(modalRecepcion).forEach((item, idx) => {
       const pesoOriginal = parseFloat(item.pesoReal) || 0;
       const pesoNuevo = parseFloat(pesosEditados[idx]) || 0;
       if (pesoOriginal !== pesoNuevo) {
@@ -359,7 +359,7 @@ export default function EstadoPedidos({
     });
 
     // Actualizar pedido con nuevos pesos
-    const itemsActualizados = modalRecepcion.items.map((item, idx) => ({
+    const itemsActualizados = getPedidoItems(modalRecepcion).map((item, idx) => ({
       ...item,
       pesoReal: pesosEditados[idx],
       pesoCorregido: true,
@@ -1480,7 +1480,7 @@ export default function EstadoPedidos({
                         <div>Detalle del pedido</div>
                         <div style={{ textAlign: 'center' }}>Solicitado</div>
                       </div>
-                      {pedido.items.map((item, idx) => (
+                      {getPedidoItems(pedido).map((item, idx) => (
                         <div
                           key={`${pedido.firebaseId}-solicitado-${idx}`}
                           className="status-table"
@@ -1662,7 +1662,7 @@ export default function EstadoPedidos({
                           <div style={{ textAlign: 'center' }}>Solicitado</div>
                           <div style={{ textAlign: 'center' }}>Real</div>
                         </div>
-                        {pedido.items.map((item, idx) => (
+                        {getPedidoItems(pedido).map((item, idx) => (
                           <div 
                             key={idx}
                             className="status-table"
@@ -1671,7 +1671,7 @@ export default function EstadoPedidos({
                               gridTemplateColumns: 'minmax(180px, 1fr) 90px 90px',
                               gap: '12px',
                               padding: '12px 16px',
-                              borderBottom: idx < pedido.items.length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
+                              borderBottom: idx < getPedidoItems(pedido).length - 1 ? '1px solid rgba(0,0,0,0.05)' : 'none',
                               alignItems: 'center',
                               background: item.pesoCorregido ? '#fffbeb' : 'transparent'
                             }}
