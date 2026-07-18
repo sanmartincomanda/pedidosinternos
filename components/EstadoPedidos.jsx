@@ -92,26 +92,26 @@ const isReceivingBranch = (pedido, user) => isSameBranch(getReceivingBranch(pedi
 
 const VIEW_THEMES = {
   enviar: {
-    title: 'Modo enviar',
-    helper: 'Veo lo que esta sucursal prepara y despacha.',
-    primary: '#2563eb',
-    secondary: '#60a5fa',
-    border: 'rgba(96, 165, 250, 0.28)',
-    background: 'linear-gradient(180deg, rgba(239,246,255,0.98) 0%, rgba(255,255,255,0.98) 42%, rgba(219,234,254,0.88) 100%)',
-    shadow: '0 28px 60px rgba(37, 99, 235, 0.12)',
-    emptyBorder: 'rgba(96, 165, 250, 0.24)',
-    emptyBackground: 'rgba(239, 246, 255, 0.72)',
+    title: 'Salida',
+    helper: 'Salida',
+    primary: '#9f111a',
+    secondary: '#e30613',
+    border: 'rgba(227, 6, 19, 0.22)',
+    background: 'linear-gradient(180deg, rgba(255,248,248,0.98) 0%, rgba(255,255,255,0.98) 42%, rgba(255,241,242,0.9) 100%)',
+    shadow: '0 28px 60px rgba(159, 17, 26, 0.12)',
+    emptyBorder: 'rgba(227, 6, 19, 0.18)',
+    emptyBackground: 'rgba(255, 241, 242, 0.72)',
   },
   recibir: {
-    title: 'Modo recibir',
-    helper: 'Veo lo que otras sucursales me deben enviar.',
-    primary: '#0891b2',
-    secondary: '#67e8f9',
-    border: 'rgba(34, 211, 238, 0.3)',
-    background: 'linear-gradient(180deg, rgba(236,254,255,0.98) 0%, rgba(255,255,255,0.98) 42%, rgba(207,250,254,0.9) 100%)',
-    shadow: '0 28px 60px rgba(8, 145, 178, 0.12)',
-    emptyBorder: 'rgba(34, 211, 238, 0.24)',
-    emptyBackground: 'rgba(236, 254, 255, 0.76)',
+    title: 'Entrada',
+    helper: 'Entrada',
+    primary: '#0f766e',
+    secondary: '#14b8a6',
+    border: 'rgba(20, 184, 166, 0.26)',
+    background: 'linear-gradient(180deg, rgba(240,253,250,0.98) 0%, rgba(255,255,255,0.98) 42%, rgba(204,251,241,0.9) 100%)',
+    shadow: '0 28px 60px rgba(15, 118, 110, 0.12)',
+    emptyBorder: 'rgba(20, 184, 166, 0.2)',
+    emptyBackground: 'rgba(240, 253, 250, 0.76)',
   }
 };
 
@@ -571,10 +571,10 @@ export default function EstadoPedidos({
           </div>
           <div>
             <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
-              Estado de Pedidos
+              Estados
             </h1>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
-              {userLabel} - {temaVista.helper}
+              {userLabel}
             </p>
           </div>
         </div>

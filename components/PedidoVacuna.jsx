@@ -706,12 +706,9 @@ export default function PedidoVacuna({
       <section className="app-panel p-4 sm:p-5">
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="app-chip border-emerald-200 bg-emerald-50 text-emerald-700">
+            <div className="app-chip border-amber-200 bg-amber-50 text-amber-700">
               {Icons.spark}
-              Envio directo
-            </div>
-            <div className="text-sm font-semibold text-slate-500">
-              Captura el producto y el peso real para enviarlo sin solicitud previa.
+              Directo
             </div>
           </div>
 
@@ -724,7 +721,7 @@ export default function PedidoVacuna({
             </div>
 
             <div>
-              <FieldLabel icon={Icons.send} label="Enviar vacuna a" />
+              <FieldLabel icon={Icons.send} label="Destino" />
               <select className="app-select" value={destino} onChange={(event) => setDestino(event.target.value)}>
                 {sucursales.filter((sucursal) => sucursal !== user).map((sucursal) => (
                   <option key={sucursal} value={sucursal} style={{ background: "#ffffff", color: "#12324e" }}>
@@ -735,7 +732,7 @@ export default function PedidoVacuna({
             </div>
 
             <div>
-              <FieldLabel icon={Icons.calendar} label="Fecha de envio" />
+              <FieldLabel icon={Icons.calendar} label="Fecha" />
               <div className="app-card-soft flex min-h-[54px] items-center px-4 text-base font-bold text-slate-700">
                 {hoy}
               </div>
@@ -746,7 +743,7 @@ export default function PedidoVacuna({
 
       <section className="app-panel p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="app-title text-2xl font-black text-slate-900">Captura de vacuna</h3>
+          <h3 className="app-title text-2xl font-black text-slate-900">Detalle</h3>
           <button
             type="button"
             onClick={() => agregarFila(true)}
@@ -766,9 +763,9 @@ export default function PedidoVacuna({
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <span className="app-chip border-slate-200 bg-slate-50 text-slate-700">
-                      Linea {String(idx + 1).padStart(2, "0")}
+                      #{String(idx + 1).padStart(2, "0")}
                     </span>
-                    <span className="app-chip border-emerald-200 bg-emerald-50 text-emerald-700">LB directo</span>
+                    <span className="app-chip border-amber-200 bg-amber-50 text-amber-700">LB</span>
                   </div>
 
                   <button type="button" onClick={() => eliminarFila(idx)} className="app-icon-button text-rose-500">
@@ -806,7 +803,7 @@ export default function PedidoVacuna({
                       <div className="app-scroll-y absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 rounded-[22px] border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)] backdrop-blur-xl">
                         {productosFiltrados.length === 0 ? (
                           <div className="rounded-[18px] px-4 py-5 text-center text-sm text-slate-400">
-                            Sin resultados
+                            Sin coincidencias
                           </div>
                         ) : (
                           productosFiltrados.map((producto) => (
@@ -854,10 +851,10 @@ export default function PedidoVacuna({
                   >
                     <span className="flex items-center gap-2">
                       {Icons.note}
-                      {item.nota ? "Editar nota especial" : "Nota especial"}
+                      Nota
                     </span>
                     <span className={item.nota ? "text-amber-500" : "text-slate-400"}>
-                      {item.nota ? "Guardada" : "Agregar"}
+                      {item.nota ? "Lista" : "Abrir"}
                     </span>
                   </button>
 
@@ -877,7 +874,7 @@ export default function PedidoVacuna({
         <div className="grid gap-3 sm:grid-cols-2">
           <button type="button" onClick={abrirNotaGeneral} className="app-button-secondary">
             {Icons.note}
-            Agregar nota
+            Nota
           </button>
 
           <button
@@ -899,7 +896,7 @@ export default function PedidoVacuna({
             {cargando ? (
               <>
                 {Icons.sync}
-                Enviando vacuna...
+                Enviando...
               </>
             ) : (
               <>

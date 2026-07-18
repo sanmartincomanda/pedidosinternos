@@ -249,8 +249,7 @@ export default function Cocina({ user, pedidos, personalCocina }) {
     if (pedidosEnProceso.length === 0) {
       return (
         <div className="app-empty px-4 py-14 text-center">
-          <div className="text-xl font-black text-slate-900">No hay pedidos pendientes en cocina.</div>
-          <p className="mt-2 text-sm text-slate-600">Los nuevos pedidos apareceran aqui automaticamente.</p>
+          <div className="text-xl font-black text-slate-900">Sin pedidos en cocina.</div>
         </div>
       );
     }
@@ -509,10 +508,10 @@ export default function Cocina({ user, pedidos, personalCocina }) {
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Activos" value={pedidosEnProceso.length} helper="Pedidos visibles" accent="#38bdf8" />
-          <StatCard label="Standby" value={standby} helper="Entrega programada" accent="#f59e0b" />
-          <StatCard label="Preparando" value={preparacion} helper="Con responsable asignado" accent="#fb923c" />
-          <StatCard label="Listos" value={listos} helper="Listos para despacho" accent="#22c55e" />
+          <StatCard label="Activos" value={pedidosEnProceso.length} helper="En cola" accent="#38bdf8" />
+          <StatCard label="Standby" value={standby} helper="Programados" accent="#f59e0b" />
+          <StatCard label="Preparando" value={preparacion} helper="Tomados" accent="#fb923c" />
+          <StatCard label="Listos" value={listos} helper="Por salir" accent="#22c55e" />
         </div>
       </section>
 

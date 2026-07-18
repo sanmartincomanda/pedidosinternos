@@ -1,19 +1,21 @@
-import { Manrope, Space_Grotesk } from "next/font/google";
+import { IBM_Plex_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const manrope = Manrope({
-  variable: "--font-manrope",
+const ibmPlexSans = IBM_Plex_Sans({
+  variable: "--font-ibm-plex-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+const jetBrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
+  weight: ["500", "600", "700"],
 });
 
 export const metadata = {
-  title: "Pedidos Internos Mobile",
-  description: "Gestion de pedidos internos entre sucursales",
+  title: "Pedidos Internos",
+  description: "Pedidos internos entre sucursales",
   applicationName: "Pedidos Internos",
 };
 
@@ -27,7 +29,7 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="es">
-      <body className={`${manrope.variable} ${spaceGrotesk.variable}`}>
+      <body className={`${ibmPlexSans.variable} ${jetBrainsMono.variable}`}>
         {children}
       </body>
     </html>

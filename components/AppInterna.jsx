@@ -19,34 +19,34 @@ import PedidoVacuna from "./PedidoVacuna";
 
 const Icons = {
   app: (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M12 2 3 6.5 12 11l9-4.5L12 2Z" />
       <path d="M3 12.5 12 17l9-4.5" />
       <path d="M3 18.5 12 23l9-4.5" />
     </svg>
   ),
-  chef: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M7 10h10v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V10Z" />
-      <path d="M6 10a4 4 0 1 1 2-7 4.6 4.6 0 0 1 8 2 3.5 3.5 0 1 1 1 6" />
-    </svg>
-  ),
   clipboard: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="5" y="4" width="14" height="17" rx="2" />
       <path d="M9 4.5h6v3H9z" />
       <path d="M9 11h6M9 15h6" />
     </svg>
   ),
   vaccine: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M9 3h6v4H9z" />
       <path d="M8 7h8v4a4 4 0 0 1-4 4 4 4 0 0 1-4-4V7Z" />
       <path d="M12 15v6M9 19h6" />
     </svg>
   ),
+  chef: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M7 10h10v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V10Z" />
+      <path d="M6 10a4 4 0 1 1 2-7 4.6 4.6 0 0 1 8 2 3.5 3.5 0 1 1 1 6" />
+    </svg>
+  ),
   truck: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M3 7h11v8H3z" />
       <path d="M14 10h4l3 3v2h-7z" />
       <circle cx="7.5" cy="18" r="2" />
@@ -54,16 +54,22 @@ const Icons = {
     </svg>
   ),
   history: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M3 12a9 9 0 1 0 3-6.7" />
       <path d="M3 4v5h5" />
       <path d="M12 7v5l3 2" />
     </svg>
   ),
   settings: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M12 3v2.2M12 18.8V21M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M3 12h2.2M18.8 12H21M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
       <circle cx="12" cy="12" r="4" />
+    </svg>
+  ),
+  user: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20 21a8 8 0 0 0-16 0" />
+      <circle cx="12" cy="8" r="4" />
     </svg>
   ),
   lock: (
@@ -72,10 +78,10 @@ const Icons = {
       <path d="M8 11V8a4 4 0 0 1 8 0v3" />
     </svg>
   ),
-  user: (
+  eye: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M20 21a8 8 0 0 0-16 0" />
-      <circle cx="12" cy="8" r="4" />
+      <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   ),
   logout: (
@@ -85,10 +91,10 @@ const Icons = {
       <path d="M21 12H9" />
     </svg>
   ),
-  eye: (
+  calendar: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
-      <circle cx="12" cy="12" r="3" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M8 2v4M16 2v4M3 10h18" />
     </svg>
   ),
   spark: (
@@ -99,54 +105,12 @@ const Icons = {
 };
 
 const NAV_ITEMS = [
-  {
-    key: "formulario",
-    label: "Nuevo",
-    title: "Nuevo pedido",
-    subtitle: "Carga productos y envia rapido.",
-    color: "#38bdf8",
-    icon: Icons.clipboard,
-  },
-  {
-    key: "vacuna",
-    label: "Vacuna",
-    title: "Pedido vacuna",
-    subtitle: "Envio directo con peso real, sin solicitud previa.",
-    color: "#0ea5a4",
-    icon: Icons.vaccine,
-  },
-  {
-    key: "cocina",
-    label: "Cocina",
-    title: "Preparacion",
-    subtitle: "Controla pesos y avance de cada orden.",
-    color: "#fb923c",
-    icon: Icons.chef,
-  },
-  {
-    key: "estados",
-    label: "Estados",
-    title: "Seguimiento",
-    subtitle: "Despacho, recepcion y diferencias.",
-    color: "#818cf8",
-    icon: Icons.truck,
-  },
-  {
-    key: "historial",
-    label: "Historial",
-    title: "Historial diario",
-    subtitle: "Consulta actividad y consolidados.",
-    color: "#a78bfa",
-    icon: Icons.history,
-  },
-  {
-    key: "configuracion",
-    label: "Ajustes",
-    title: "Configuracion",
-    subtitle: "Personal, catalogo y parametros.",
-    color: "#94a3b8",
-    icon: Icons.settings,
-  },
+  { key: "formulario", label: "Pedido", title: "Pedido", icon: Icons.clipboard, accent: "#e30613" },
+  { key: "vacuna", label: "Directo", title: "Envio directo", icon: Icons.vaccine, accent: "#d97706" },
+  { key: "cocina", label: "Cocina", title: "Cocina", icon: Icons.chef, accent: "#f97316" },
+  { key: "estados", label: "Estados", title: "Estados", icon: Icons.truck, accent: "#0f766e" },
+  { key: "historial", label: "Historial", title: "Historial", icon: Icons.history, accent: "#1d4ed8" },
+  { key: "configuracion", label: "Config", title: "Configuracion", icon: Icons.settings, accent: "#475569" },
 ];
 
 const INITIAL_CONFIG = {
@@ -159,19 +123,82 @@ const INITIAL_CONFIG = {
   },
 };
 
-function MetricCard({ label, value, accent, helper }) {
+function KpiCard({ label, value, tone = "default" }) {
+  const styles = {
+    default: {
+      borderColor: "rgba(148, 163, 184, 0.24)",
+      background: "rgba(255,255,255,0.92)",
+      color: "#111827",
+    },
+    red: {
+      borderColor: "rgba(227, 6, 19, 0.22)",
+      background: "rgba(227, 6, 19, 0.08)",
+      color: "#9f111a",
+    },
+    amber: {
+      borderColor: "rgba(245, 181, 27, 0.24)",
+      background: "rgba(245, 181, 27, 0.12)",
+      color: "#8a6208",
+    },
+    emerald: {
+      borderColor: "rgba(5, 150, 105, 0.24)",
+      background: "rgba(5, 150, 105, 0.1)",
+      color: "#0f766e",
+    },
+  };
+
+  const style = styles[tone] || styles.default;
+
   return (
     <div
-      className="app-card-soft p-4"
+      className="rounded-[1.1rem] border px-4 py-3"
       style={{
-        borderColor: `${accent}35`,
-        background: `linear-gradient(135deg, ${accent}14 0%, rgba(255,255,255,0.98) 100%)`,
+        borderColor: style.borderColor,
+        background: style.background,
       }}
     >
-      <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-slate-500">{label}</div>
-      <div className="mt-2 text-2xl font-black text-slate-900">{value}</div>
-      {helper ? <div className="mt-1 text-sm text-slate-600">{helper}</div> : null}
+      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{label}</div>
+      <div className="mt-1 text-xl font-black" style={{ color: style.color }}>
+        {value}
+      </div>
     </div>
+  );
+}
+
+function DesktopNavButton({ item, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-[1rem] border px-4 py-3 text-left transition-all"
+      style={{
+        borderColor: active ? `${item.accent}33` : "rgba(217, 225, 232, 0.9)",
+        background: active ? `${item.accent}12` : "rgba(255,255,255,0.92)",
+        color: active ? "#111827" : "#475569",
+        boxShadow: active ? `0 12px 24px -18px ${item.accent}55` : "none",
+      }}
+    >
+      <span style={{ color: item.accent }}>{item.icon}</span>
+      <span className="text-sm font-black">{item.label}</span>
+    </button>
+  );
+}
+
+function MobileNavButton({ item, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-[64px] flex-1 flex-col items-center justify-center gap-1 rounded-[18px] border px-2 text-[11px] font-black transition-all sm:text-xs"
+      style={{
+        borderColor: active ? `${item.accent}30` : "transparent",
+        background: active ? `${item.accent}12` : "transparent",
+        color: active ? "#111827" : "#64748b",
+      }}
+    >
+      <span style={{ color: item.accent }}>{item.icon}</span>
+      <span>{item.label}</span>
+    </button>
   );
 }
 
@@ -188,8 +215,8 @@ export default function AppInterna() {
 
     try {
       return JSON.parse(savedConfig);
-    } catch (parseError) {
-      console.error("No se pudo leer appConfig", parseError);
+    } catch (error) {
+      console.error("No se pudo leer appConfig", error);
       return INITIAL_CONFIG;
     }
   });
@@ -227,8 +254,8 @@ export default function AppInterna() {
           },
         });
       },
-      (error) => {
-        console.error("Error cargando configuracion global:", error);
+      (readError) => {
+        console.error("Error cargando configuracion global:", readError);
       },
     );
 
@@ -270,15 +297,22 @@ export default function AppInterna() {
   const handleLogin = (event) => {
     event.preventDefault();
 
-    const encontrado = authenticateBranch(username, password);
+    const found = authenticateBranch(username, password);
 
-    if (!encontrado) {
+    if (!found) {
       setError("Usuario o contrasena incorrectos.");
       return;
     }
 
-    setUser(encontrado.id);
+    setUser(found.id);
     setError("");
+    setPassword("");
+    setPedidoEditar(null);
+    setView("formulario");
+  };
+
+  const handleLogout = () => {
+    setUser(null);
     setPassword("");
     setPedidoEditar(null);
     setView("formulario");
@@ -291,89 +325,128 @@ export default function AppInterna() {
 
   const stats = useMemo(() => {
     const pedidosOperativos = pedidos.filter(isPedidoAfterOperativeReset);
-    const activos = pedidosOperativos.filter(
-      (pedido) => !["RECIBIDO_CONFORME", "ENTREGADO", "ANULADO"].includes(pedido.estado),
-    ).length;
-    const standby = pedidosOperativos.filter((pedido) => pedido.estado === "STANDBY_ENTREGA").length;
-    const listos = pedidosOperativos.filter((pedido) => pedido.estado === "LISTO").length;
-
     return {
-      activos,
-      standby,
-      listos,
       total: pedidosOperativos.length,
+      activos: pedidosOperativos.filter(
+        (pedido) => !["RECIBIDO_CONFORME", "ENTREGADO", "ANULADO"].includes(pedido.estado),
+      ).length,
+      standby: pedidosOperativos.filter((pedido) => pedido.estado === "STANDBY_ENTREGA").length,
+      listos: pedidosOperativos.filter((pedido) => pedido.estado === "LISTO").length,
     };
   }, [pedidos]);
 
   const fechaActual = new Intl.DateTimeFormat("es-NI", {
-    weekday: "long",
+    weekday: "short",
     day: "numeric",
-    month: "long",
+    month: "short",
   }).format(new Date());
 
-  const sharedProps = {
-    user,
-    pedidos,
-    config,
+  const renderCurrentView = () => {
+    const commonPrinterSettings = config.impresion || INITIAL_CONFIG.impresion;
+    const branchOptions = getSelectableBranches(user);
+
+    switch (view) {
+      case "formulario":
+        return (
+          <Formulario
+            user={user}
+            pedidos={pedidos}
+            printerSettings={commonPrinterSettings}
+            setView={setView}
+            pedidoEditar={pedidoEditar}
+            setPedidoEditar={setPedidoEditar}
+            sucursales={branchOptions}
+            productosCSV={config.productos || []}
+          />
+        );
+      case "vacuna":
+        return (
+          <PedidoVacuna
+            user={user}
+            pedidos={pedidos}
+            printerSettings={commonPrinterSettings}
+            setView={setView}
+            sucursales={branchOptions}
+            productosCSV={config.productos || []}
+          />
+        );
+      case "cocina":
+        return <Cocina user={user} pedidos={pedidos} personalCocina={config.personalCocina || []} />;
+      case "estados":
+        return (
+          <EstadoPedidos
+            user={user}
+            pedidos={pedidos}
+            personalTransporte={config.personalTransporte || []}
+            printerSettings={commonPrinterSettings}
+            setView={setView}
+            setPedidoEditar={setPedidoEditar}
+          />
+        );
+      case "historial":
+        return <Historial user={user} pedidos={pedidos} printerSettings={commonPrinterSettings} />;
+      case "configuracion":
+        return <Configuracion config={config} setConfig={setConfig} />;
+      default:
+        return null;
+    }
   };
-  const isFormularioView = view === "formulario";
 
   if (!user) {
     return (
-      <div className="app-shell flex min-h-screen items-center">
-        <div className="grid w-full gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-          <section
-            className="app-panel page-enter overflow-hidden p-6 sm:p-8 lg:p-10"
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(53,125,191,0.98) 0%, rgba(71,138,198,0.96) 52%, rgba(244,249,254,0.95) 100%)",
-            }}
-          >
-            <div className="app-chip mb-5 w-fit border-white/25 bg-white/14 text-white">
-              {Icons.spark}
-              Version interna
+      <div className="login-shell flex items-center px-4 py-6">
+        <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+          <section className="login-aside page-enter p-6 sm:p-8 lg:p-10">
+            <div className="text-[10px] font-black uppercase tracking-[0.38em] text-[#f5b51b]">
+              Carnes San Martin
             </div>
-            <div className="max-w-2xl">
-              <h1 className="app-title text-4xl font-black leading-tight text-white sm:text-5xl">
-                Pedidos internos con imagen mas limpia, blanca y lista para uso diario.
-              </h1>
-              <p className="mt-4 max-w-xl text-base leading-7 text-sky-50 sm:text-lg">
-                Mantuvimos toda la operacion y la llevamos a una presentacion mas clara, mas parecida a un sistema de escritorio moderno como SICAR.
-              </p>
+            <h1 className="app-title mt-3 text-4xl font-black text-white sm:text-5xl">
+              Pedidos Internos
+            </h1>
+            <div className="mt-3 text-sm font-semibold text-slate-300 sm:text-base">
+              Granada y Nindiri
             </div>
 
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              <MetricCard label="Tema" value="Claro" accent="#dceeff" helper="Mas descanso visual" />
-              <MetricCard label="Navegacion" value="Ordenada" accent="#d7ecfb" helper="Mas intuitiva en telefono" />
-              <MetricCard label="Estilo" value="SICAR" accent="#dbe8ff" helper="Azul, blanco y limpio" />
+            <div className="mt-7 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[1.25rem] border border-white/12 bg-white/8 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">Pedido</div>
+                <div className="mt-2 text-lg font-black text-white">Captura rapida</div>
+              </div>
+              <div className="rounded-[1.25rem] border border-white/12 bg-white/8 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">Costo</div>
+                <div className="mt-2 text-lg font-black text-white">Contabilidad</div>
+              </div>
+              <div className="rounded-[1.25rem] border border-white/12 bg-white/8 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">PDF</div>
+                <div className="mt-2 text-lg font-black text-white">Soporte</div>
+              </div>
             </div>
 
-            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="mt-7 grid gap-3">
               {[
-                "Acciones principales visibles y faciles de tocar.",
-                "Tarjetas compactas en vez de bloques pesados y oscuros.",
-                "Jerarquia visual inspirada en SICAR: barra azul y zona de trabajo clara.",
-                "Base lista para seguir refinando y pasar luego a Android.",
+                "Serie A · Granada",
+                "Serie B · Nindiri",
+                "Costo total reflejado en historial y requisa",
               ].map((item) => (
-                <div key={item} className="rounded-[24px] border border-white/18 bg-white/12 p-4 text-sm text-white shadow-[0_12px_28px_rgba(17,57,96,0.14)] backdrop-blur-sm">
-                  <span className="mr-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/18 text-white">
-                    {Icons.spark}
-                  </span>
-                  <span>{item}</span>
+                <div
+                  key={item}
+                  className="rounded-[1.15rem] border border-white/10 bg-white/7 px-4 py-3 text-sm font-semibold text-slate-100"
+                >
+                  {item}
                 </div>
               ))}
             </div>
           </section>
 
-          <section className="app-panel page-enter p-6 sm:p-8">
+          <section className="login-panel page-enter p-6 sm:p-8">
             <div className="mx-auto max-w-md">
               <div className="mb-6 flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-[linear-gradient(135deg,#3f83c0_0%,#2373b9_100%)] text-white shadow-[0_16px_34px_rgba(35,115,185,0.24)]">
+                <div className="flex h-15 w-15 items-center justify-center rounded-[1.35rem] bg-[linear-gradient(135deg,#e30613_0%,#9f111a_100%)] text-white shadow-[0_18px_38px_-22px_rgba(159,17,26,0.55)]">
                   {Icons.app}
                 </div>
                 <div>
-                  <div className="app-title text-3xl font-black text-slate-900">Sistema Interno</div>
-                  <div className="mt-1 text-sm text-slate-600">Ingreso de sucursales y seguimiento operativo.</div>
+                  <div className="app-title text-3xl font-black text-slate-950">Acceso</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-500">Sucursal</div>
                 </div>
               </div>
 
@@ -388,7 +461,7 @@ export default function AppInterna() {
                       type="text"
                       value={username}
                       onChange={(event) => setUsername(event.target.value)}
-                      placeholder="Ej. Granada o Nindiri"
+                      placeholder="Granada o Nindiri"
                       className="app-input pl-12"
                     />
                   </div>
@@ -404,7 +477,7 @@ export default function AppInterna() {
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Ingresa tu clave"
+                      placeholder="Clave"
                       className="app-input pl-12 pr-14"
                     />
                     <button
@@ -418,19 +491,24 @@ export default function AppInterna() {
                 </div>
 
                 {error ? (
-                  <div className="rounded-2xl border border-rose-400/35 bg-rose-500/12 px-4 py-3 text-sm font-semibold text-rose-200">
+                  <div className="rounded-[1rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
                     {error}
                   </div>
                 ) : null}
 
                 <button type="submit" className="app-button-primary w-full text-base">
-                  Entrar al sistema
+                  Entrar
                 </button>
               </form>
 
-                <div className="mt-6 rounded-[24px] border border-sky-100 bg-sky-50 p-4 text-sm text-slate-600">
-                  Accesos activos: Carnes San Martin Granada y Carnes San Martin Nindiri. Tambien acepta Serie A y Serie B como alias de ingreso.
+              <div className="mt-6 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                  Granada / Serie A
                 </div>
+                <div className="rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                  Nindiri / Serie B
+                </div>
+              </div>
             </div>
           </section>
         </div>
@@ -439,176 +517,123 @@ export default function AppInterna() {
   }
 
   return (
-    <div className="app-shell page-enter">
-      <header
-        className="app-panel overflow-hidden px-4 py-4 sm:px-6"
-        style={{
-          background:
-            "linear-gradient(135deg, rgba(54,124,189,0.98) 0%, rgba(73,138,197,0.96) 42%, rgba(232,241,249,0.96) 100%)",
-        }}
-      >
-        <div
-          className="absolute inset-0 opacity-40"
-          style={{
-            background: `radial-gradient(circle at top right, rgba(255,255,255,0.22), transparent 28%), linear-gradient(135deg, ${navMeta.color}20, transparent 54%)`,
-          }}
-        />
-
-        <div className="relative flex flex-col gap-4">
-          {isFormularioView ? (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="app-chip w-fit border-white/25 bg-white/14 text-white">{fechaActual}</div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="rounded-[22px] border border-white/24 bg-white/14 px-4 py-3 text-white">
-                  <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-sky-50/80">Sesion</div>
-                  <div className="mt-1 text-lg font-black text-white">{getBranchDisplayName(user)}</div>
-                </div>
-                <button
-                  onClick={() => {
-                    setUser(null);
-                    setPassword("");
-                    setPedidoEditar(null);
-                    setView("formulario");
-                  }}
-                  className="app-button-ghost whitespace-nowrap border-white/24 bg-white/14 text-sm text-white"
-                >
-                  {Icons.logout}
-                  Salir
-                </button>
-              </div>
+    <div className="min-h-screen">
+      <header className="command-header">
+        <div className="mx-auto flex max-w-[1460px] flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div className="flex items-center gap-4">
+            <div className="flex h-13 w-13 items-center justify-center rounded-[1.1rem] bg-white/10 text-white shadow-[0_14px_26px_-18px_rgba(15,23,42,0.6)]">
+              {navMeta.icon}
             </div>
-          ) : (
-            <>
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex items-start gap-4">
-                  <div
-                    className="flex h-14 w-14 items-center justify-center rounded-[20px] text-white shadow-[0_18px_40px_rgba(15,23,42,0.28)]"
-                    style={{ background: `linear-gradient(135deg, ${navMeta.color} 0%, #1d4ed8 100%)` }}
-                  >
-                    {navMeta.icon}
-                  </div>
-                  <div>
-                    <div className="app-chip mb-2 border-white/24 bg-white/14 text-white">{fechaActual}</div>
-                    <h1 className="app-title text-3xl font-black text-white">{navMeta.title}</h1>
-                    <p className="mt-1 max-w-2xl text-sm text-sky-50 sm:text-base">{navMeta.subtitle}</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="rounded-[22px] border border-white/24 bg-white/14 px-4 py-3 text-white">
-                    <div className="text-xs font-extrabold uppercase tracking-[0.18em] text-sky-50/80">Sesion</div>
-                    <div className="mt-1 text-lg font-black text-white">{getBranchDisplayName(user)}</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setUser(null);
-                      setPassword("");
-                      setPedidoEditar(null);
-                      setView("formulario");
-                    }}
-                    className="app-button-ghost whitespace-nowrap border-white/24 bg-white/14 text-sm text-white"
-                  >
-                    {Icons.logout}
-                    Salir
-                  </button>
-                </div>
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.32em] text-[#f5b51b]">
+                Carnes San Martin
               </div>
+              <div className="mt-1 app-title text-3xl font-black text-white">{navMeta.title}</div>
+            </div>
+          </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Pedidos visibles" value={stats.total} accent="#38bdf8" helper="Todo lo relacionado contigo" />
-                <MetricCard label="Activos" value={stats.activos} accent="#818cf8" helper="Pendientes de cerrar" />
-                <MetricCard label="Standby" value={stats.standby} accent="#f59e0b" helper="Entrega programada" />
-                <MetricCard label="Listos" value={stats.listos} accent="#22c55e" helper="Esperando despacho" />
-              </div>
-            </>
-          )}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="app-chip border-white/12 bg-white/10 text-white">
+              {Icons.calendar}
+              {fechaActual}
+            </div>
+            <div className="app-chip border-white/12 bg-white/10 text-white">
+              {Icons.user}
+              {getBranchDisplayName(user)}
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="app-button-ghost border-white/12 bg-white/10 text-white shadow-none sm:w-auto"
+            >
+              {Icons.logout}
+              Salir
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="mt-5 space-y-5">
-        <section className="app-panel px-4 py-4 sm:px-6">
-          <div className="flex flex-wrap items-center gap-3">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setView(item.key)}
-                className="app-chip transition-all"
-                style={{
-                  borderColor: view === item.key ? `${item.color}40` : "rgba(148,163,184,0.2)",
-                  background: view === item.key ? `${item.color}14` : "rgba(247,251,255,0.98)",
-                  color: view === item.key ? "#12324e" : "#55718d",
-                }}
-              >
-                <span style={{ color: item.color }}>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+      <div className="app-shell">
+        <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
+          <aside className="hidden lg:flex lg:flex-col lg:gap-4">
+            <section className="app-panel p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Sucursal</div>
+              <div className="mt-1 text-xl font-black text-slate-950">{getBranchDisplayName(user)}</div>
+              <div className="mt-4 grid gap-3">
+                <KpiCard label="Pedidos" value={stats.total} />
+                <KpiCard label="Activos" value={stats.activos} tone="red" />
+                <KpiCard label="Standby" value={stats.standby} tone="amber" />
+                <KpiCard label="Listos" value={stats.listos} tone="emerald" />
+              </div>
+            </section>
 
-        <section className="app-section p-4 sm:p-6">
-          {view === "formulario" ? (
-            <Formulario
-              user={sharedProps.user}
-              pedidos={sharedProps.pedidos}
-              printerSettings={config.impresion || INITIAL_CONFIG.impresion}
-              setView={setView}
-              pedidoEditar={pedidoEditar}
-              setPedidoEditar={setPedidoEditar}
-              sucursales={getSelectableBranches(user)}
-              productosCSV={config.productos || []}
-            />
-          ) : null}
+            <section className="app-panel p-3">
+              <div className="mb-3 px-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                Modulos
+              </div>
+              <div className="grid gap-2">
+                {NAV_ITEMS.map((item) => (
+                  <DesktopNavButton
+                    key={item.key}
+                    item={item}
+                    active={view === item.key}
+                    onClick={() => setView(item.key)}
+                  />
+                ))}
+              </div>
+            </section>
+          </aside>
 
-          {view === "vacuna" ? (
-            <PedidoVacuna
-              user={sharedProps.user}
-              pedidos={sharedProps.pedidos}
-              printerSettings={config.impresion || INITIAL_CONFIG.impresion}
-              setView={setView}
-              sucursales={getSelectableBranches(user)}
-              productosCSV={config.productos || []}
-            />
-          ) : null}
+          <main className="app-route-shell page-enter">
+            <section className="app-panel mb-5 p-3 lg:hidden">
+              <div className="app-tab-row">
+                {NAV_ITEMS.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setView(item.key)}
+                    className="app-chip whitespace-nowrap"
+                    style={{
+                      borderColor: view === item.key ? `${item.accent}30` : "rgba(148,163,184,0.18)",
+                      background: view === item.key ? `${item.accent}12` : "rgba(255,255,255,0.98)",
+                    }}
+                  >
+                    <span style={{ color: item.accent }}>{item.icon}</span>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </section>
 
-          {view === "cocina" ? (
-            <Cocina user={sharedProps.user} pedidos={sharedProps.pedidos} personalCocina={config.personalCocina || []} />
-          ) : null}
+            <section className="app-panel mb-5 p-4 sm:p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                    Modulo activo
+                  </div>
+                  <div className="mt-1 text-2xl font-black text-slate-950">{navMeta.title}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+                  <KpiCard label="Activos" value={stats.activos} tone="red" />
+                  <KpiCard label="Listos" value={stats.listos} tone="emerald" />
+                </div>
+              </div>
+            </section>
 
-          {view === "estados" ? (
-            <EstadoPedidos
-              user={sharedProps.user}
-              pedidos={sharedProps.pedidos}
-              personalTransporte={config.personalTransporte || []}
-              printerSettings={config.impresion || INITIAL_CONFIG.impresion}
-              setView={setView}
-              setPedidoEditar={setPedidoEditar}
-            />
-          ) : null}
+            {renderCurrentView()}
+          </main>
+        </div>
+      </div>
 
-          {view === "historial" ? <Historial user={sharedProps.user} pedidos={sharedProps.pedidos} printerSettings={config.impresion || INITIAL_CONFIG.impresion} /> : null}
-
-          {view === "configuracion" ? <Configuracion config={config} setConfig={setConfig} /> : null}
-        </section>
-      </main>
-
-      <nav className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-4">
-        <div className="mx-auto flex max-w-4xl gap-2 rounded-[28px] border border-slate-200 bg-white/94 p-2 shadow-[0_16px_42px_rgba(60,90,122,0.16)] backdrop-blur-2xl">
+      <nav className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-4 lg:hidden">
+        <div className="mx-auto flex max-w-4xl gap-2 rounded-[24px] border border-slate-200 bg-white/94 p-2 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">
           {NAV_ITEMS.map((item) => (
-            <button
+            <MobileNavButton
               key={item.key}
+              item={item}
+              active={view === item.key}
               onClick={() => setView(item.key)}
-              className="flex min-h-[68px] flex-1 flex-col items-center justify-center rounded-[22px] px-2 text-xs font-bold transition-all sm:flex-row sm:gap-2 sm:text-sm"
-              style={{
-                background: view === item.key ? `${item.color}14` : "transparent",
-                border: `1px solid ${view === item.key ? `${item.color}36` : "transparent"}`,
-                color: view === item.key ? "#12324e" : "#6b7f92",
-              }}
-            >
-              <span style={{ color: item.color }}>{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
+            />
           ))}
         </div>
       </nav>

@@ -405,19 +405,16 @@ export default function Configuracion({ setConfig }) {
       <section className="app-panel p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="app-chip mb-3 border-sky-200 bg-sky-50 text-sky-800">
+            <div className="app-chip mb-3 border-amber-200 bg-amber-50 text-amber-800">
               {Icons.settings}
-              Panel administrativo
+              Ajustes
             </div>
-            <h2 className="app-title text-3xl font-black text-slate-900">Configuracion lista para usar en movil</h2>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">
-              Administra personal y catalogo con bloques mas comodos, manteniendo sincronizacion en tiempo real con Firebase.
-            </p>
+            <h2 className="app-title text-3xl font-black text-slate-900">Configuracion</h2>
           </div>
 
           <button type="button" onClick={guardarConfiguracion} disabled={guardando} className="app-button-primary whitespace-nowrap sm:w-auto">
             {guardando ? Icons.sync : Icons.cloud}
-            {guardando ? "Guardando..." : "Guardar en Firebase"}
+            {guardando ? "Guardando..." : "Guardar"}
           </button>
         </div>
 
@@ -467,8 +464,7 @@ export default function Configuracion({ setConfig }) {
       {activeTab === "cocina" ? (
         <section className="app-panel space-y-5 p-5 sm:p-6">
           <div>
-            <h3 className="app-title text-2xl font-black text-slate-900">Personal de cocina</h3>
-            <p className="mt-1 text-sm text-slate-600">Quienes pueden tomar un pedido y pasarlo a preparacion.</p>
+            <h3 className="app-title text-2xl font-black text-slate-900">Cocina</h3>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -513,8 +509,7 @@ export default function Configuracion({ setConfig }) {
       {activeTab === "transporte" ? (
         <section className="app-panel space-y-5 p-5 sm:p-6">
           <div>
-            <h3 className="app-title text-2xl font-black text-slate-900">Personal de transporte</h3>
-            <p className="mt-1 text-sm text-slate-600">Quienes pueden despachar y mover pedidos entre sucursales.</p>
+            <h3 className="app-title text-2xl font-black text-slate-900">Transporte</h3>
           </div>
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -559,8 +554,7 @@ export default function Configuracion({ setConfig }) {
       {activeTab === "productos" ? (
         <section className="app-panel space-y-5 p-5 sm:p-6">
           <div>
-            <h3 className="app-title text-2xl font-black text-slate-900">Catalogo de productos</h3>
-            <p className="mt-1 text-sm text-slate-600">Importa claves y nombres desde CSV o administra el listado actual desde el telefono.</p>
+            <h3 className="app-title text-2xl font-black text-slate-900">Catalogo</h3>
           </div>
 
           {!mostrarPreview ? (
@@ -652,10 +646,7 @@ export default function Configuracion({ setConfig }) {
       {activeTab === "impresion" ? (
         <section className="app-panel space-y-5 p-5 sm:p-6">
           <div>
-            <h3 className="app-title text-2xl font-black text-slate-900">Impresion de requisas</h3>
-            <p className="mt-1 text-sm text-slate-600">
-              Configura la impresora termica sugerida y activa la impresion automatica cuando un pedido se marque como enviado.
-            </p>
+            <h3 className="app-title text-2xl font-black text-slate-900">Impresion</h3>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
@@ -731,11 +722,10 @@ export default function Configuracion({ setConfig }) {
         </section>
       ) : null}
 
-      <section className="rounded-[26px] border border-sky-400/24 bg-sky-400/10 p-5 text-sm text-sky-100">
-        <div className="mb-2 font-black uppercase tracking-[0.16em] text-sky-200">Notas operativas</div>
+      <section className="rounded-[26px] border border-amber-300/35 bg-amber-50 p-5 text-sm text-amber-900">
+        <div className="mb-2 font-black uppercase tracking-[0.16em] text-amber-700">CSV</div>
         <p className="leading-6">
-          Los cambios se reflejan en Firebase para todos los usuarios. El archivo CSV debe venir como CLAVE,PRODUCTO;
-          por ejemplo: <span className="font-black">BIS-001,BISTEC DE RES</span>.
+          Formato: <span className="font-black">CLAVE,PRODUCTO</span>
         </p>
       </section>
     </div>

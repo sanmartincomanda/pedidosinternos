@@ -230,7 +230,7 @@ function FieldLabel({ icon, label, badge }) {
       <span className="text-slate-400">{icon}</span>
       <span>{label}</span>
       {badge ? (
-        <span className="rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-black tracking-[0.14em] text-amber-200">
+        <span className="rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-black tracking-[0.14em] text-amber-700">
           {badge}
         </span>
       ) : null}
@@ -912,7 +912,7 @@ export default function Formulario({
           </div>
 
           <div>
-            <FieldLabel icon={Icons.send} label="Enviar pedido a" />
+                    <FieldLabel icon={Icons.send} label="Destino" />
             <select className="app-select" value={destino} onChange={(event) => setDestino(event.target.value)}>
               {sucursales.filter((sucursal) => sucursal !== user).map((sucursal) => (
                 <option key={sucursal} value={sucursal} style={{ background: "#ffffff", color: "#12324e" }}>
@@ -923,7 +923,7 @@ export default function Formulario({
           </div>
 
           <div>
-            <FieldLabel icon={Icons.calendar} label="Fecha de entrega" />
+                    <FieldLabel icon={Icons.calendar} label="Entrega" />
             <input
               type="date"
               value={fechaEntrega}
@@ -941,7 +941,7 @@ export default function Formulario({
 
       <section className="app-panel p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="app-title text-2xl font-black text-slate-900">Captura de pedido</h3>
+          <h3 className="app-title text-2xl font-black text-slate-900">Detalle</h3>
           <button
             type="button"
             onClick={() => agregarFila(true)}
@@ -960,7 +960,7 @@ export default function Formulario({
               <article key={idx} className="app-card p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <span className="app-chip border-slate-200 bg-slate-50 text-slate-700">
-                    Linea {String(idx + 1).padStart(2, "0")}
+                    #{String(idx + 1).padStart(2, "0")}
                   </span>
 
                   <button type="button" onClick={() => eliminarFila(idx)} className="app-icon-button text-rose-200">
@@ -998,7 +998,7 @@ export default function Formulario({
                       <div className="app-scroll-y absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 rounded-[22px] border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)] backdrop-blur-xl">
                         {productosFiltrados.length === 0 ? (
                           <div className="rounded-[18px] px-4 py-5 text-center text-sm text-slate-400">
-                            Sin resultados
+                            Sin coincidencias
                           </div>
                         ) : (
                           productosFiltrados.map((producto) => (
@@ -1058,10 +1058,10 @@ export default function Formulario({
                   >
                     <span className="flex items-center gap-2">
                       {Icons.note}
-                      {item.nota ? "Editar nota especial" : "Nota especial"}
+                      Nota
                     </span>
                     <span className={item.nota ? "text-amber-300" : "text-slate-400"}>
-                      {item.nota ? "Guardada" : "Agregar"}
+                      {item.nota ? "Lista" : "Abrir"}
                     </span>
                   </button>
 
@@ -1081,7 +1081,7 @@ export default function Formulario({
         <div className="grid gap-3 sm:grid-cols-2">
           <button type="button" onClick={abrirNotaGeneral} className="app-button-secondary">
             {Icons.note}
-            {notaGeneral ? "Editar nota" : "Agregar nota"}
+            Nota
           </button>
 
           <button
@@ -1107,12 +1107,12 @@ export default function Formulario({
             {cargando ? (
               <>
                 {Icons.sync}
-                {isEditing ? "Guardando cambios..." : "Enviando pedido..."}
+                {isEditing ? "Guardando..." : "Enviando..."}
               </>
             ) : (
               <>
                 {isEditing ? Icons.key : Icons.send}
-                {isEditing ? "Guardar cambios" : "Enviar pedido"}
+                {isEditing ? "Guardar" : "Enviar"}
               </>
             )}
           </button>
