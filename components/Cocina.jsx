@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { ref, update } from "firebase/database";
 import { getBranchDisplayName, isSameBranch } from "@/lib/branchUtils";
+import { printTransferRequisition } from "@/lib/historialPdf";
 import { formatOrderNumber, getPedidoItems, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 
 const Icons = {
@@ -68,6 +69,13 @@ const Icons = {
       <path d="m3 9 6-6M15 3l6 6M21 15l-6 6M9 21l-6-6" />
     </svg>
   ),
+  truck: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z" />
+      <circle cx="7.5" cy="18" r="2" />
+      <circle cx="17.5" cy="18" r="2" />
+    </svg>
+  ),
 };
 
 const STATUS_CONFIG = {
@@ -117,13 +125,21 @@ function StatCard({ label, value, helper, accent }) {
   );
 }
 
-export default function Cocina({ user, pedidos, personalCocina }) {
+export default function Cocina({
+  user,
+  pedidos,
+  personalCocina,
+  personalTransporte = [],
+  printerSettings = {},
+}) {
   const [modalPreparador, setModalPreparador] = useState(null);
   const [preparadorSeleccionado, setPreparadorSeleccionado] = useState(null);
   const [animatingCards, setAnimatingCards] = useState(new Set());
   const [pesosEditando, setPesosEditando] = useState({});
   const [now, setNow] = useState(() => new Date().getTime());
   const [isExpanded, setIsExpanded] = useState(false);
+  const [modalRepartidor, setModalRepartidor] = useState(null);
+  const [repartidorSeleccionado, setRepartidorSeleccionado] = useState("");
 
   const pedidosEnProceso = pedidos.filter(
     (pedido) =>
@@ -164,11 +180,8 @@ export default function Cocina({ user, pedidos, personalCocina }) {
     const pedido = pedidos.find((item) => item.firebaseId === firebaseId);
     if (!pedido) return;
 
-    const nuevosItems = [...getPedidoItems(pedido)];
-    nuevosItems[itemIdx] = { ...nuevosItems[itemIdx], pesoReal: valor };
-
-    update(ref(db, `pedidos_internos/${firebaseId}`), {
-      items: nuevosItems,
+    update(ref(db, `pedidos_internos/${firebaseId}/items/${itemIdx}`), {
+      pesoReal: valor,
     });
 
     setPesosEditando((prev) => {
@@ -231,6 +244,51 @@ export default function Cocina({ user, pedidos, personalCocina }) {
         return next;
       });
     }, 300);
+  };
+
+  const despacharPedido = async (firebaseId, repartidor) => {
+    const pedido = pedidos.find((item) => item.firebaseId === firebaseId);
+    if (!pedido || !repartidor) return;
+
+    const marcaEnvio = {
+      estado: "ENVIADO",
+      enviadoCon: repartidor,
+      timestampEnviado: new Date().toLocaleTimeString("es-ES", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      timestamp: Date.now(),
+    };
+
+    setAnimatingCards((prev) => new Set([...prev, firebaseId]));
+
+    try {
+      await update(ref(db, `pedidos_internos/${firebaseId}`), marcaEnvio);
+
+      if (printerSettings?.impresionAutomaticaEnvio !== false) {
+        printTransferRequisition(
+          {
+            ...pedido,
+            ...marcaEnvio,
+            historyDate: pedido.fechaEntrega || pedido.fechaPedido,
+            statusMeta: { label: "Enviado" },
+          },
+          printerSettings,
+        );
+      }
+
+      setModalRepartidor(null);
+      setRepartidorSeleccionado("");
+    } catch (error) {
+      console.error("No se pudo enviar el pedido:", error);
+      alert(`No se pudo enviar el pedido: ${error.message}`);
+    } finally {
+      setAnimatingCards((prev) => {
+        const next = new Set(prev);
+        next.delete(firebaseId);
+        return next;
+      });
+    }
   };
 
   const getTimeElapsed = (timestamp) => {
@@ -447,9 +505,17 @@ export default function Cocina({ user, pedidos, personalCocina }) {
                     ) : null}
 
                     {status === "LISTO" ? (
-                      <div className="rounded-[20px] border border-emerald-300 bg-emerald-50 px-4 py-4 text-center text-base font-black text-emerald-800">
-                        Pedido listo para enviar.
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalRepartidor(pedido.firebaseId);
+                          setRepartidorSeleccionado("");
+                        }}
+                        className="flex w-full items-center justify-center gap-2 rounded-[18px] border-none bg-[linear-gradient(135deg,#0f766e_0%,#115e59_100%)] px-4 py-4 text-base font-black text-white shadow-[0_16px_30px_rgba(15,118,110,0.24)]"
+                      >
+                        {Icons.truck}
+                        Enviar pedido
+                      </button>
                     ) : null}
 
                     {pedido.timestampPreparacion ? (
@@ -481,14 +547,8 @@ export default function Cocina({ user, pedidos, personalCocina }) {
       <section className="app-panel p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="app-chip mb-3 border-orange-200 bg-orange-50 text-orange-800">
-              {Icons.chef}
-              Cocina movil
-            </div>
-            <h2 className="app-title text-3xl font-black text-slate-900">Preparacion pensada para pantalla pequena</h2>
-            <p className="mt-2 max-w-2xl text-sm text-slate-600 sm:text-base">
-              Cada pedido baja a una sola columna y cada producto se maneja como tarjeta para pesar y avanzar rapido.
-            </p>
+            <h2 className="app-title text-3xl font-black text-slate-900">Cocina - Preparacion</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-500">Preparar, pesar y enviar pedidos.</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -582,6 +642,67 @@ export default function Cocina({ user, pedidos, personalCocina }) {
             >
               {Icons.chef}
               {preparadorSeleccionado ? `Asignar a ${preparadorSeleccionado}` : "Selecciona un preparador"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {modalRepartidor ? (
+        <div
+          className="app-modal"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setModalRepartidor(null);
+              setRepartidorSeleccionado("");
+            }
+          }}
+        >
+          <div className="app-modal-panel w-full max-w-[640px]">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="app-title text-2xl font-black text-slate-900">Enviar pedido</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Pedido {formatOrderNumber(pedidos.find((item) => item.firebaseId === modalRepartidor))}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalRepartidor(null);
+                  setRepartidorSeleccionado("");
+                }}
+                className="app-icon-button text-slate-700"
+              >
+                {Icons.close}
+              </button>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(personalTransporte.length > 0 ? personalTransporte : ["Entrega directa"]).map((nombre) => (
+                <button
+                  type="button"
+                  key={nombre}
+                  onClick={() => setRepartidorSeleccionado(nombre)}
+                  className="rounded-[18px] border px-4 py-3 text-left text-base font-black transition"
+                  style={{
+                    borderColor: repartidorSeleccionado === nombre ? "#0f766e" : "#cbd5e1",
+                    background: repartidorSeleccionado === nombre ? "#0f766e" : "#f8fafc",
+                    color: repartidorSeleccionado === nombre ? "#ffffff" : "#0f172a",
+                  }}
+                >
+                  {nombre}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => despacharPedido(modalRepartidor, repartidorSeleccionado)}
+              disabled={!repartidorSeleccionado}
+              className="app-button-primary mt-5 w-full bg-[linear-gradient(135deg,#0f766e_0%,#115e59_100%)]"
+            >
+              {Icons.truck}
+              {repartidorSeleccionado ? `Enviar con ${repartidorSeleccionado}` : "Selecciona quien entrega"}
             </button>
           </div>
         </div>
