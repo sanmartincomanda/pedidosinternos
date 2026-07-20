@@ -242,7 +242,7 @@ export default function PedidoVacuna({
   pedidos = [],
   printerSettings = {},
 }) {
-  const MAX_LINEAS = 25;
+  const MAX_LINEAS = 100;
   const catalogoProductos = productosCSV.length > 0 ? productosCSV : PRODUCTOS_EJEMPLO;
   const catalogoBusqueda = useMemo(
     () =>
@@ -811,14 +811,14 @@ export default function PedidoVacuna({
       }
 
       setCounterValue(nuevoId);
-      alert(`Pedido vacuna ${numeroOrden} enviado con exito.`);
+      alert(`Traspaso ${numeroOrden} enviado con exito.`);
 
       setItems([createEmptyItem()]);
       setNotaGeneral("");
       setNotaTemporal("");
       setShowNoteModal(false);
       cerrarNotaArticulo();
-      setView("estados");
+      setView("historial");
     } catch (error) {
       console.error("Fallo el envio de vacuna:", error);
       alert(`Error: ${error.message}`);
@@ -829,15 +829,13 @@ export default function PedidoVacuna({
 
   return (
     <div className="page-enter space-y-4">
+      <section className="module-heading module-heading-traspaso">
+        <div className="text-[11px] font-black uppercase tracking-[0.24em] text-emerald-700">Envio directo</div>
+        <h1 className="app-title mt-1 text-3xl font-black text-slate-950 sm:text-4xl">MODULO TRASPASO</h1>
+      </section>
+
       <section className="app-panel p-4 sm:p-5">
         <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="app-chip border-amber-200 bg-amber-50 text-amber-700">
-              {Icons.spark}
-              Directo
-            </div>
-          </div>
-
           <div className="grid gap-3 md:grid-cols-3">
             <div>
               <FieldLabel icon={Icons.package} label="N. Pedido" />
@@ -869,7 +867,10 @@ export default function PedidoVacuna({
 
       <section className="app-panel p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="app-title text-2xl font-black text-slate-900">Detalle</h3>
+          <div>
+            <h3 className="app-title text-xl font-black text-slate-900">Productos</h3>
+            <div className="text-xs font-bold text-slate-500">{items.length} de {MAX_LINEAS}</div>
+          </div>
           <button
             type="button"
             onClick={() => agregarFila(true)}
@@ -880,30 +881,28 @@ export default function PedidoVacuna({
           </button>
         </div>
 
-        <div className="space-y-3">
+        <div className="mb-2 hidden grid-cols-[42px_minmax(280px,1fr)_120px_150px_44px_44px] gap-2 px-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 lg:grid">
+          <span>#</span>
+          <span>Elegir producto</span>
+          <span>Peso</span>
+          <span>Suma de bultos</span>
+          <span>Nota</span>
+          <span />
+        </div>
+
+        <div className="space-y-2">
           {items.map((item, idx) => {
             const productosFiltrados = filtrarProductos(item.producto);
 
             return (
-              <article key={idx} className="app-card p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="app-chip border-slate-200 bg-slate-50 text-slate-700">
-                      #{String(idx + 1).padStart(2, "0")}
-                    </span>
-                    <span className="app-chip border-amber-200 bg-amber-50 text-amber-700">LB</span>
-                  </div>
+              <article key={idx} className="compact-order-line app-card grid grid-cols-[36px_minmax(0,1fr)_44px] items-start gap-2 p-2 lg:grid-cols-[42px_minmax(280px,1fr)_120px_150px_44px_44px] lg:items-center">
+                <span className="flex h-11 items-center justify-center rounded-xl bg-slate-100 text-xs font-black text-slate-600">
+                  {String(idx + 1).padStart(2, "0")}
+                </span>
 
-                  <button type="button" onClick={() => eliminarFila(idx)} className="app-icon-button text-rose-500">
-                    {Icons.trash}
-                  </button>
-                </div>
-
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
                   <div className="relative" ref={(element) => (dropdownRefs.current[idx] = element)}>
-                    <FieldLabel icon={Icons.search} label="Producto" />
                     <div className="relative">
-                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                         {Icons.search}
                       </span>
                       <input
@@ -917,7 +916,7 @@ export default function PedidoVacuna({
                         onFocus={() => abrirDropdown(idx)}
                         onKeyDown={(event) => handleKeyDown(event, idx, "producto")}
                         placeholder="Elegir producto"
-                        className="app-input pl-12 uppercase"
+                        className="app-input pl-10 uppercase"
                         autoComplete="off"
                         autoCorrect="off"
                         autoCapitalize="characters"
@@ -950,8 +949,7 @@ export default function PedidoVacuna({
                     ) : null}
                   </div>
 
-                  <div>
-                    <FieldLabel icon={Icons.scale} label="Peso real (lb)" />
+                  <div className="col-start-2 lg:col-auto">
                     <input
                       ref={(element) => (pesoInputRefs.current[idx] = element)}
                       type="number"
@@ -959,7 +957,7 @@ export default function PedidoVacuna({
                       onChange={(event) => handlePesoChange(idx, event.target.value)}
                       onKeyDown={(event) => handleKeyDown(event, idx, "pesoReal")}
                       onFocus={(event) => event.target.select()}
-                      placeholder="0.00"
+                      placeholder="Peso lb"
                       min="0"
                       step="0.01"
                       inputMode="decimal"
@@ -967,43 +965,46 @@ export default function PedidoVacuna({
                       className="app-input text-center text-slate-900"
                     />
 
-                    <button
-                      type="button"
-                      onClick={() => abrirSumaBultos(idx)}
-                      className="app-button-ghost mt-2 w-full justify-between px-4 text-sm"
-                    >
-                      <span className="flex items-center gap-2">
-                        {Icons.scale}
-                        Suma de bultos
-                      </span>
-                      <span className={item.bultos?.length ? "text-emerald-600" : "text-slate-400"}>
-                        {item.bultos?.length ? `${item.bultos.length}` : "Abrir"}
-                      </span>
-                    </button>
                   </div>
-                </div>
 
-                <div className="mt-3">
                   <button
                     type="button"
-                    onClick={() => abrirNotaArticulo(idx)}
-                    className="app-button-ghost w-full justify-between px-4 text-sm"
+                    onClick={() => abrirSumaBultos(idx)}
+                    className="app-button-ghost col-start-2 row-start-3 w-full justify-between px-3 text-sm lg:col-auto lg:row-auto"
                   >
                     <span className="flex items-center gap-2">
-                      {Icons.note}
-                      Nota
+                      {Icons.scale}
+                      Bultos
                     </span>
-                    <span className={item.nota ? "text-amber-500" : "text-slate-400"}>
-                      {item.nota ? "Lista" : "Abrir"}
+                    <span className={item.bultos?.length ? "text-emerald-600" : "text-slate-400"}>
+                      {item.bultos?.length || "+"}
                     </span>
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => abrirNotaArticulo(idx)}
+                    className={`app-icon-button col-start-3 row-start-2 lg:col-auto lg:row-auto ${item.nota ? "border-amber-300 bg-amber-50 text-amber-700" : "text-slate-500"}`}
+                    aria-label="Nota del producto"
+                    title={item.nota || "Agregar nota"}
+                  >
+                    {Icons.note}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => eliminarFila(idx)}
+                    className="app-icon-button col-start-3 row-start-1 text-rose-500 lg:col-auto lg:row-auto"
+                    aria-label="Eliminar producto"
+                  >
+                    {Icons.trash}
+                  </button>
+
                   {item.nota ? (
-                    <div className="mt-2 rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-                      {item.nota}
+                    <div className="col-start-2 col-end-4 truncate px-1 text-xs font-bold text-amber-700 lg:col-start-2 lg:col-end-6">
+                      Nota: {item.nota}
                     </div>
                   ) : null}
-                </div>
               </article>
             );
           })}
@@ -1041,7 +1042,7 @@ export default function PedidoVacuna({
             ) : (
               <>
                 {Icons.send}
-                Enviar vacuna
+                Enviar traspaso
               </>
             )}
           </button>

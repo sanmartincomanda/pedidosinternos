@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { ref, update, push, set } from "firebase/database";
 import { getBranchDisplayName, getCanonicalBranchId, isSameBranch } from "@/lib/branchUtils";
-import { formatOrderNumber, getLocalDateString, getPedidoItems, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
+import { formatOrderNumber, getPedidoItems, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 import { printTransferRequisition } from "@/lib/historialPdf";
 
 // Iconos SVG estilo delivery
@@ -89,6 +89,7 @@ const getSendingBranch = (pedido) => getCanonicalBranchId(pedido?.sucursalDestin
 const getReceivingBranch = (pedido) => getCanonicalBranchId(pedido?.sucursalOrigen || '');
 const isSendingBranch = (pedido, user) => isSameBranch(getSendingBranch(pedido), user);
 const isReceivingBranch = (pedido, user) => isSameBranch(getReceivingBranch(pedido), user);
+const ACTIVE_BRANCHES = new Set(['Granada', 'Nindiri']);
 
 const VIEW_THEMES = {
   enviar: {
@@ -154,8 +155,8 @@ export default function EstadoPedidos({
   setView = () => {},
   setPedidoEditar = () => {},
 }) {
-  const [filtro, setFiltro] = useState('preparacion');
-  const [modoVista, setModoVista] = useState('enviar');
+  const filtro = 'enviados';
+  const modoVista = 'recibir';
   const [modalRepartidor, setModalRepartidor] = useState(null);
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState(null);
   const [animatingCards, setAnimatingCards] = useState(new Set());
@@ -167,7 +168,6 @@ export default function EstadoPedidos({
   const [modoEdicion, setModoEdicion] = useState(false);
   const [, setNotificaciones] = useState([]);
   const [modalNotificacion, setModalNotificacion] = useState(null);
-  const hoy = getLocalDateString();
   const temaVista = VIEW_THEMES[modoVista];
   const userLabel = getBranchDisplayName(user);
 
@@ -189,32 +189,22 @@ export default function EstadoPedidos({
     setModalNotificacion({ ...notif, id });
   };
 
-  const esPedidoEnviadoHoy = (pedido) => {
-    if (pedido.estado !== 'ENVIADO') return false;
-
-    if (pedido.timestamp) {
-      return getLocalDateString(new Date(pedido.timestamp)) === hoy;
-    }
-
-    return pedido.fechaPedido === hoy || pedido.fechaEntrega === hoy;
-  };
-
   // Filtrar pedidos relevantes para el usuario
   const pedidosRelevantes = pedidos.filter((pedido) => {
-    const participaEnPedido = modoVista === 'enviar'
-      ? isSendingBranch(pedido, user)
-      : isReceivingBranch(pedido, user);
+    const participaEnPedido = isReceivingBranch(pedido, user);
     const estaFinalizado = ['RECIBIDO_CONFORME', 'ENTREGADO', 'ANULADO'].includes(pedido.estado);
+    const sucursalEnvio = getSendingBranch(pedido);
+    const sucursalRecepcion = getReceivingBranch(pedido);
+    const perteneceOperacionActual =
+      ACTIVE_BRANCHES.has(sucursalEnvio) &&
+      ACTIVE_BRANCHES.has(sucursalRecepcion) &&
+      sucursalEnvio !== sucursalRecepcion;
 
-    if (!participaEnPedido || estaFinalizado || !isPedidoAfterOperativeReset(pedido)) {
+    if (!participaEnPedido || !perteneceOperacionActual || estaFinalizado || !isPedidoAfterOperativeReset(pedido)) {
       return false;
     }
 
-    if (pedido.estado === 'ENVIADO') {
-      return esPedidoEnviadoHoy(pedido);
-    }
-
-    return true;
+    return pedido.estado === 'ENVIADO';
   });
 
   // Aplicar filtros de pestaña
@@ -428,13 +418,6 @@ export default function EstadoPedidos({
     return `${Math.floor(diff / 60)}h ${diff % 60}m`;
   };
 
-  // Contadores para tabs
-  const contadores = {
-    preparacion: pedidosRelevantes.filter((pedido) => getMainStatusBucket(pedido) === 'preparacion').length,
-    por_enviar: pedidosRelevantes.filter((pedido) => getMainStatusBucket(pedido) === 'por_enviar').length,
-    enviados: pedidosRelevantes.filter((pedido) => getMainStatusBucket(pedido) === 'enviados').length
-  };
-
   const tituloFiltroActivo = STATUS_TABS.find((tab) => tab.key === filtro)?.shortLabel || 'Pedidos';
 
   return (
@@ -571,108 +554,24 @@ export default function EstadoPedidos({
           </div>
           <div>
             <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
-              Estados
+              Recibir Producto
             </h1>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
               {userLabel}
             </p>
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
-          <div style={{
-            display: 'inline-flex',
-            gap: '8px',
-            padding: '6px',
-            borderRadius: '18px',
-            background: 'rgba(255,255,255,0.88)',
-            border: `1px solid ${temaVista.border}`,
-            boxShadow: '0 10px 24px rgba(15, 23, 42, 0.08)'
-          }}>
-            {[
-              { key: 'enviar', label: 'Enviar' },
-              { key: 'recibir', label: 'Recibir' }
-            ].map((modo) => (
-              <button
-                key={modo.key}
-                type="button"
-                onClick={() => setModoVista(modo.key)}
-                style={{
-                  border: 'none',
-                  borderRadius: '14px',
-                  padding: '12px 18px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  background: modoVista === modo.key
-                    ? `linear-gradient(135deg, ${temaVista.primary} 0%, ${temaVista.secondary} 100%)`
-                    : 'transparent',
-                  color: modoVista === modo.key ? 'white' : '#475569',
-                  boxShadow: modoVista === modo.key ? `0 8px 18px ${temaVista.primary}30` : 'none',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {modo.label}
-              </button>
-            ))}
-          </div>
-          <div style={{
-            padding: '8px 14px',
-            borderRadius: '999px',
-            background: 'rgba(255,255,255,0.7)',
-            border: `1px solid ${temaVista.border}`,
-            color: temaVista.primary,
-            fontSize: '12px',
-            fontWeight: 800
-          }}>
-            {temaVista.title}
-          </div>
+        <div style={{
+          padding: '10px 16px',
+          borderRadius: '16px',
+          background: 'rgba(255,255,255,0.82)',
+          border: `1px solid ${temaVista.border}`,
+          color: temaVista.primary,
+          fontSize: '13px',
+          fontWeight: 800
+        }}>
+          {pedidosFiltrados.length} pendientes de recibir
         </div>
-      </div>
-
-      {/* Tabs de filtro */}
-      <div className="filters-scroll" style={{
-        display: 'flex',
-        gap: '8px',
-        marginBottom: '24px',
-        overflowX: 'auto',
-        paddingBottom: '8px'
-      }}>
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setFiltro(tab.key)}
-            style={{
-              padding: '12px 20px',
-              borderRadius: '12px',
-              border: 'none',
-              background: filtro === tab.key 
-                ? `linear-gradient(135deg, ${temaVista.primary} 0%, ${temaVista.secondary} 100%)` 
-                : 'rgba(255,255,255,0.92)',
-              color: filtro === tab.key ? 'white' : '#475569',
-              fontWeight: 700,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap',
-              boxShadow: filtro === tab.key ? `0 8px 20px ${temaVista.primary}35` : 'none'
-            }}
-          >
-            {tab.label}
-            <span style={{
-              background: filtro === tab.key ? 'rgba(255,255,255,0.2)' : '#e2e8f0',
-              padding: '2px 8px',
-              borderRadius: '10px',
-              fontSize: '11px',
-              minWidth: '20px',
-              textAlign: 'center'
-            }}>
-              {contadores[tab.key]}
-            </span>
-          </button>
-        ))}
       </div>
 
       {/* Modal de Notificación Emergente */}

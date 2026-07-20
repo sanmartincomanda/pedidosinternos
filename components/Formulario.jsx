@@ -67,6 +67,11 @@ const Icons = {
       <path d="m20 20-3.5-3.5" />
     </svg>
   ),
+  scale: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M6 6h12M7 6l-3 13h16L17 6M9 10a3 3 0 0 0 6 0" />
+    </svg>
+  ),
   key: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M21 2 10.5 12.5M18.5 4.5 20 6l2-2-1.5-1.5" />
@@ -220,9 +225,22 @@ const createEmptyItem = () => ({
   producto: "",
   cantidad: "",
   unidad: "",
+  bultos: [],
   nota: "",
   mostrarDropdown: false,
 });
+
+function parseBultoWeight(value) {
+  const normalized = String(value ?? "").trim().replace(",", ".");
+  const parsed = Number.parseFloat(normalized);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed * 10000) / 10000;
+}
+
+function formatBultoWeight(value) {
+  return String(Math.round(Number(value) * 10000) / 10000);
+}
 
 function FieldLabel({ icon, label, badge }) {
   return (
@@ -247,7 +265,7 @@ export default function Formulario({
   pedidoEditar = null,
   setPedidoEditar = () => {},
 }) {
-  const MAX_LINEAS = 25;
+  const MAX_LINEAS = 100;
   const catalogoProductos = productosCSV.length > 0 ? productosCSV : PRODUCTOS_EJEMPLO;
   const catalogoBusqueda = useMemo(
     () =>
@@ -279,9 +297,14 @@ export default function Formulario({
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [itemNoteModalIndex, setItemNoteModalIndex] = useState(null);
   const [itemNoteTemporal, setItemNoteTemporal] = useState("");
+  const [bultosModalIndex, setBultosModalIndex] = useState(null);
+  const [bultosTemporal, setBultosTemporal] = useState([]);
+  const [bultoTemporal, setBultoTemporal] = useState("");
+  const [bultoError, setBultoError] = useState("");
 
   const productInputRefs = useRef([]);
   const quantityInputRefs = useRef([]);
+  const bultoInputRef = useRef(null);
   const dropdownRefs = useRef({});
 
   const esStandby = fechaEntrega > hoy;
@@ -301,6 +324,7 @@ export default function Formulario({
     setShowNoteModal(false);
     cerrarNotaArticulo();
     setUnitPickerIndex(null);
+    setBultosModalIndex(null);
     setFechaEntrega(hoy);
     setPedidoEditar(null);
   };
@@ -321,6 +345,7 @@ export default function Formulario({
       producto: item.producto || "",
       cantidad: item.cantidad || "",
       unidad: item.unidad || "",
+      bultos: Array.isArray(item.bultos) ? item.bultos : [],
       nota: item.nota || "",
       mostrarDropdown: false,
     }));
@@ -496,6 +521,10 @@ export default function Formulario({
         ...next[idx],
         [field]: field === "nota" ? value.toUpperCase() : value,
       };
+
+      if (field === "cantidad") {
+        next[idx].bultos = [];
+      }
 
       if (field === "producto") {
         const textoNormalizado = normalizeCatalogSearch(value);
@@ -690,17 +719,90 @@ export default function Formulario({
     setShowNoteModal(false);
   };
 
+  const abrirSumaBultos = (idx) => {
+    if (!items[idx]?.producto.trim()) {
+      focusProductField(idx);
+      return;
+    }
+
+    setBultosModalIndex(idx);
+    setBultosTemporal(Array.isArray(items[idx].bultos) ? items[idx].bultos : []);
+    setBultoTemporal("");
+    setBultoError("");
+    setTimeout(() => focusElement(bultoInputRef.current), 50);
+  };
+
+  const cerrarSumaBultos = () => {
+    setBultosModalIndex(null);
+    setBultosTemporal([]);
+    setBultoTemporal("");
+    setBultoError("");
+  };
+
+  const agregarBulto = () => {
+    const peso = parseBultoWeight(bultoTemporal);
+    if (peso === null) {
+      setBultoError("Ingresa un peso mayor que cero.");
+      setTimeout(() => focusElement(bultoInputRef.current, { select: true }), 30);
+      return;
+    }
+
+    setBultosTemporal((prev) => [...prev, peso]);
+    setBultoTemporal("");
+    setBultoError("");
+    setTimeout(() => focusElement(bultoInputRef.current), 30);
+  };
+
+  const quitarBulto = (idx) => {
+    setBultosTemporal((prev) => prev.filter((_, itemIndex) => itemIndex !== idx));
+  };
+
+  const finalizarSumaBultos = () => {
+    let pesosFinales = bultosTemporal;
+
+    if (String(bultoTemporal).trim() !== "") {
+      const ultimoPeso = parseBultoWeight(bultoTemporal);
+      if (ultimoPeso === null) {
+        setBultoError("Revisa el ultimo peso antes de finalizar.");
+        return;
+      }
+      pesosFinales = [...pesosFinales, ultimoPeso];
+    }
+
+    if (pesosFinales.length === 0) {
+      setBultoError("Agrega al menos un peso.");
+      return;
+    }
+
+    const total = Math.round(pesosFinales.reduce((sum, peso) => sum + peso, 0) * 10000) / 10000;
+    setItems((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === bultosModalIndex
+          ? { ...item, cantidad: formatBultoWeight(total), unidad: "lb", bultos: pesosFinales }
+          : item,
+      ),
+    );
+    cerrarSumaBultos();
+  };
+
   const construirItemsActualizados = (validos) =>
-    validos.map((item) => ({
-      clave: item.clave,
-      producto: item.producto,
-      cantidad: item.cantidad,
-      unidad: item.unidad,
-      nota: item.nota,
-      pesoReal: "",
-      preparadoPor: "",
-      listo: false,
-    }));
+    validos.map((item) => {
+      const bultos = Array.isArray(item.bultos)
+        ? item.bultos.map(parseBultoWeight).filter((peso) => peso !== null)
+        : [];
+
+      return {
+        clave: item.clave,
+        producto: item.producto,
+        cantidad: item.cantidad,
+        unidad: item.unidad,
+        nota: item.nota,
+        ...(bultos.length > 0 ? { bultos, cantidadBultos: bultos.length } : {}),
+        pesoReal: "",
+        preparadoPor: "",
+        listo: false,
+      };
+    });
 
   const validarPedido = () => {
     const validos = items.filter((item) => item.producto.trim() !== "");
@@ -801,7 +903,7 @@ export default function Formulario({
 
       alert(`Pedido ${formatOrderNumber(pedidoEditar)} actualizado con exito.`);
       resetFormulario();
-      setView("estados");
+      setView("historial");
     } catch (error) {
       console.error("Fallo la edicion:", error);
       alert(`Error: ${error.message}`);
@@ -866,7 +968,7 @@ export default function Formulario({
       alert(`Pedido ${numeroOrden} ${esStandby ? "guardado en standby" : "enviado"} con exito.`);
 
       resetFormulario();
-      setView("estados");
+      setView("historial");
     } catch (error) {
       console.error("Fallo el envio:", error);
       alert(`Error: ${error.message}`);
@@ -877,6 +979,11 @@ export default function Formulario({
 
   return (
     <div className="page-enter space-y-4">
+      <section className="module-heading module-heading-pedido">
+        <div className="text-[11px] font-black uppercase tracking-[0.24em] text-sky-700">Solicitud para preparar</div>
+        <h1 className="app-title mt-1 text-3xl font-black text-slate-950 sm:text-4xl">MODULO PEDIDO</h1>
+      </section>
+
       {isEditing ? (
         <section className="app-panel border border-amber-200 bg-amber-50 p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -941,7 +1048,10 @@ export default function Formulario({
 
       <section className="app-panel p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="app-title text-2xl font-black text-slate-900">Detalle</h3>
+          <div>
+            <h3 className="app-title text-xl font-black text-slate-900">Productos</h3>
+            <div className="text-xs font-bold text-slate-500">{items.length} de {MAX_LINEAS}</div>
+          </div>
           <button
             type="button"
             onClick={() => agregarFila(true)}
@@ -952,27 +1062,29 @@ export default function Formulario({
           </button>
         </div>
 
-        <div className="space-y-3">
+        <div className="mb-2 hidden grid-cols-[42px_minmax(260px,1fr)_110px_110px_150px_44px_44px] gap-2 px-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 lg:grid">
+          <span>#</span>
+          <span>Elegir producto</span>
+          <span>Peso / Cantidad</span>
+          <span>Unidad</span>
+          <span>Suma de bultos</span>
+          <span>Nota</span>
+          <span />
+        </div>
+
+        <div className="space-y-2">
           {items.map((item, idx) => {
             const productosFiltrados = filtrarProductos(item.producto);
 
             return (
-              <article key={idx} className="app-card p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <span className="app-chip border-slate-200 bg-slate-50 text-slate-700">
-                    #{String(idx + 1).padStart(2, "0")}
-                  </span>
+              <article key={idx} className="compact-order-line app-card grid grid-cols-[36px_minmax(0,1fr)_44px] items-start gap-2 p-2 lg:grid-cols-[42px_minmax(260px,1fr)_110px_110px_150px_44px_44px] lg:items-center">
+                <span className="flex h-11 items-center justify-center rounded-xl bg-slate-100 text-xs font-black text-slate-600">
+                  {String(idx + 1).padStart(2, "0")}
+                </span>
 
-                  <button type="button" onClick={() => eliminarFila(idx)} className="app-icon-button text-rose-200">
-                    {Icons.trash}
-                  </button>
-                </div>
-
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_140px_170px]">
                   <div className="relative" ref={(element) => (dropdownRefs.current[idx] = element)}>
-                    <FieldLabel icon={Icons.search} label="Producto" />
                     <div className="relative">
-                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                         {Icons.search}
                       </span>
                       <input
@@ -986,7 +1098,7 @@ export default function Formulario({
                         onFocus={() => abrirDropdown(idx)}
                         onKeyDown={(event) => handleKeyDown(event, idx, "producto")}
                         placeholder="Elegir producto"
-                        className="app-input pl-12 uppercase"
+                        className="app-input pl-10 uppercase"
                         autoComplete="off"
                         autoCorrect="off"
                         autoCapitalize="characters"
@@ -1019,8 +1131,7 @@ export default function Formulario({
                     ) : null}
                   </div>
 
-                  <div>
-                    <FieldLabel icon={Icons.package} label="Cantidad" />
+                  <div className="col-start-2 lg:col-auto">
                     <input
                       ref={(element) => (quantityInputRefs.current[idx] = element)}
                       type="number"
@@ -1028,7 +1139,7 @@ export default function Formulario({
                       onChange={(event) => handleInputChange(idx, "cantidad", event.target.value)}
                       onKeyDown={(event) => handleKeyDown(event, idx, "cantidad")}
                       onFocus={(event) => event.target.select()}
-                      placeholder="0"
+                      placeholder="Peso"
                       min="0"
                       step="0.01"
                       inputMode="decimal"
@@ -1037,40 +1148,54 @@ export default function Formulario({
                     />
                   </div>
 
-                  <div>
-                    <FieldLabel icon={Icons.package} label="Unidad" />
+                  <div className="col-start-2 row-start-3 lg:col-auto lg:row-auto">
                     <button
                       type="button"
                       onClick={() => abrirSelectorUnidad(idx)}
-                      className="app-button-ghost w-full justify-between px-4 text-sm"
+                      className="app-button-ghost w-full justify-between px-3 text-sm"
                     >
                       <span>{item.unidad || "Elegir"}</span>
-                      <span className="text-slate-400">Abrir</span>
                     </button>
                   </div>
-                </div>
 
-                <div className="mt-3">
                   <button
                     type="button"
-                    onClick={() => abrirNotaArticulo(idx)}
-                    className="app-button-ghost w-full justify-between px-4 text-sm"
+                    onClick={() => abrirSumaBultos(idx)}
+                    className="app-button-ghost col-start-2 row-start-4 w-full justify-between px-3 text-sm lg:col-auto lg:row-auto"
                   >
                     <span className="flex items-center gap-2">
-                      {Icons.note}
-                      Nota
+                      {Icons.scale}
+                      Bultos
                     </span>
-                    <span className={item.nota ? "text-amber-300" : "text-slate-400"}>
-                      {item.nota ? "Lista" : "Abrir"}
+                    <span className={item.bultos?.length ? "text-emerald-600" : "text-slate-400"}>
+                      {item.bultos?.length || "+"}
                     </span>
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => abrirNotaArticulo(idx)}
+                    className={`app-icon-button col-start-3 row-start-3 lg:col-auto lg:row-auto ${item.nota ? "border-amber-300 bg-amber-50 text-amber-700" : "text-slate-500"}`}
+                    aria-label="Nota del producto"
+                    title={item.nota || "Agregar nota"}
+                  >
+                    {Icons.note}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => eliminarFila(idx)}
+                    className="app-icon-button col-start-3 row-start-1 text-rose-500 lg:col-auto lg:row-auto"
+                    aria-label="Eliminar producto"
+                  >
+                    {Icons.trash}
+                  </button>
+
                   {item.nota ? (
-                    <div className="mt-2 rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-                      {item.nota}
+                    <div className="col-start-2 col-end-4 truncate px-1 text-xs font-bold text-amber-700 lg:col-start-2 lg:col-end-7">
+                      Nota: {item.nota}
                     </div>
                   ) : null}
-                </div>
               </article>
             );
           })}
@@ -1118,6 +1243,89 @@ export default function Formulario({
           </button>
         </div>
       </section>
+
+      {bultosModalIndex !== null ? (
+        <div
+          className="app-modal"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) cerrarSumaBultos();
+          }}
+        >
+          <div className="app-modal-panel w-full max-w-[560px] p-5 sm:p-6">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="app-title text-2xl font-black text-slate-900">Suma de bultos</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  {items[bultosModalIndex]?.producto || `Producto ${bultosModalIndex + 1}`}
+                </p>
+              </div>
+              <button type="button" onClick={cerrarSumaBultos} className="app-icon-button text-slate-700">
+                {Icons.close}
+              </button>
+            </div>
+
+            <div className="mb-4 rounded-[20px] border border-emerald-200 bg-emerald-50 px-5 py-4">
+              <div className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Peso total</div>
+              <div className="mt-1 text-4xl font-black text-slate-900">
+                {formatBultoWeight(bultosTemporal.reduce((sum, peso) => sum + peso, 0))} lb
+              </div>
+              <div className="mt-1 text-sm font-bold text-emerald-700">{bultosTemporal.length} bultos</div>
+            </div>
+
+            <FieldLabel icon={Icons.scale} label="Peso del bulto (lb)" />
+            <div className="grid grid-cols-[minmax(0,1fr)_52px] gap-2">
+              <input
+                ref={bultoInputRef}
+                type="text"
+                value={bultoTemporal}
+                onChange={(event) => {
+                  setBultoTemporal(event.target.value);
+                  setBultoError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    agregarBulto();
+                  }
+                }}
+                placeholder="0.00"
+                inputMode="decimal"
+                className="app-input text-center text-xl font-black"
+              />
+              <button type="button" onClick={agregarBulto} className="app-button-primary px-0" aria-label="Agregar peso">
+                {Icons.plus}
+              </button>
+            </div>
+            <p className={`mt-2 min-h-5 text-sm font-semibold ${bultoError ? "text-rose-600" : "text-slate-500"}`}>
+              {bultoError || "Escribe un peso y presiona Enter."}
+            </p>
+
+            {bultosTemporal.length > 0 ? (
+              <div className="app-scroll-y mt-3 max-h-52 space-y-2 overflow-y-auto">
+                {[...bultosTemporal].reverse().map((peso, reverseIndex) => {
+                  const originalIndex = bultosTemporal.length - 1 - reverseIndex;
+                  return (
+                    <div key={`${originalIndex}-${peso}`} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2">
+                      <span className="text-sm font-bold text-slate-500">Bulto {originalIndex + 1}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-lg font-black">{formatBultoWeight(peso)} lb</span>
+                        <button type="button" onClick={() => quitarBulto(originalIndex)} className="app-icon-button h-9 w-9 text-rose-500">
+                          {Icons.trash}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={cerrarSumaBultos} className="app-button-ghost">Cancelar</button>
+              <button type="button" onClick={finalizarSumaBultos} className="app-button-primary">Finalizar</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {unitPickerIndex !== null ? (
         <div

@@ -9,7 +9,7 @@ import {
   getSelectableBranches,
   isSameBranch,
 } from "@/lib/branchUtils";
-import { isPedidoAfterOperativeReset, normalizePedidoForUi } from "@/lib/orderUtils";
+import { normalizePedidoForUi } from "@/lib/orderUtils";
 import Cocina from "./Cocina";
 import Configuracion from "./Configuracion";
 import EstadoPedidos from "./EstadoPedidos";
@@ -105,12 +105,11 @@ const Icons = {
 };
 
 const NAV_ITEMS = [
-  { key: "formulario", label: "Pedido", title: "Pedido", icon: Icons.clipboard, accent: "#e30613" },
-  { key: "vacuna", label: "Directo", title: "Envio directo", icon: Icons.vaccine, accent: "#d97706" },
-  { key: "cocina", label: "Cocina", title: "Cocina", icon: Icons.chef, accent: "#f97316" },
-  { key: "estados", label: "Estados", title: "Estados", icon: Icons.truck, accent: "#0f766e" },
+  { key: "formulario", label: "Pedido", title: "Realizar Pedido", icon: Icons.clipboard, accent: "#e30613" },
+  { key: "vacuna", label: "Traspaso", title: "Traspaso", icon: Icons.vaccine, accent: "#d97706" },
+  { key: "cocina", label: "Cocina", title: "Cocina - Preparacion", icon: Icons.chef, accent: "#f97316" },
+  { key: "estados", label: "Recibir", title: "Recibir Producto", icon: Icons.truck, accent: "#0f766e" },
   { key: "historial", label: "Historial", title: "Historial", icon: Icons.history, accent: "#1d4ed8" },
-  { key: "configuracion", label: "Config", title: "Configuracion", icon: Icons.settings, accent: "#475569" },
 ];
 
 const INITIAL_CONFIG = {
@@ -122,48 +121,6 @@ const INITIAL_CONFIG = {
     formato: "80mm",
   },
 };
-
-function KpiCard({ label, value, tone = "default" }) {
-  const styles = {
-    default: {
-      borderColor: "rgba(148, 163, 184, 0.24)",
-      background: "rgba(255,255,255,0.92)",
-      color: "#111827",
-    },
-    red: {
-      borderColor: "rgba(227, 6, 19, 0.22)",
-      background: "rgba(227, 6, 19, 0.08)",
-      color: "#9f111a",
-    },
-    amber: {
-      borderColor: "rgba(245, 181, 27, 0.24)",
-      background: "rgba(245, 181, 27, 0.12)",
-      color: "#8a6208",
-    },
-    emerald: {
-      borderColor: "rgba(5, 150, 105, 0.24)",
-      background: "rgba(5, 150, 105, 0.1)",
-      color: "#0f766e",
-    },
-  };
-
-  const style = styles[tone] || styles.default;
-
-  return (
-    <div
-      className="rounded-[1.1rem] border px-4 py-3"
-      style={{
-        borderColor: style.borderColor,
-        background: style.background,
-      }}
-    >
-      <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{label}</div>
-      <div className="mt-1 text-xl font-black" style={{ color: style.color }}>
-        {value}
-      </div>
-    </div>
-  );
-}
 
 function DesktopNavButton({ item, active, onClick }) {
   return (
@@ -316,21 +273,13 @@ export default function AppInterna() {
   };
 
   const navMeta = useMemo(
-    () => NAV_ITEMS.find((item) => item.key === view) || NAV_ITEMS[0],
+    () =>
+      NAV_ITEMS.find((item) => item.key === view) || {
+        title: "Configuracion",
+        icon: Icons.settings,
+      },
     [view],
   );
-
-  const stats = useMemo(() => {
-    const pedidosOperativos = pedidos.filter(isPedidoAfterOperativeReset);
-    return {
-      total: pedidosOperativos.length,
-      activos: pedidosOperativos.filter(
-        (pedido) => !["RECIBIDO_CONFORME", "ENTREGADO", "ANULADO"].includes(pedido.estado),
-      ).length,
-      standby: pedidosOperativos.filter((pedido) => pedido.estado === "STANDBY_ENTREGA").length,
-      listos: pedidosOperativos.filter((pedido) => pedido.estado === "LISTO").length,
-    };
-  }, [pedidos]);
 
   const fechaActual = new Intl.DateTimeFormat("es-NI", {
     weekday: "short",
@@ -368,7 +317,15 @@ export default function AppInterna() {
           />
         );
       case "cocina":
-        return <Cocina user={user} pedidos={pedidos} personalCocina={config.personalCocina || []} />;
+        return (
+          <Cocina
+            user={user}
+            pedidos={pedidos}
+            personalCocina={config.personalCocina || []}
+            personalTransporte={config.personalTransporte || []}
+            printerSettings={commonPrinterSettings}
+          />
+        );
       case "estados":
         return (
           <EstadoPedidos
@@ -516,110 +473,63 @@ export default function AppInterna() {
   return (
     <div className="min-h-screen">
       <header className="command-header">
-        <div className="mx-auto flex max-w-[1460px] flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-          <div className="flex items-center gap-4">
-            <div className="flex h-13 w-13 items-center justify-center rounded-[1.1rem] bg-white/10 text-white shadow-[0_14px_26px_-18px_rgba(15,23,42,0.6)]">
-              {navMeta.icon}
-            </div>
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.32em] text-[#f5b51b]">
-                Carnes San Martin
+        <div className="mx-auto max-w-[1460px] px-4 py-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] bg-white/10 text-white">
+                {navMeta.icon}
               </div>
-              <div className="mt-1 app-title text-3xl font-black text-white">{navMeta.title}</div>
+              <div className="min-w-0">
+                <div className="text-[9px] font-black uppercase tracking-[0.28em] text-[#f5b51b]">Carnes San Martin</div>
+                <div className="app-title truncate text-xl font-black text-white sm:text-2xl">{navMeta.title}</div>
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="hidden app-chip border-white/12 bg-white/10 text-white md:inline-flex">
+                {Icons.calendar}
+                {fechaActual}
+              </div>
+              <div className="hidden app-chip border-white/12 bg-white/10 text-white sm:inline-flex">
+                {Icons.user}
+                {getBranchDisplayName(user)}
+              </div>
+              <button
+                type="button"
+                onClick={() => setView("configuracion")}
+                className="app-icon-button border-white/12 bg-white/10 text-white shadow-none"
+                aria-label="Configuracion"
+                title="Configuracion"
+              >
+                {Icons.settings}
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="app-icon-button border-white/12 bg-white/10 text-white shadow-none"
+                aria-label="Salir"
+                title="Salir"
+              >
+                {Icons.logout}
+              </button>
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="app-chip border-white/12 bg-white/10 text-white">
-              {Icons.calendar}
-              {fechaActual}
-            </div>
-            <div className="app-chip border-white/12 bg-white/10 text-white">
-              {Icons.user}
-              {getBranchDisplayName(user)}
-            </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="app-button-ghost border-white/12 bg-white/10 text-white shadow-none sm:w-auto"
-            >
-              {Icons.logout}
-              Salir
-            </button>
-          </div>
+          <nav className="mt-3 hidden grid-cols-5 gap-2 lg:grid">
+            {NAV_ITEMS.map((item) => (
+              <DesktopNavButton
+                key={item.key}
+                item={item}
+                active={view === item.key}
+                onClick={() => setView(item.key)}
+              />
+            ))}
+          </nav>
         </div>
       </header>
 
       <div className="app-shell">
-        <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
-          <aside className="hidden lg:flex lg:flex-col lg:gap-4">
-            <section className="app-panel p-4">
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Sucursal</div>
-              <div className="mt-1 text-xl font-black text-slate-950">{getBranchDisplayName(user)}</div>
-              <div className="mt-4 grid gap-3">
-                <KpiCard label="Pedidos" value={stats.total} />
-                <KpiCard label="Activos" value={stats.activos} tone="red" />
-                <KpiCard label="Standby" value={stats.standby} tone="amber" />
-                <KpiCard label="Listos" value={stats.listos} tone="emerald" />
-              </div>
-            </section>
-
-            <section className="app-panel p-3">
-              <div className="mb-3 px-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                Modulos
-              </div>
-              <div className="grid gap-2">
-                {NAV_ITEMS.map((item) => (
-                  <DesktopNavButton
-                    key={item.key}
-                    item={item}
-                    active={view === item.key}
-                    onClick={() => setView(item.key)}
-                  />
-                ))}
-              </div>
-            </section>
-          </aside>
-
-          <main className="app-route-shell page-enter">
-            <section className="app-panel mb-5 p-3 lg:hidden">
-              <div className="app-tab-row">
-                {NAV_ITEMS.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setView(item.key)}
-                    className="app-chip whitespace-nowrap"
-                    style={{
-                      borderColor: view === item.key ? `${item.accent}30` : "rgba(148,163,184,0.18)",
-                      background: view === item.key ? `${item.accent}12` : "rgba(255,255,255,0.98)",
-                    }}
-                  >
-                    <span style={{ color: item.accent }}>{item.icon}</span>
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="app-panel mb-5 p-4 sm:p-5">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                    Modulo activo
-                  </div>
-                  <div className="mt-1 text-2xl font-black text-slate-950">{navMeta.title}</div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
-                  <KpiCard label="Activos" value={stats.activos} tone="red" />
-                  <KpiCard label="Listos" value={stats.listos} tone="emerald" />
-                </div>
-              </div>
-            </section>
-
-            {renderCurrentView()}
-          </main>
-        </div>
+        <main className="app-route-shell page-enter">{renderCurrentView()}</main>
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-4 lg:hidden">
