@@ -116,23 +116,22 @@ const VIEW_THEMES = {
   }
 };
 
-const STATUS_TABS = [
-  { key: 'preparacion', label: 'En preparacion (Cocina)', shortLabel: 'Preparacion' },
-  { key: 'por_enviar', label: 'Por enviar', shortLabel: 'Por enviar' },
-  { key: 'enviados', label: 'Enviados', shortLabel: 'Enviados' }
-];
+const PENDING_REQUEST_STATUSES = new Set(['NUEVO', 'STANDBY_ENTREGA', 'PREPARACION', 'LISTO']);
+const RECEIVE_VISIBLE_STATUSES = new Set([...PENDING_REQUEST_STATUSES, 'ENVIADO']);
 
-const getMainStatusBucket = (pedido) => {
-  switch (pedido.estado) {
-    case 'LISTO':
-      return 'por_enviar';
-    case 'ENVIADO':
-      return 'enviados';
-    case 'NUEVO':
+const getRequestedOrderProgress = (pedido) => {
+  const preparingBranch = getBranchDisplayName(getSendingBranch(pedido));
+
+  switch (pedido?.estado) {
     case 'STANDBY_ENTREGA':
+      return `Programado para ${pedido.fechaEntrega || 'otra fecha'} - pendiente de preparar`;
     case 'PREPARACION':
+      return `En preparacion en ${preparingBranch}`;
+    case 'LISTO':
+      return `Preparado - pendiente de enviar desde ${preparingBranch}`;
+    case 'NUEVO':
     default:
-      return 'preparacion';
+      return `Pendiente de preparar en ${preparingBranch}`;
   }
 };
 
@@ -155,7 +154,6 @@ export default function EstadoPedidos({
   setView = () => {},
   setPedidoEditar = () => {},
 }) {
-  const filtro = 'enviados';
   const modoVista = 'recibir';
   const [modalRepartidor, setModalRepartidor] = useState(null);
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState(null);
@@ -204,13 +202,12 @@ export default function EstadoPedidos({
       return false;
     }
 
-    return pedido.estado === 'ENVIADO';
+    return RECEIVE_VISIBLE_STATUSES.has(pedido.estado);
   });
 
-  // Aplicar filtros de pestaña
-  const filtrarPedidos = () => pedidosRelevantes.filter((pedido) => getMainStatusBucket(pedido) === filtro);
-
-  const pedidosFiltrados = filtrarPedidos();
+  const pedidosFiltrados = pedidosRelevantes;
+  const pedidosPorPrepararOEnviar = pedidosFiltrados.filter((pedido) => PENDING_REQUEST_STATUSES.has(pedido.estado)).length;
+  const pedidosEnCamino = pedidosFiltrados.filter((pedido) => pedido.estado === 'ENVIADO').length;
 
   const despacharPedido = async (firebaseId, repartidor) => {
     setAnimatingCards(prev => new Set([...prev, firebaseId]));
@@ -260,10 +257,15 @@ export default function EstadoPedidos({
     setRepartidorSeleccionado(null);
   };
 
-  const anularPedido = (pedido) => {
+  const anularPedido = async (pedido) => {
+    if (!isReceivingBranch(pedido, user) || !PENDING_REQUEST_STATUSES.has(pedido.estado)) {
+      alert('Este pedido ya fue enviado y no puede anularse desde Recibir.');
+      return;
+    }
+
     const codigoPedido = formatOrderNumber(pedido);
     const confirmado = window.confirm(
-      `Vas a anular el pedido ${codigoPedido}. El numero quedara reservado como ANULADO y el pedido saldra de Estados y Cocina.`
+      `Vas a anular el pedido ${codigoPedido}. El numero quedara reservado como ANULADO y el pedido saldra de Recibir y Cocina.`
     );
 
     if (!confirmado) {
@@ -274,22 +276,26 @@ export default function EstadoPedidos({
 
     setAnimatingCards(prev => new Set([...prev, pedido.firebaseId]));
 
-    update(ref(db, `pedidos_internos/${pedido.firebaseId}`), {
-      estado: 'ANULADO',
-      anuladoPor: user,
-      fechaAnulacion: marcaAnulacion.toISOString().split('T')[0],
-      horaAnulacion: marcaAnulacion.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
-      motivoAnulacion: 'Anulado desde sucursal origen',
-      timestamp: marcaAnulacion.getTime()
-    });
-
-    setTimeout(() => {
+    try {
+      await update(ref(db, `pedidos_internos/${pedido.firebaseId}`), {
+        estado: 'ANULADO',
+        anuladoPor: user,
+        fechaAnulacion: marcaAnulacion.toISOString().split('T')[0],
+        horaAnulacion: marcaAnulacion.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+        motivoAnulacion: 'Anulado por la sucursal solicitante antes del envio',
+        estadoAnteriorAnulacion: pedido.estado,
+        timestamp: marcaAnulacion.getTime()
+      });
+    } catch (error) {
+      console.error('No se pudo anular el pedido:', error);
+      alert(`No se pudo anular el pedido: ${error.message}`);
+    } finally {
       setAnimatingCards(prev => {
         const next = new Set(prev);
         next.delete(pedido.firebaseId);
         return next;
       });
-    }, 300);
+    }
   };
 
   // Abrir modal de recepción
@@ -417,8 +423,6 @@ export default function EstadoPedidos({
     if (diff < 60) return `${diff}m`;
     return `${Math.floor(diff / 60)}h ${diff % 60}m`;
   };
-
-  const tituloFiltroActivo = STATUS_TABS.find((tab) => tab.key === filtro)?.shortLabel || 'Pedidos';
 
   return (
     <div style={{
@@ -570,7 +574,7 @@ export default function EstadoPedidos({
           fontSize: '13px',
           fontWeight: 800
         }}>
-          {pedidosFiltrados.length} pendientes de recibir
+          {pedidosPorPrepararOEnviar} por preparar/enviar · {pedidosEnCamino} en camino
         </div>
       </div>
 
@@ -1159,12 +1163,12 @@ export default function EstadoPedidos({
         }}>
           <div style={{ fontSize: '64px', marginBottom: '16px' }}>📋</div>
           <h3 style={{ fontSize: '24px', margin: '0 0 8px 0', color: '#0f172a' }}>
-            No hay pedidos en {tituloFiltroActivo.toLowerCase()}
+            No hay pedidos pendientes
           </h3>
           <p style={{ margin: 0, color: '#64748b' }}>
             {modoVista === 'enviar'
               ? 'Aqui apareceran los pedidos que tu sucursal debe preparar, enviar o que ya salieron hoy.'
-              : 'Aqui apareceran los pedidos que tu sucursal esta esperando recibir en este momento.'}
+              : 'Aqui apareceran los pedidos solicitados mientras se preparan, envian y esperan recepcion.'}
           </p>
         </div>
       ) : (
@@ -1180,8 +1184,8 @@ export default function EstadoPedidos({
             const esOrigen = isSameBranch(pedido.sucursalOrigen, user);
             const esDestino = isSameBranch(pedido.sucursalDestino, user);
             const esVacuna = isPedidoVacuna(pedido);
-            const puedeEditarPedido = esOrigen && !esVacuna && status !== 'RECIBIDO_CONFORME';
-            const puedeAnularPedido = esOrigen && !esVacuna && status !== 'RECIBIDO_CONFORME';
+            const puedeEditarPedido = esOrigen && !esVacuna && PENDING_REQUEST_STATUSES.has(status);
+            const puedeAnularPedido = esOrigen && !esVacuna && PENDING_REQUEST_STATUSES.has(status);
             const mostrarPeso = mostrarPesos[pedido.firebaseId];
             const rutaOrigen = esVacuna ? getSendingBranch(pedido) : getCanonicalBranchId(pedido.sucursalOrigen);
             const rutaDestino = esVacuna ? getReceivingBranch(pedido) : getCanonicalBranchId(pedido.sucursalDestino);
@@ -1661,7 +1665,7 @@ export default function EstadoPedidos({
                                 }}
                               >
                                 {Icons.close}
-                                Anular
+                                Anular pedido
                               </button>
                             </div>
                           )}
@@ -1856,8 +1860,8 @@ export default function EstadoPedidos({
                         </div>
                       )}
 
-                      {/* Info para origen (quien hizo el pedido) esperando envío */}
-                      {esOrigen && status === 'NUEVO' && (
+                      {/* Info para origen (quien hizo el pedido) esperando envio */}
+                      {esOrigen && !esVacuna && PENDING_REQUEST_STATUSES.has(status) && (
                         <div style={{
                           padding: '14px 18px',
                           background: 'rgba(59, 130, 246, 0.1)',
@@ -1866,9 +1870,14 @@ export default function EstadoPedidos({
                           color: '#2563eb',
                           fontSize: '13px',
                           fontWeight: 700,
-                          textAlign: 'center'
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px'
                         }}>
-                          ⏳ Pedido enviado a {rutaDestinoLabel} - Esperando preparación
+                          {Icons.clock}
+                          <span>{getRequestedOrderProgress(pedido)}</span>
                         </div>
                       )}
                     </div>
