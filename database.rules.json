@@ -1,0 +1,12 @@
+{
+  "rules": {
+    ".read": "true",
+    ".write": "true",
+    "pedidos_internos": {
+      ".indexOn": ["timestamp", "estado"]
+    },
+    "integracion_sicar_pilot": {
+      ".indexOn": ["status", "actualizadoEn"]
+    }
+  }
+}
