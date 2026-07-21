@@ -1107,7 +1107,7 @@ export default function Formulario({
                     </div>
 
                     {item.mostrarDropdown ? (
-                      <div className="app-scroll-y absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 rounded-[22px] border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)] backdrop-blur-xl">
+                      <div className="app-scroll-y mt-2 max-h-64 rounded-[22px] border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)]">
                         {productosFiltrados.length === 0 ? (
                           <div className="rounded-[18px] px-4 py-5 text-center text-sm text-slate-400">
                             Sin coincidencias
