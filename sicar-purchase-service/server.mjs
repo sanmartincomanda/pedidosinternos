@@ -195,6 +195,7 @@ async function getArticles(supplierId = 0) {
         a.factor,
         a.existencia,
         a.precioCompra,
+        a.precioCompra AS lastPurchaseNet,
         a.preCompraProm,
         u.nombre AS unidadCompra,
         COALESCE(t.taxPercent, 0) AS taxPercent,
@@ -221,6 +222,7 @@ async function getArticles(supplierId = 0) {
       factor: Number(row.factor),
       existencia: Number(row.existencia),
       precioCompra: Number(row.precioCompra),
+      lastPurchaseNet: Number(row.lastPurchaseNet),
       preCompraProm: Number(row.preCompraProm),
       taxPercent: Number(row.taxPercent),
       lastPurchaseGross: Number(row.lastPurchaseGross),
@@ -240,6 +242,7 @@ async function getPurchaseContext(payload) {
 
   const paymentMethod = `${payload.paymentMethod || ""}`.trim().toLowerCase();
   if (!new Set(["credit", "other"]).has(paymentMethod)) throw new Error("Selecciona Credito u Otro medio de pago.");
+  const priceMode = payload?.priceMode === "net" ? "net" : "gross";
 
   const supplierRows = await query(`SELECT pro_id, nombre, COALESCE(diasCredito, 0) AS diasCredito FROM proveedor WHERE pro_id = ${supplierId} AND status = 1 LIMIT 1;`);
   if (supplierRows.length !== 1) throw new Error("El proveedor no existe o esta inactivo en SICAR.");
@@ -248,12 +251,12 @@ async function getPurchaseContext(payload) {
   for (const input of payload.items) {
     const articleId = Number(input.articleId);
     const quantity = Number(input.quantity);
-    const grossUnitPrice = Number(input.grossUnitPrice);
+    const enteredUnitPrice = Number(priceMode === "net" ? input.netUnitPrice : input.grossUnitPrice);
     if (!Number.isInteger(articleId) || articleId <= 0) throw new Error("Uno de los productos es invalido.");
     if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 1000000) throw new Error("Una cantidad es invalida.");
-    if (!Number.isFinite(grossUnitPrice) || grossUnitPrice < 0 || grossUnitPrice > 100000000) throw new Error("Un precio es invalido.");
+    if (!Number.isFinite(enteredUnitPrice) || enteredUnitPrice < 0 || enteredUnitPrice > 100000000) throw new Error("Un precio es invalido.");
     if (itemMap.has(articleId)) throw new Error("No se puede repetir el mismo producto en una compra.");
-    itemMap.set(articleId, { articleId, quantity, grossUnitPrice });
+    itemMap.set(articleId, { articleId, quantity, enteredUnitPrice });
   }
 
   const articleIds = [...itemMap.keys()].join(",");
@@ -303,15 +306,22 @@ async function getPurchaseContext(payload) {
   const items = [...itemMap.values()].map((input, index) => {
     const article = articleMap.get(input.articleId);
     const taxRate = article.taxes.filter((tax) => tax.tras === 1).reduce((sum, tax) => sum + tax.rate, 0);
-    const netUnitPrice = taxRate > 0 ? input.grossUnitPrice / (1 + taxRate / 100) : input.grossUnitPrice;
+    const netUnitPrice = priceMode === "net"
+      ? input.enteredUnitPrice
+      : (taxRate > 0 ? input.enteredUnitPrice / (1 + taxRate / 100) : input.enteredUnitPrice);
+    const grossUnitPrice = priceMode === "net"
+      ? Math.round((netUnitPrice * (1 + taxRate / 100) + Number.EPSILON) * 1000000) / 1000000
+      : input.enteredUnitPrice;
     const netAmount = Math.round((input.quantity * netUnitPrice + Number.EPSILON) * 100) / 100;
-    const grossAmount = Math.round((input.quantity * input.grossUnitPrice + Number.EPSILON) * 100) / 100;
+    const grossAmount = Math.round((input.quantity * grossUnitPrice + Number.EPSILON) * 100) / 100;
     return {
       ...article,
-      ...input,
+      articleId: input.articleId,
+      quantity: input.quantity,
       order: index + 1,
       taxRate,
       netUnitPrice,
+      grossUnitPrice,
       netAmount,
       grossAmount,
     };

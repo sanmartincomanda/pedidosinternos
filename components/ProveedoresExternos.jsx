@@ -95,6 +95,10 @@ function roundMoney(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
 
+function roundUnitPrice(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 1000000) / 1000000;
+}
+
 function parseBultoWeight(value) {
   const parsed = Number.parseFloat(`${value ?? ""}`.trim().replace(",", "."));
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
@@ -113,10 +117,11 @@ function buildPurchasePayload({ supplier, invoiceNumber, comment, items, request
     date: localDate(),
     comment: `${comment || ""}`.trim(),
     paymentMethod,
+    priceMode: "net",
     items: items.map((item) => ({
       articleId: Number(item.art_id),
       quantity: Number(item.quantity),
-      grossUnitPrice: Number(item.grossUnitPrice),
+      netUnitPrice: Number(item.netUnitPrice),
     })),
   };
 }
@@ -234,10 +239,12 @@ export default function ProveedoresExternos({ user }) {
   }, [connection, productQuery, supplier?.pro_id]);
 
   const totals = useMemo(() => {
-    const gross = items.reduce(
-      (sum, item) => sum + Number(item.quantity || 0) * Number(item.grossUnitPrice || 0),
-      0,
-    );
+    const gross = items.reduce((sum, item) => {
+      const grossUnitPrice = roundUnitPrice(
+        Number(item.netUnitPrice || 0) * (1 + Number(item.taxPercent || 0) / 100),
+      );
+      return sum + roundMoney(Number(item.quantity || 0) * grossUnitPrice);
+    }, 0);
     return { lines: items.length, gross: roundMoney(gross) };
   }, [items]);
 
@@ -251,7 +258,7 @@ export default function ProveedoresExternos({ user }) {
         {
           ...product,
           quantity: "",
-          grossUnitPrice: `${Number(product.lastPurchaseGross || 0).toFixed(2)}`,
+          netUnitPrice: `${Number(product.lastPurchaseNet ?? product.precioCompra ?? 0).toFixed(2)}`,
           bultos: [],
         },
         ...current,
@@ -342,7 +349,7 @@ export default function ProveedoresExternos({ user }) {
     if (!supplier) return "Selecciona el proveedor.";
     if (items.length === 0) return "Agrega al menos un producto.";
     if (items.some((item) => Number(item.quantity) <= 0)) return "Completa una cantidad mayor que cero en todos los productos.";
-    if (items.some((item) => Number(item.grossUnitPrice) < 0 || item.grossUnitPrice === "")) return "Revisa el precio de compra de todos los productos.";
+    if (items.some((item) => Number(item.netUnitPrice) < 0 || item.netUnitPrice === "")) return "Revisa el precio sin IVA de todos los productos.";
     return "";
   };
 
@@ -576,7 +583,7 @@ export default function ProveedoresExternos({ user }) {
                 >
                   <span className="rounded-lg bg-lime-100 px-2 py-1 font-mono text-[10px] font-black text-lime-800">{product.clave}</span>
                   <span className="min-w-0 truncate text-sm font-bold text-slate-800">{product.descripcion}</span>
-                  <span className="shrink-0 text-right text-xs font-black text-[#4d7c0f]">{formatMoney(product.lastPurchaseGross)}</span>
+                  <span className="shrink-0 text-right text-xs font-black text-[#4d7c0f]" title="Precio sin IVA">{formatMoney(product.lastPurchaseNet ?? product.precioCompra)}</span>
                 </button>
               ))}
               {products.length === 0 ? <div className="p-5 text-center text-sm text-slate-400">Sin coincidencias</div> : null}
@@ -590,7 +597,7 @@ export default function ProveedoresExternos({ user }) {
               <span>Producto</span>
               <span className="text-center">Cant.</span>
               <span className="text-center">Bultos</span>
-              <span className="text-center">Precio</span>
+              <span className="text-center">P. sin IVA</span>
               <span />
             </div>
             <div className="max-h-[min(52vh,560px)] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
@@ -630,9 +637,9 @@ export default function ProveedoresExternos({ user }) {
                     <span className="sm:hidden">{item.bultos?.length || "+"}</span>
                   </button>
                   <TouchNumericInput
-                    value={item.grossUnitPrice}
-                    onValueChange={(value) => updateItem(item.art_id, "grossUnitPrice", value)}
-                    label={`Precio final ${item.descripcion}`}
+                    value={item.netUnitPrice}
+                    onValueChange={(value) => updateItem(item.art_id, "netUnitPrice", value)}
+                    label={`Precio sin IVA ${item.descripcion}`}
                     decimals={2}
                     placeholder="0.00"
                     className="app-input h-10 !min-h-10 rounded-lg px-1 text-center text-[11px] font-black text-[#4d7c0f] sm:px-2 sm:text-sm"
@@ -661,7 +668,7 @@ export default function ProveedoresExternos({ user }) {
         <div className="rounded-[1.4rem] border border-slate-700 bg-slate-950 p-3 text-white shadow-[0_24px_60px_-28px_rgba(2,6,23,0.85)]">
           <div className="grid grid-cols-[1fr_auto] items-center gap-3">
             <div className="px-2">
-              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Total factura</div>
+              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Total factura con IVA</div>
               <div className="mt-1 text-2xl font-black">{formatMoney(totals.gross)}</div>
             </div>
             <button

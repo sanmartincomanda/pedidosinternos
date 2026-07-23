@@ -29,7 +29,7 @@ La aplicacion de escritorio incluye:
 npm run desktop:build
 ```
 
-El instalador queda en `release/CSM-Operaciones-1.1.2-Setup.exe`.
+El instalador queda en `release/CSM-Operaciones-1.1.3-Setup.exe`.
 
 ## Android
 
