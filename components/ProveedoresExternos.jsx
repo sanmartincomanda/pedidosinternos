@@ -353,7 +353,7 @@ export default function ProveedoresExternos({ user }) {
         </div>
       ) : null}
 
-      <section className="app-panel min-w-0 max-w-full p-4 sm:p-5">
+      <section className={`app-panel relative min-w-0 max-w-full overflow-visible p-4 sm:p-5 ${supplierOpen ? "z-50" : "z-20"}`}>
         <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)]">
           <div className="relative min-w-0">
             <label className="app-label">Proveedor</label>
@@ -373,7 +373,7 @@ export default function ProveedoresExternos({ user }) {
               />
             </div>
             {supplierOpen ? (
-              <div className="absolute inset-x-0 top-full z-30 mt-2 max-h-72 max-w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+              <div className="absolute inset-x-0 top-full z-[60] mt-2 max-h-[min(18rem,calc(100vh-10rem))] max-w-full overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.45)]">
                 {suppliers.map((row) => (
                   <button
                     key={row.pro_id}
@@ -415,7 +415,7 @@ export default function ProveedoresExternos({ user }) {
         </div>
       </section>
 
-      <section className="app-panel min-w-0 max-w-full p-4 sm:p-5">
+      <section className="app-panel relative z-10 min-w-0 max-w-full p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-lg font-black text-slate-950">Productos</div>
