@@ -9,7 +9,11 @@ import {
   getSelectableBranches,
   isSameBranch,
 } from "@/lib/branchUtils";
-import { normalizePedidoForUi } from "@/lib/orderUtils";
+import {
+  getPedidoCreationTimestamp,
+  getPedidoItems,
+  normalizePedidoForUi,
+} from "@/lib/orderUtils";
 import {
   deactivateMobileNotifications,
   initializeMobileNotifications,
@@ -143,48 +147,123 @@ const INITIAL_CONFIG = {
 const FINAL_ORDER_STATUSES = new Set(["RECIBIDO_CONFORME", "ENTREGADO", "ANULADO"]);
 const PREPARATION_STATUSES = new Set(["NUEVO", "STANDBY_ENTREGA", "PREPARACION", "LISTO"]);
 const STATUS_NOTIFICATIONS = {
-  NUEVO: { title: "Nuevo pedido recibido", view: "cocina" },
-  STANDBY_ENTREGA: { title: "Pedido pendiente de preparar", view: "cocina" },
-  PREPARACION: { title: "Pedido en preparacion", view: "cocina" },
-  LISTO: { title: "Pedido listo para enviar", view: "cocina" },
-  ENVIADO: { title: "Pedido enviado", view: "estados" },
-  RECIBIDO_CONFORME: { title: "Pedido recibido conforme", view: "historial" },
-  ENTREGADO: { title: "Pedido entregado", view: "historial" },
-  ANULADO: { title: "Pedido anulado", view: "historial" },
+  NUEVO: { title: "NUEVO PEDIDO SOLICITADO", action: "Preparar", view: "cocina", target: "sender" },
+  STANDBY_ENTREGA: { title: "NUEVO PEDIDO SOLICITADO", action: "Preparar", view: "cocina", target: "sender" },
+  ENVIADO: { title: "PRODUCTO EN CAMINO", action: "Recibir", view: "estados", target: "receiver" },
 };
+const ALERT_FRESHNESS_MS = 72 * 60 * 60 * 1000;
+const ALERT_STORAGE_PREFIX = "csmOperationalAlertsSeen";
 
 function getPedidoIdentity(pedido) {
   return `${pedido?.firebaseId || pedido?.id || pedido?.numeroOrden || ""}`;
 }
 
-function notifyPedidoChanges(pedidos, previousStatusesRef) {
+function buildOperationalAlert(pedido, user) {
+  const status = `${pedido?.estado || ""}`;
+  const config = STATUS_NOTIFICATIONS[status];
+  if (!config) return null;
+
+  const sender = pedido?.sucursalDestino;
+  const receiver = pedido?.sucursalOrigen;
+  const targetBranch = config.target === "sender" ? sender : receiver;
+  if (!isSameBranch(targetBranch, user)) return null;
+
+  const items = getPedidoItems(pedido);
+  const productNames = items
+    .map((item) => `${item?.producto || item?.descripcion || item?.nombre || ""}`.trim())
+    .filter(Boolean);
+  const visibleProducts = productNames.slice(0, 3).join(", ");
+  const remainingProducts = Math.max(0, productNames.length - 3);
+  const productSummary = `${visibleProducts}${remainingProducts > 0 ? ` y ${remainingProducts} mas` : ""}` || "Ver detalle del pedido";
+  const orderId = getPedidoIdentity(pedido);
+  const orderNumber = `${pedido?.numeroOrden || pedido?.id || "Pedido"}`;
+  const senderLabel = getBranchDisplayName(sender) || "Origen";
+  const receiverLabel = getBranchDisplayName(receiver) || "Destino";
+
+  return {
+    key: `${orderId}:${status}`,
+    orderId,
+    orderNumber,
+    status,
+    title: config.title,
+    action: config.action,
+    view: config.view,
+    sender: senderLabel,
+    receiver: receiverLabel,
+    itemCount: items.length,
+    productSummary,
+    body: `${config.action} ${orderNumber} | ${senderLabel} -> ${receiverLabel}`,
+  };
+}
+
+function getStoredAlertKeys(user) {
+  if (typeof window === "undefined") return new Set();
+
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(`${ALERT_STORAGE_PREFIX}:${user}`) || "[]");
+    return new Set(Array.isArray(stored) ? stored : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function storeAlertKeys(user, keys) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(`${ALERT_STORAGE_PREFIX}:${user}`, JSON.stringify(Array.from(keys).slice(-200)));
+}
+
+function isRecentOperationalAlert(pedido) {
+  const timestamp = Number(pedido?.timestamp || 0) || getPedidoCreationTimestamp(pedido);
+  return timestamp > 0 && Date.now() - timestamp <= ALERT_FRESHNESS_MS;
+}
+
+function collectPedidoAlerts(pedidos, previousStatusesRef, user) {
   const currentStatuses = Object.fromEntries(
     pedidos.map((pedido) => [getPedidoIdentity(pedido), `${pedido?.estado || ""}`]),
   );
   const previousStatuses = previousStatusesRef.current;
+  const seenKeys = getStoredAlertKeys(user);
+  const alerts = [];
 
-  if (previousStatuses && typeof window !== "undefined" && window.desktopAPI?.notify) {
-    pedidos.forEach((pedido) => {
-      const pedidoId = getPedidoIdentity(pedido);
-      const previousStatus = previousStatuses[pedidoId];
-      const currentStatus = `${pedido?.estado || ""}`;
-      const isNewOperationalOrder = !previousStatus && ["NUEVO", "ENVIADO"].includes(currentStatus);
+  pedidos.forEach((pedido) => {
+    const alert = buildOperationalAlert(pedido, user);
+    if (!alert || seenKeys.has(alert.key)) return;
 
-      if ((previousStatus && previousStatus !== currentStatus) || isNewOperationalOrder) {
-        const notification = STATUS_NOTIFICATIONS[currentStatus];
-        if (!notification) return;
+    const previousStatus = previousStatuses?.[alert.orderId];
+    const statusChanged = previousStatuses
+      ? previousStatus !== alert.status
+      : isRecentOperationalAlert(pedido);
+    if (!statusChanged) return;
 
-        window.desktopAPI.notify({
-          title: notification.title,
-          body: `${pedido?.numeroOrden || "Pedido"} - Estado actualizado correctamente`,
-          orderId: pedidoId,
-          view: notification.view,
-        });
-      }
-    });
-  }
+    seenKeys.add(alert.key);
+    alerts.push(alert);
+    window.desktopAPI?.notify?.(alert);
+  });
 
+  if (alerts.length > 0) storeAlertKeys(user, seenKeys);
   previousStatusesRef.current = currentStatuses;
+  return alerts;
+}
+
+function alertFromNavigation(data = {}) {
+  if (!data?.title || !data?.view) return null;
+
+  const orderId = `${data.orderId || data.orderNumber || "notification"}`;
+  const status = `${data.status || ""}`;
+  return {
+    key: `${orderId}:${status || data.title}`,
+    orderId,
+    orderNumber: `${data.orderNumber || "Pedido"}`,
+    status,
+    title: `${data.title}`,
+    action: status === "ENVIADO" ? "Recibir" : "Preparar",
+    view: `${data.view}`,
+    sender: `${data.sender || "Origen"}`,
+    receiver: `${data.receiver || "Destino"}`,
+    itemCount: Number(data.itemCount || 0),
+    productSummary: `${data.productSummary || "Ver detalle del pedido"}`,
+    body: `${data.body || "Hay una novedad en pedidos internos."}`,
+  };
 }
 
 function DesktopNavButton({ item, active, onClick }) {
@@ -268,6 +347,7 @@ export default function AppInterna() {
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [isDesktop, setIsDesktop] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [operationalAlerts, setOperationalAlerts] = useState([]);
   const previousOrderStatusesRef = useRef(null);
 
   useEffect(() => {
@@ -285,9 +365,17 @@ export default function AppInterna() {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    const disposeNavigation = window.desktopAPI?.onNavigate?.((nextView) => {
+    const disposeNavigation = window.desktopAPI?.onNavigate?.((destination) => {
+      const nextView = typeof destination === "string" ? destination : destination?.view;
       if (NAV_ITEMS.some((item) => item.key === nextView) || nextView === "configuracion") {
         setView(nextView);
+      }
+
+      const alert = typeof destination === "object" ? alertFromNavigation(destination) : null;
+      if (alert) {
+        setOperationalAlerts((current) =>
+          current.some((item) => item.key === alert.key) ? current : [alert, ...current],
+        );
       }
     });
 
@@ -305,9 +393,16 @@ export default function AppInterna() {
 
     let disposed = false;
     let cleanup = stopMobileNotificationListeners;
-    initializeMobileNotifications(user, (nextView) => {
+    initializeMobileNotifications(user, (nextView, notificationData) => {
       if (NAV_ITEMS.some((item) => item.key === nextView) || nextView === "configuracion") {
         setView(nextView);
+      }
+
+      const alert = alertFromNavigation(notificationData);
+      if (alert) {
+        setOperationalAlerts((current) =>
+          current.some((item) => item.key === alert.key) ? current : [alert, ...current],
+        );
       }
     })
       .then((removeListeners) => {
@@ -388,7 +483,13 @@ export default function AppInterna() {
       );
 
       const pedidosOrdenados = pedidosRelevantes.reverse();
-      notifyPedidoChanges(pedidosOrdenados, previousOrderStatusesRef);
+      const newAlerts = collectPedidoAlerts(pedidosOrdenados, previousOrderStatusesRef, user);
+      if (newAlerts.length > 0) {
+        setOperationalAlerts((current) => {
+          const currentKeys = new Set(current.map((alert) => alert.key));
+          return [...current, ...newAlerts.filter((alert) => !currentKeys.has(alert.key))];
+        });
+      }
       setPedidos(pedidosOrdenados);
     });
 
@@ -407,6 +508,7 @@ export default function AppInterna() {
 
     window.localStorage.setItem("csmDesktopBranch", found.id);
     previousOrderStatusesRef.current = null;
+    setOperationalAlerts([]);
     setUser(found.id);
     setError("");
     setPassword("");
@@ -420,6 +522,7 @@ export default function AppInterna() {
     });
     window.localStorage.removeItem("csmDesktopBranch");
     previousOrderStatusesRef.current = null;
+    setOperationalAlerts([]);
     setUser(null);
     setPassword("");
     setPedidoEditar(null);
@@ -447,6 +550,16 @@ export default function AppInterna() {
     const inTransit = pedidos.filter((pedido) => pedido.estado === "ENVIADO").length;
     return { active, preparation, inTransit };
   }, [pedidos]);
+
+  const activeOperationalAlert = operationalAlerts[0] || null;
+  const closeOperationalAlert = () => {
+    setOperationalAlerts((current) => current.slice(1));
+  };
+  const openOperationalAlert = () => {
+    if (!activeOperationalAlert) return;
+    setView(activeOperationalAlert.view);
+    setOperationalAlerts((current) => current.slice(1));
+  };
 
   const renderCurrentView = () => {
     const commonPrinterSettings = config.impresion || INITIAL_CONFIG.impresion;
@@ -749,6 +862,76 @@ export default function AppInterna() {
           ))}
         </div>
       </nav>
+
+      {activeOperationalAlert ? (
+        <div className="app-modal z-[90] px-4" role="dialog" aria-modal="true" aria-labelledby="operational-alert-title">
+          <div className="app-modal-panel w-full max-w-[520px] overflow-hidden p-0">
+            <div
+              className={`h-2 w-full ${activeOperationalAlert.status === "ENVIADO" ? "bg-emerald-500" : "bg-amber-400"}`}
+            />
+            <div className="p-5 sm:p-6">
+              <div className="flex items-start gap-4">
+                <div
+                  className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
+                    activeOperationalAlert.status === "ENVIADO"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  {activeOperationalAlert.status === "ENVIADO" ? Icons.truck : Icons.clipboard}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                    Aviso operativo
+                  </div>
+                  <h2 id="operational-alert-title" className="mt-1 text-xl font-black text-slate-900 sm:text-2xl">
+                    {activeOperationalAlert.title}
+                  </h2>
+                  <div className="mt-2 inline-flex rounded-full bg-slate-900 px-3 py-1 text-sm font-black text-white">
+                    {activeOperationalAlert.orderNumber}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Origen</div>
+                  <div className="mt-1 font-extrabold text-slate-700">{activeOperationalAlert.sender}</div>
+                </div>
+                <div className="text-xl font-black text-slate-300">→</div>
+                <div className="text-right">
+                  <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Destino</div>
+                  <div className="mt-1 font-extrabold text-slate-700">{activeOperationalAlert.receiver}</div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-200 px-4 py-3">
+                <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                  {activeOperationalAlert.itemCount || 0} productos
+                </div>
+                <p className="mt-1 text-sm font-semibold leading-6 text-slate-600">
+                  {activeOperationalAlert.productSummary}
+                </p>
+              </div>
+
+              <div className="mt-6 grid grid-cols-[auto_1fr] gap-3">
+                <button type="button" onClick={closeOperationalAlert} className="app-button app-button-secondary px-5">
+                  Cerrar
+                </button>
+                <button type="button" onClick={openOperationalAlert} className="app-button app-button-primary">
+                  Ver pedido
+                </button>
+              </div>
+
+              {operationalAlerts.length > 1 ? (
+                <div className="mt-3 text-center text-xs font-bold text-slate-400">
+                  Quedan {operationalAlerts.length - 1} avisos por revisar
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

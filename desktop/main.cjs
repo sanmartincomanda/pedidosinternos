@@ -65,23 +65,23 @@ function setAutoLaunch(enabled) {
   });
 }
 
-function sendNavigation(view) {
+function sendNavigation(destination) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send("desktop:navigate", view);
+  mainWindow.webContents.send("desktop:navigate", destination);
 }
 
-function showMainWindow(view) {
+function showMainWindow(destination) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
 
-  if (view) {
+  if (destination) {
     if (mainWindow.webContents.isLoading()) {
-      mainWindow.webContents.once("did-finish-load", () => sendNavigation(view));
+      mainWindow.webContents.once("did-finish-load", () => sendNavigation(destination));
     } else {
-      sendNavigation(view);
+      sendNavigation(destination);
     }
   }
 }
@@ -96,10 +96,14 @@ function showDesktopNotification(payload = {}) {
     body,
     icon: getIconPath(),
     silent: false,
-    urgency: "normal",
+    urgency: "critical",
+    timeoutType: "never",
   });
 
-  notification.on("click", () => showMainWindow(payload.view || "estados"));
+  notification.on("click", () => showMainWindow({
+    ...payload,
+    view: payload.view || "estados",
+  }));
   notification.show();
 }
 

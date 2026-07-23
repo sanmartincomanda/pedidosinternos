@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld("desktopAPI", {
   notify: (payload) => ipcRenderer.send("desktop:notify", payload),
   show: (view) => ipcRenderer.send("desktop:show", view),
   onNavigate: (callback) => {
-    const listener = (_event, view) => callback(view);
+    const listener = (_event, destination) => callback(destination);
     ipcRenderer.on("desktop:navigate", listener);
     return () => ipcRenderer.removeListener("desktop:navigate", listener);
   },

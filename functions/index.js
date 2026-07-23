@@ -6,17 +6,27 @@ const { onValueWritten } = require("firebase-functions/v2/database");
 initializeApp();
 
 const STATUS_CONFIG = {
-  NUEVO: { title: "Nuevo pedido recibido", view: "cocina" },
-  STANDBY_ENTREGA: { title: "Pedido pendiente de preparar", view: "cocina" },
-  PREPARACION: { title: "Pedido en preparacion", view: "cocina" },
-  LISTO: { title: "Pedido listo para enviar", view: "cocina" },
-  ENVIADO: { title: "Pedido enviado", view: "estados" },
-  RECIBIDO_CONFORME: { title: "Pedido recibido conforme", view: "historial" },
-  ENTREGADO: { title: "Pedido entregado", view: "historial" },
-  ANULADO: { title: "Pedido anulado", view: "historial" },
+  NUEVO: {
+    title: "NUEVO PEDIDO SOLICITADO",
+    action: "Preparar",
+    view: "cocina",
+    channelId: "pedidos_nuevos_v1",
+  },
+  STANDBY_ENTREGA: {
+    title: "NUEVO PEDIDO SOLICITADO",
+    action: "Preparar",
+    view: "cocina",
+    channelId: "pedidos_nuevos_v1",
+  },
+  ENVIADO: {
+    title: "PRODUCTO EN CAMINO",
+    action: "Recibir",
+    view: "estados",
+    channelId: "producto_en_camino_v1",
+  },
 };
 
-const PREPARATION_STATUSES = new Set(["NUEVO", "STANDBY_ENTREGA", "PREPARACION", "LISTO"]);
+const PREPARATION_STATUSES = new Set(["NUEVO", "STANDBY_ENTREGA"]);
 const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered",
@@ -39,9 +49,30 @@ function getTargetBranches(order, status) {
 
   if (PREPARATION_STATUSES.has(status)) return [sender];
   if (status === "ENVIADO") return [receiver];
-  if (status === "RECIBIDO_CONFORME") return [sender];
-  if (status === "ENTREGADO" || status === "ANULADO") return [sender, receiver];
   return [];
+}
+
+function normalizeItems(items) {
+  if (Array.isArray(items)) return items.filter(Boolean);
+  if (!items || typeof items !== "object") return [];
+  return Object.keys(items)
+    .sort((left, right) => Number(left) - Number(right))
+    .map((key) => items[key])
+    .filter(Boolean);
+}
+
+function getProductSummary(order) {
+  const items = normalizeItems(order?.items);
+  const names = items
+    .map((item) => `${item?.producto || item?.descripcion || item?.nombre || ""}`.trim())
+    .filter(Boolean);
+  const visibleNames = names.slice(0, 2).join(", ");
+  const remaining = Math.max(0, names.length - 2);
+
+  return {
+    itemCount: items.length,
+    productSummary: `${visibleNames}${remaining > 0 ? ` y ${remaining} mas` : ""}` || "Ver detalle del pedido",
+  };
 }
 
 async function sendInBatches(devices, payload) {
@@ -59,7 +90,7 @@ async function sendInBatches(devices, payload) {
       android: {
         priority: "high",
         notification: {
-          channelId: "pedidos",
+          channelId: payload.channelId,
           sound: "default",
         },
       },
@@ -111,15 +142,28 @@ exports.notificarCambioPedido = onValueWritten(
     if (devices.length === 0) return;
 
     const orderNumber = `${after.numeroOrden || event.params.pedidoId || "Pedido"}`;
+    const sender = canonicalBranch(after.sucursalDestino);
+    const receiver = canonicalBranch(after.sucursalOrigen);
+    const route = `${sender || "Origen"} -> ${receiver || "Destino"}`;
+    const { itemCount, productSummary } = getProductSummary(after);
+    const body = `${statusConfig.action} ${orderNumber} | ${route} | ${productSummary}`;
+
     await sendInBatches(devices, {
       title: statusConfig.title,
-      body: `${orderNumber} - Estado actualizado correctamente`,
+      body,
+      channelId: statusConfig.channelId,
       data: {
         title: statusConfig.title,
-        body: `${orderNumber} - Estado actualizado correctamente`,
+        body,
         view: statusConfig.view,
         orderId: `${event.params.pedidoId || ""}`,
+        orderNumber,
         status: currentStatus,
+        sender,
+        receiver,
+        itemCount: `${itemCount}`,
+        productSummary,
+        channelId: statusConfig.channelId,
       },
     });
   },
