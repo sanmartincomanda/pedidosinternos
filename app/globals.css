@@ -35,12 +35,16 @@
 
 html {
   min-height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   background: var(--background);
   color-scheme: light;
 }
 
 body {
   min-height: 100vh;
+  max-width: 100%;
+  overflow-x: hidden;
   margin: 0;
   color: var(--foreground);
   font-family: var(--font-ibm-plex-sans), "Segoe UI", sans-serif;
@@ -162,6 +166,8 @@ textarea {
 .app-route-shell {
   position: relative;
   isolation: isolate;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .app-route-shell::before {
@@ -177,6 +183,8 @@ textarea {
 }
 
 .app-panel {
+  min-width: 0;
+  max-width: 100%;
   border-radius: 1.8rem;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -328,6 +336,8 @@ textarea {
 .app-input,
 .app-select,
 .app-textarea {
+  min-width: 0;
+  max-width: 100%;
   width: 100%;
   border: 1px solid var(--line-strong);
   border-radius: 1rem;

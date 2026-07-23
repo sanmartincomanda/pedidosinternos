@@ -111,7 +111,7 @@ function ConnectionDialog({ initial, onClose, onSaved }) {
           className="app-input"
           placeholder="Clave API"
         />
-        <div className="mt-6 grid grid-cols-2 gap-3">
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
           <button type="button" onClick={onClose} className="app-button app-button-secondary">Cancelar</button>
           <button
             type="button"
@@ -266,8 +266,8 @@ export default function ProveedoresExternos({ user }) {
   };
 
   return (
-    <div className="space-y-4 pb-28">
-      <section className="overflow-hidden rounded-[1.7rem] border border-slate-800 bg-[radial-gradient(circle_at_88%_8%,rgba(14,165,233,0.2),transparent_18rem),linear-gradient(135deg,#08111f_0%,#10233a_58%,#142f3a_100%)] p-5 text-white shadow-[0_24px_60px_-38px_rgba(2,6,23,0.85)] sm:p-6">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-clip pb-28">
+      <section className="min-w-0 max-w-full overflow-hidden rounded-[1.7rem] border border-slate-800 bg-[radial-gradient(circle_at_88%_8%,rgba(14,165,233,0.2),transparent_18rem),linear-gradient(135deg,#08111f_0%,#10233a_58%,#142f3a_100%)] p-5 text-white shadow-[0_24px_60px_-38px_rgba(2,6,23,0.85)] sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-300">Modulo proveedores externos</div>
@@ -315,9 +315,9 @@ export default function ProveedoresExternos({ user }) {
         </div>
       ) : null}
 
-      <section className="app-panel p-4 sm:p-5">
-        <div className="grid gap-4 lg:grid-cols-[1.35fr_0.8fr_1fr]">
-          <div className="relative">
+      <section className="app-panel min-w-0 max-w-full p-4 sm:p-5">
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)]">
+          <div className="relative min-w-0">
             <label className="app-label">Proveedor</label>
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{Icons.supplier}</span>
@@ -335,7 +335,7 @@ export default function ProveedoresExternos({ user }) {
               />
             </div>
             {supplierOpen ? (
-              <div className="absolute inset-x-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+              <div className="absolute inset-x-0 top-full z-30 mt-2 max-h-72 max-w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
                 {suppliers.map((row) => (
                   <button
                     key={row.pro_id}
@@ -345,7 +345,7 @@ export default function ProveedoresExternos({ user }) {
                       setSupplierQuery("");
                       setSupplierOpen(false);
                     }}
-                    className="mb-1 w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-cyan-50"
+                    className="mb-1 w-full min-w-0 break-words rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-cyan-50"
                   >
                     {row.nombre}
                   </button>
@@ -354,7 +354,7 @@ export default function ProveedoresExternos({ user }) {
               </div>
             ) : null}
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="app-label">Factura / remision</label>
             <input
               value={invoiceNumber}
@@ -364,7 +364,7 @@ export default function ProveedoresExternos({ user }) {
               maxLength={19}
             />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className="app-label">Nota</label>
             <input
               value={comment}
@@ -377,7 +377,7 @@ export default function ProveedoresExternos({ user }) {
         </div>
       </section>
 
-      <section className="app-panel p-4 sm:p-5">
+      <section className="app-panel min-w-0 max-w-full p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-lg font-black text-slate-950">Productos</div>
@@ -386,7 +386,7 @@ export default function ProveedoresExternos({ user }) {
           <div className="rounded-full bg-cyan-50 px-4 py-2 text-sm font-black text-cyan-800">Precio final con IVA</div>
         </div>
 
-        <div className="relative mt-4">
+        <div className="relative mt-4 min-w-0 max-w-full">
           <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{Icons.search}</span>
           <input
             value={productQuery}
@@ -400,17 +400,19 @@ export default function ProveedoresExternos({ user }) {
             disabled={connection !== "online"}
           />
           {productOpen ? (
-            <div className="absolute inset-x-0 top-full z-20 mt-2 max-h-[360px] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+            <div className="absolute inset-x-0 top-full z-20 mt-2 max-h-[360px] max-w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
               {products.map((product) => (
                 <button
                   key={product.art_id}
                   type="button"
                   onClick={() => addProduct(product)}
-                  className="mb-1 grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-cyan-50"
+                  className="mb-1 grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-cyan-50"
                 >
-                  <span className="rounded-lg bg-slate-100 px-2 py-1 font-mono text-xs font-black text-slate-600">{product.clave}</span>
-                  <span className="min-w-0 text-sm font-bold text-slate-800">{product.descripcion}</span>
-                  <span className="text-right text-sm font-black text-cyan-800">{formatMoney(product.lastPurchaseGross)}</span>
+                  <span className="min-w-0">
+                    <span className="inline-flex max-w-full rounded-lg bg-slate-100 px-2 py-1 font-mono text-xs font-black text-slate-600">{product.clave}</span>
+                    <span className="mt-1 block break-words text-sm font-bold text-slate-800">{product.descripcion}</span>
+                  </span>
+                  <span className="shrink-0 text-right text-sm font-black text-cyan-800">{formatMoney(product.lastPurchaseGross)}</span>
                 </button>
               ))}
               {products.length === 0 ? <div className="p-5 text-center text-sm text-slate-400">Sin coincidencias</div> : null}
@@ -422,7 +424,7 @@ export default function ProveedoresExternos({ user }) {
           {items.map((item, index) => {
             const lineTotal = roundMoney(Number(item.quantity || 0) * Number(item.grossUnitPrice || 0));
             return (
-              <div key={item.art_id} className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 lg:grid-cols-[42px_minmax(240px,1fr)_130px_155px_135px_48px] lg:items-center">
+              <div key={item.art_id} className="grid min-w-0 max-w-full gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 xl:grid-cols-[42px_minmax(180px,1fr)_minmax(100px,130px)_minmax(120px,155px)_minmax(115px,135px)_48px] xl:items-center">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-xs font-black text-white">{String(index + 1).padStart(2, "0")}</div>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-black text-slate-900">{item.descripcion}</div>
@@ -433,7 +435,7 @@ export default function ProveedoresExternos({ user }) {
                   </div>
                 </div>
                 <div>
-                  <label className="app-label lg:hidden">Cantidad</label>
+                  <label className="app-label xl:hidden">Cantidad</label>
                   <TouchNumericInput
                     value={item.quantity}
                     onValueChange={(value) => updateItem(item.art_id, "quantity", value)}
@@ -444,7 +446,7 @@ export default function ProveedoresExternos({ user }) {
                   />
                 </div>
                 <div>
-                  <label className="app-label lg:hidden">Precio con IVA</label>
+                  <label className="app-label xl:hidden">Precio con IVA</label>
                   <TouchNumericInput
                     value={item.grossUnitPrice}
                     onValueChange={(value) => updateItem(item.art_id, "grossUnitPrice", value)}
@@ -513,7 +515,7 @@ export default function ProveedoresExternos({ user }) {
           <div className="app-modal-panel w-full max-w-xl p-5 sm:p-6">
             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-700">Confirmar recepcion</div>
             <h2 className="mt-1 text-2xl font-black text-slate-950">{preview.supplier?.nombre}</h2>
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl bg-slate-50 p-4">
                 <div className="text-[10px] font-black uppercase text-slate-400">Productos</div>
                 <div className="mt-1 text-xl font-black">{preview.summary?.lines}</div>
@@ -526,7 +528,7 @@ export default function ProveedoresExternos({ user }) {
             <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
               Esta accion registra la compra y aumenta inventario. No modifica precios de venta ni la configuracion de IVA.
             </p>
-            <div className="mt-6 grid grid-cols-2 gap-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button type="button" onClick={() => setPreview(null)} className="app-button app-button-secondary">Revisar</button>
               <button type="button" onClick={receivePurchase} disabled={loading} className="app-button app-button-primary">
                 {loading ? "Registrando..." : "Confirmar recepcion"}
