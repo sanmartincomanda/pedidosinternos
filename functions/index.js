@@ -10,19 +10,19 @@ const STATUS_CONFIG = {
     title: "NUEVO PEDIDO SOLICITADO",
     action: "Preparar",
     view: "cocina",
-    channelId: "pedidos_nuevos_v1",
+    channelId: "pedidos_nuevos_v2",
   },
   STANDBY_ENTREGA: {
     title: "NUEVO PEDIDO SOLICITADO",
     action: "Preparar",
     view: "cocina",
-    channelId: "pedidos_nuevos_v1",
+    channelId: "pedidos_nuevos_v2",
   },
   ENVIADO: {
     title: "PRODUCTO EN CAMINO",
     action: "Recibir",
     view: "estados",
-    channelId: "producto_en_camino_v1",
+    channelId: "producto_en_camino_v2",
   },
 };
 

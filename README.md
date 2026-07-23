@@ -29,7 +29,7 @@ La aplicacion de escritorio incluye:
 npm run desktop:build
 ```
 
-El instalador queda en `release/CSM-Pedidos-1.0.1-Setup.exe`.
+El instalador queda en `release/CSM-Pedidos-1.0.2-Setup.exe`.
 
 ## Android
 

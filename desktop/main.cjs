@@ -28,6 +28,7 @@ const MIME_TYPES = {
   ".map": "application/json; charset=utf-8",
   ".png": "image/png",
   ".svg": "image/svg+xml",
+  ".wav": "audio/wav",
   ".webp": "image/webp",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
@@ -40,6 +41,7 @@ let staticOrigin = "";
 let isQuitting = false;
 
 app.setAppUserModelId(APP_ID);
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 const singleInstanceLock = app.requestSingleInstanceLock();
 if (!singleInstanceLock) {

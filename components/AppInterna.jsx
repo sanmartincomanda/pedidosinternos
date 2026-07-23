@@ -18,6 +18,7 @@ import {
   deactivateMobileNotifications,
   initializeMobileNotifications,
   isNativeAndroidApp,
+  showMobileOperationalNotification,
   stopMobileNotificationListeners,
 } from "@/lib/mobileNotifications";
 import Cocina from "./Cocina";
@@ -152,7 +153,7 @@ const STATUS_NOTIFICATIONS = {
   ENVIADO: { title: "PRODUCTO EN CAMINO", action: "Recibir", view: "estados", target: "receiver" },
 };
 const ALERT_FRESHNESS_MS = 72 * 60 * 60 * 1000;
-const ALERT_STORAGE_PREFIX = "csmOperationalAlertsSeen";
+const ALERT_STORAGE_PREFIX = "csmOperationalAlertsSeenV2";
 
 function getPedidoIdentity(pedido) {
   return `${pedido?.firebaseId || pedido?.id || pedido?.numeroOrden || ""}`;
@@ -212,6 +213,26 @@ function storeAlertKeys(user, keys) {
   window.localStorage.setItem(`${ALERT_STORAGE_PREFIX}:${user}`, JSON.stringify(Array.from(keys).slice(-200)));
 }
 
+function markAlertReviewed(user, alertKey) {
+  if (!user || !alertKey) return;
+  const seenKeys = getStoredAlertKeys(user);
+  seenKeys.add(alertKey);
+  storeAlertKeys(user, seenKeys);
+}
+
+function playDesktopAlertSound(status) {
+  if (typeof window === "undefined" || !window.desktopAPI) return;
+
+  const soundFile = status === "ENVIADO"
+    ? "/sounds/producto-en-camino.wav"
+    : "/sounds/pedido-nuevo.wav";
+  const audio = new Audio(soundFile);
+  audio.volume = 0.95;
+  audio.play().catch((soundError) => {
+    console.error("No se pudo reproducir el sonido del aviso:", soundError);
+  });
+}
+
 function isRecentOperationalAlert(pedido) {
   const timestamp = Number(pedido?.timestamp || 0) || getPedidoCreationTimestamp(pedido);
   return timestamp > 0 && Date.now() - timestamp <= ALERT_FRESHNESS_MS;
@@ -235,12 +256,13 @@ function collectPedidoAlerts(pedidos, previousStatusesRef, user) {
       : isRecentOperationalAlert(pedido);
     if (!statusChanged) return;
 
-    seenKeys.add(alert.key);
     alerts.push(alert);
-    window.desktopAPI?.notify?.(alert);
+    if (window.desktopAPI?.notify) {
+      window.desktopAPI.notify(alert);
+      playDesktopAlertSound(alert.status);
+    }
   });
 
-  if (alerts.length > 0) storeAlertKeys(user, seenKeys);
   previousStatusesRef.current = currentStatuses;
   return alerts;
 }
@@ -489,6 +511,9 @@ export default function AppInterna() {
           const currentKeys = new Set(current.map((alert) => alert.key));
           return [...current, ...newAlerts.filter((alert) => !currentKeys.has(alert.key))];
         });
+        showMobileOperationalNotification(newAlerts[0]).catch((notificationError) => {
+          console.error("No se pudo mostrar el aviso sonoro Android:", notificationError);
+        });
       }
       setPedidos(pedidosOrdenados);
     });
@@ -553,10 +578,12 @@ export default function AppInterna() {
 
   const activeOperationalAlert = operationalAlerts[0] || null;
   const closeOperationalAlert = () => {
+    markAlertReviewed(user, activeOperationalAlert?.key);
     setOperationalAlerts((current) => current.slice(1));
   };
   const openOperationalAlert = () => {
     if (!activeOperationalAlert) return;
+    markAlertReviewed(user, activeOperationalAlert.key);
     setView(activeOperationalAlert.view);
     setOperationalAlerts((current) => current.slice(1));
   };
@@ -898,7 +925,7 @@ export default function AppInterna() {
                   <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Origen</div>
                   <div className="mt-1 font-extrabold text-slate-700">{activeOperationalAlert.sender}</div>
                 </div>
-                <div className="text-xl font-black text-slate-300">→</div>
+                <div className="text-xl font-black text-slate-300">{"->"}</div>
                 <div className="text-right">
                   <div className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Destino</div>
                   <div className="mt-1 font-extrabold text-slate-700">{activeOperationalAlert.receiver}</div>
