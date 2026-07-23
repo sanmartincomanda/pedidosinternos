@@ -1,6 +1,6 @@
 {
   "name": "app-pedidos-internos",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Traspasos internos y recepcion de proveedores de Carnes San Martin",
   "author": "Carnes San Martin",
   "private": true,
