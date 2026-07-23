@@ -10,6 +10,12 @@ import {
   isSameBranch,
 } from "@/lib/branchUtils";
 import { normalizePedidoForUi } from "@/lib/orderUtils";
+import {
+  deactivateMobileNotifications,
+  initializeMobileNotifications,
+  isNativeAndroidApp,
+  stopMobileNotificationListeners,
+} from "@/lib/mobileNotifications";
 import Cocina from "./Cocina";
 import Configuracion from "./Configuracion";
 import EstadoPedidos from "./EstadoPedidos";
@@ -261,12 +267,18 @@ export default function AppInterna() {
   const [showPassword, setShowPassword] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [isDesktop, setIsDesktop] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const previousOrderStatusesRef = useRef(null);
 
   useEffect(() => {
     const desktopMode = Boolean(window.desktopAPI?.isDesktop);
-    queueMicrotask(() => setIsDesktop(desktopMode));
+    const mobileMode = isNativeAndroidApp();
+    queueMicrotask(() => {
+      setIsDesktop(desktopMode);
+      setIsMobile(mobileMode);
+    });
     document.documentElement.classList.toggle("desktop-runtime", desktopMode);
+    document.documentElement.classList.toggle("android-runtime", mobileMode);
 
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -281,11 +293,39 @@ export default function AppInterna() {
 
     return () => {
       document.documentElement.classList.remove("desktop-runtime");
+      document.documentElement.classList.remove("android-runtime");
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       if (typeof disposeNavigation === "function") disposeNavigation();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user || !isNativeAndroidApp()) return undefined;
+
+    let disposed = false;
+    let cleanup = stopMobileNotificationListeners;
+    initializeMobileNotifications(user, (nextView) => {
+      if (NAV_ITEMS.some((item) => item.key === nextView) || nextView === "configuracion") {
+        setView(nextView);
+      }
+    })
+      .then((removeListeners) => {
+        if (disposed) {
+          removeListeners();
+        } else {
+          cleanup = removeListeners;
+        }
+      })
+      .catch((notificationError) => {
+        console.error("No se pudieron iniciar las notificaciones Android:", notificationError);
+      });
+
+    return () => {
+      disposed = true;
+      cleanup();
+    };
+  }, [user]);
 
   useEffect(() => {
     localStorage.setItem("appConfig", JSON.stringify(config));
@@ -375,6 +415,9 @@ export default function AppInterna() {
   };
 
   const handleLogout = () => {
+    deactivateMobileNotifications().catch((notificationError) => {
+      console.error("No se pudo desactivar este telefono:", notificationError);
+    });
     window.localStorage.removeItem("csmDesktopBranch");
     previousOrderStatusesRef.current = null;
     setUser(null);
@@ -630,10 +673,12 @@ export default function AppInterna() {
         </div>
 
         <div className="desktop-sidebar-footer">
-          <span className="desktop-footer-icon">{isDesktop ? Icons.bell : Icons.monitor}</span>
+          <span className="desktop-footer-icon">{isDesktop || isMobile ? Icons.bell : Icons.monitor}</span>
           <div>
-            <div className="desktop-footer-title">{isDesktop ? "Avisos activos" : "Modo web"}</div>
-            <div className="desktop-footer-copy">{isDesktop ? "Segundo plano" : "Navegador"}</div>
+            <div className="desktop-footer-title">{isDesktop || isMobile ? "Avisos activos" : "Modo web"}</div>
+            <div className="desktop-footer-copy">
+              {isDesktop ? "Segundo plano" : isMobile ? "Android" : "Navegador"}
+            </div>
           </div>
         </div>
       </aside>

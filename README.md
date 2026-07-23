@@ -30,3 +30,22 @@ npm run desktop:build
 ```
 
 El instalador queda en `release/CSM-Pedidos-1.0.0-Setup.exe`.
+
+## Android
+
+El proyecto Android usa Capacitor 7, Android API 35 y Firebase Cloud Messaging.
+
+```powershell
+npm run android:apk
+```
+
+El APK firmado de produccion queda en `android/app/build/outputs/apk/release/app-release.apk`.
+La firma privada se carga desde `android-signing/keystore.properties` y no se publica en GitHub.
+Las notificaciones en segundo plano dependen de la funcion `notificarCambioPedido`:
+
+```powershell
+npm run firebase:deploy:notifications
+```
+
+Firebase exige que el proyecto este en el plan Blaze para desplegar esta Cloud Function.
+Sin esa funcion, la app sigue operativa pero no puede garantizar avisos cuando esta completamente cerrada.

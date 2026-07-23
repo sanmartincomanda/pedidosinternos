@@ -20,6 +20,11 @@
 # production
 /build
 /release/
+/android-apk/
+/android-signing/
+/android/local.properties
+/android/.gradle/
+/functions/node_modules/
 
 # misc
 .DS_Store

@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "464790476389",
+    "firebase_url": "https://pedidosinterno-3c65d-default-rtdb.firebaseio.com",
+    "project_id": "pedidosinterno-3c65d",
+    "storage_bucket": "pedidosinterno-3c65d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:464790476389:android:288b1ad3e18bbc636ad88c",
+        "android_client_info": {
+          "package_name": "com.pedidosinternos.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCMEk3OtdRc7-ijKcYjx1u-b1cKEEF4CA4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
