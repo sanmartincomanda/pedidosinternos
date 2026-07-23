@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import TouchNumericInput from "./TouchNumericInput";
 import {
   checkSicarPurchaseApi,
@@ -59,6 +60,21 @@ const Icons = {
       <path d="M8 12h8M12 8v8" />
     </svg>
   ),
+  plus: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  ),
+  scale: (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 3v4M5 7h14M7 7l-4 8h8L7 7Zm10 0-4 8h8l-4-8ZM12 7v14M8 21h8" />
+    </svg>
+  ),
+  close: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+      <path d="m6 6 12 12M18 6 6 18" />
+    </svg>
+  ),
 };
 
 function localDate() {
@@ -77,6 +93,16 @@ function formatMoney(value) {
 
 function roundMoney(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function parseBultoWeight(value) {
+  const parsed = Number.parseFloat(`${value ?? ""}`.trim().replace(",", "."));
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed * 10000) / 10000;
+}
+
+function formatBultoWeight(value) {
+  return `${Math.round(Number(value || 0) * 10000) / 10000}`;
 }
 
 function buildPurchasePayload({ supplier, invoiceNumber, comment, items, requestId, paymentMethod }) {
@@ -154,6 +180,10 @@ export default function ProveedoresExternos({ user }) {
   const [products, setProducts] = useState([]);
   const [productOpen, setProductOpen] = useState(false);
   const [items, setItems] = useState([]);
+  const [bultosArticleId, setBultosArticleId] = useState(null);
+  const [bultosTemporal, setBultosTemporal] = useState([]);
+  const [bultoTemporal, setBultoTemporal] = useState("");
+  const [bultoError, setBultoError] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
@@ -163,6 +193,9 @@ export default function ProveedoresExternos({ user }) {
   const [preview, setPreview] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const requestIdRef = useRef(globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`);
+  const productSearchRef = useRef(null);
+  const quantityRefs = useRef(new Map());
+  const bultoInputRef = useRef(null);
 
   const checkConnection = async () => {
     setConnection("checking");
@@ -210,24 +243,99 @@ export default function ProveedoresExternos({ user }) {
 
   const addProduct = (product) => {
     setItems((current) => {
-      if (current.some((item) => Number(item.art_id) === Number(product.art_id))) return current;
+      const existing = current.find((item) => Number(item.art_id) === Number(product.art_id));
+      if (existing) {
+        return [existing, ...current.filter((item) => Number(item.art_id) !== Number(product.art_id))];
+      }
       return [
-        ...current,
         {
           ...product,
           quantity: "",
           grossUnitPrice: `${Number(product.lastPurchaseGross || 0).toFixed(2)}`,
+          bultos: [],
         },
+        ...current,
       ];
     });
     setProductQuery("");
     setProductOpen(false);
+    requestAnimationFrame(() => quantityRefs.current.get(Number(product.art_id))?.focus());
   };
 
   const updateItem = (articleId, field, value) => {
     setItems((current) =>
-      current.map((item) => (Number(item.art_id) === Number(articleId) ? { ...item, [field]: value } : item)),
+      current.map((item) => (
+        Number(item.art_id) === Number(articleId)
+          ? { ...item, [field]: value, ...(field === "quantity" ? { bultos: [] } : {}) }
+          : item
+      )),
     );
+  };
+
+  const openProductSearch = () => {
+    setProductOpen(true);
+    requestAnimationFrame(() => {
+      productSearchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      productSearchRef.current?.focus();
+    });
+  };
+
+  const closeBultos = () => {
+    setBultosArticleId(null);
+    setBultosTemporal([]);
+    setBultoTemporal("");
+    setBultoError("");
+  };
+
+  const openBultos = (articleId) => {
+    const item = items.find((row) => Number(row.art_id) === Number(articleId));
+    const saved = Array.isArray(item?.bultos)
+      ? item.bultos.map(parseBultoWeight).filter((weight) => weight !== null)
+      : [];
+    setBultosArticleId(Number(articleId));
+    setBultosTemporal(saved);
+    setBultoTemporal("");
+    setBultoError("");
+    setTimeout(() => bultoInputRef.current?.focus(), 80);
+  };
+
+  const addBulto = () => {
+    const weight = parseBultoWeight(bultoTemporal);
+    if (weight === null) {
+      setBultoError("Ingresa un peso mayor que cero.");
+      bultoInputRef.current?.focus();
+      return;
+    }
+    setBultosTemporal((current) => [...current, weight]);
+    setBultoTemporal("");
+    setBultoError("");
+    requestAnimationFrame(() => bultoInputRef.current?.focus());
+  };
+
+  const finishBultos = () => {
+    let finalWeights = bultosTemporal;
+    if (`${bultoTemporal}`.trim()) {
+      const lastWeight = parseBultoWeight(bultoTemporal);
+      if (lastWeight === null) {
+        setBultoError("Revisa el ultimo peso.");
+        bultoInputRef.current?.focus();
+        return;
+      }
+      finalWeights = [...finalWeights, lastWeight];
+    }
+    if (finalWeights.length === 0) {
+      setBultoError("Agrega al menos un peso.");
+      bultoInputRef.current?.focus();
+      return;
+    }
+    const total = finalWeights.reduce((sum, weight) => sum + weight, 0);
+    setItems((current) => current.map((item) => (
+      Number(item.art_id) === Number(bultosArticleId)
+        ? { ...item, quantity: formatBultoWeight(total), bultos: finalWeights }
+        : item
+    )));
+    closeBultos();
+    openProductSearch();
   };
 
   const validate = () => {
@@ -303,21 +411,32 @@ export default function ProveedoresExternos({ user }) {
     }
   };
 
+  const activeBultoItem = items.find((item) => Number(item.art_id) === Number(bultosArticleId));
+  const bultosTotal = bultosTemporal.reduce((sum, weight) => sum + weight, 0);
+
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-clip pb-28">
-      <section className="min-w-0 max-w-full overflow-hidden rounded-[1.7rem] border border-slate-800 bg-[radial-gradient(circle_at_88%_8%,rgba(14,165,233,0.2),transparent_18rem),linear-gradient(135deg,#08111f_0%,#10233a_58%,#142f3a_100%)] p-5 text-white shadow-[0_24px_60px_-38px_rgba(2,6,23,0.85)] sm:p-6">
+      <section className="min-w-0 max-w-full overflow-hidden rounded-[1.7rem] border border-[#3f6212] bg-[radial-gradient(circle_at_88%_8%,rgba(118,185,0,0.3),transparent_20rem),linear-gradient(135deg,#0b1408_0%,#17250e_58%,#223914_100%)] p-5 text-white shadow-[0_24px_60px_-38px_rgba(20,40,8,0.9)] sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="text-[10px] font-black uppercase tracking-[0.22em] text-cyan-300">Modulo proveedores externos</div>
-            <h2 className="mt-2 text-2xl font-black sm:text-3xl">Recibir mercaderia</h2>
-            <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-300">
-              Proveedor, cantidades y precio final de factura. SICAR calcula el IVA configurado sin modificar el articulo.
-            </p>
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-2xl bg-white px-3 shadow-lg sm:h-20 sm:w-36">
+              <div
+                role="img"
+                aria-label="Carnes San Martin"
+                className="h-full w-full bg-contain bg-center bg-no-repeat"
+                style={{ backgroundImage: 'url("./csm-logo.svg")' }}
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-lime-300">Proveedores externos</div>
+              <h2 className="mt-1 text-2xl font-black sm:text-3xl">Recibir mercaderia</h2>
+              <p className="mt-1 max-w-2xl text-sm font-semibold text-slate-300">Factura de compra e inventario SICAR.</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={() => setConnectionDialog(true)}
-            className="flex min-h-12 items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 text-sm font-black text-white"
+            className="flex min-h-11 items-center gap-2 rounded-xl border border-lime-300/25 bg-white/10 px-4 text-sm font-black text-white"
           >
             {Icons.settings}
             SICAR
@@ -383,7 +502,7 @@ export default function ProveedoresExternos({ user }) {
                       setSupplierQuery("");
                       setSupplierOpen(false);
                     }}
-                    className="mb-1 w-full min-w-0 break-words rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-cyan-50"
+                    className="mb-1 w-full min-w-0 break-words rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-lime-50"
                   >
                     {row.nombre}
                   </button>
@@ -415,42 +534,49 @@ export default function ProveedoresExternos({ user }) {
         </div>
       </section>
 
-      <section className="app-panel relative z-10 min-w-0 max-w-full p-4 sm:p-5">
+      <section className={`app-panel relative min-w-0 max-w-full overflow-visible border-lime-200 p-3 sm:p-4 ${productOpen ? "z-40" : "z-10"}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-lg font-black text-slate-950">Productos</div>
-            <div className="text-xs font-bold text-slate-400">{totals.lines} lineas agregadas</div>
+            <div className="text-lg font-black text-slate-950">Productos <span className="text-[#5d9100]">{totals.lines}</span></div>
+            <div className="text-xs font-bold text-slate-400">Hasta 100 lineas</div>
           </div>
-          <div className="rounded-full bg-cyan-50 px-4 py-2 text-sm font-black text-cyan-800">Precio final con IVA</div>
+          <button
+            type="button"
+            onClick={openProductSearch}
+            disabled={connection !== "online"}
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#76b900] px-4 text-sm font-black text-[#101807] shadow-[0_14px_28px_-18px_rgba(78,124,15,0.9)] disabled:opacity-40"
+          >
+            {Icons.plus}
+            Agregar producto
+          </button>
         </div>
 
-        <div className="relative mt-4 min-w-0 max-w-full">
-          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{Icons.search}</span>
+        <div className="relative mt-3 min-w-0 max-w-full">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5d9100]">{Icons.search}</span>
           <input
+            ref={productSearchRef}
             value={productQuery}
             onChange={(event) => {
               setProductQuery(event.target.value);
               setProductOpen(true);
             }}
             onFocus={() => setProductOpen(true)}
-            className="app-input min-h-14 pl-12 text-base"
-            placeholder="Buscar por clave o nombre"
+            className="app-input !min-h-12 border-lime-200 bg-lime-50/40 pl-11 text-base focus:border-[#76b900]"
+            placeholder="Clave o nombre del producto"
             disabled={connection !== "online"}
           />
           {productOpen ? (
-            <div className="absolute inset-x-0 top-full z-20 mt-2 max-h-[360px] max-w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+            <div className="absolute inset-x-0 top-full z-[60] mt-2 max-h-[min(360px,55vh)] max-w-full overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-lime-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(30,50,12,0.45)]">
               {products.map((product) => (
                 <button
                   key={product.art_id}
                   type="button"
                   onClick={() => addProduct(product)}
-                  className="mb-1 grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-cyan-50"
+                  className="mb-1 grid min-h-11 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-lime-50"
                 >
-                  <span className="min-w-0">
-                    <span className="inline-flex max-w-full rounded-lg bg-slate-100 px-2 py-1 font-mono text-xs font-black text-slate-600">{product.clave}</span>
-                    <span className="mt-1 block break-words text-sm font-bold text-slate-800">{product.descripcion}</span>
-                  </span>
-                  <span className="shrink-0 text-right text-sm font-black text-cyan-800">{formatMoney(product.lastPurchaseGross)}</span>
+                  <span className="rounded-lg bg-lime-100 px-2 py-1 font-mono text-[10px] font-black text-lime-800">{product.clave}</span>
+                  <span className="min-w-0 truncate text-sm font-bold text-slate-800">{product.descripcion}</span>
+                  <span className="shrink-0 text-right text-xs font-black text-[#4d7c0f]">{formatMoney(product.lastPurchaseGross)}</span>
                 </button>
               ))}
               {products.length === 0 ? <div className="p-5 text-center text-sm text-slate-400">Sin coincidencias</div> : null}
@@ -458,64 +584,77 @@ export default function ProveedoresExternos({ user }) {
           ) : null}
         </div>
 
-        <div className="mt-4 space-y-2">
-          {items.map((item, index) => {
-            const lineTotal = roundMoney(Number(item.quantity || 0) * Number(item.grossUnitPrice || 0));
-            return (
-              <div key={item.art_id} className="grid min-w-0 max-w-full gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 xl:grid-cols-[42px_minmax(180px,1fr)_minmax(100px,130px)_minmax(120px,155px)_minmax(115px,135px)_48px] xl:items-center">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-xs font-black text-white">{String(index + 1).padStart(2, "0")}</div>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-black text-slate-900">{item.descripcion}</div>
-                  <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
-                    <span>{item.clave}</span>
-                    <span>{item.unidadCompra}</span>
-                    <span>{Number(item.taxPercent || 0) > 0 ? `IVA ${item.taxPercent}%` : "Exento"}</span>
+        {items.length > 0 ? (
+          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="grid grid-cols-[minmax(70px,1fr)_62px_46px_76px_34px] items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-2 text-[8px] font-black uppercase tracking-[0.1em] text-slate-400 sm:grid-cols-[minmax(180px,1fr)_88px_72px_120px_40px] sm:gap-2 sm:px-3 sm:text-[9px]">
+              <span>Producto</span>
+              <span className="text-center">Cant.</span>
+              <span className="text-center">Bultos</span>
+              <span className="text-center">Precio</span>
+              <span />
+            </div>
+            <div className="max-h-[min(52vh,560px)] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+              {items.map((item) => (
+                <div key={item.art_id} className="grid min-h-12 grid-cols-[minmax(70px,1fr)_62px_46px_76px_34px] items-center gap-1 px-2 py-1.5 sm:grid-cols-[minmax(180px,1fr)_88px_72px_120px_40px] sm:gap-2 sm:px-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="hidden shrink-0 rounded-md bg-lime-100 px-2 py-1 font-mono text-[9px] font-black text-lime-800 md:inline">{item.clave}</span>
+                    <span className="min-w-0 truncate text-xs font-black text-slate-900 sm:text-sm" title={item.descripcion}>{item.descripcion}</span>
                   </div>
-                </div>
-                <div>
-                  <label className="app-label xl:hidden">Cantidad</label>
                   <TouchNumericInput
+                    ref={(element) => {
+                      if (element) quantityRefs.current.set(Number(item.art_id), element);
+                      else quantityRefs.current.delete(Number(item.art_id));
+                    }}
                     value={item.quantity}
                     onValueChange={(value) => updateItem(item.art_id, "quantity", value)}
+                    onConfirmValue={openProductSearch}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        openProductSearch();
+                      }
+                    }}
                     label={`Cantidad ${item.descripcion}`}
                     decimals={4}
-                    placeholder="Cantidad"
-                    className="app-input text-center font-black"
+                    placeholder="0"
+                    className="app-input h-10 !min-h-10 rounded-lg px-1 text-center text-xs font-black sm:px-2 sm:text-sm"
                   />
-                </div>
-                <div>
-                  <label className="app-label xl:hidden">Precio con IVA</label>
+                  <button
+                    type="button"
+                    onClick={() => openBultos(item.art_id)}
+                    className={`flex h-10 items-center justify-center gap-1 rounded-lg border px-1 text-[9px] font-black ${item.bultos?.length ? "border-lime-300 bg-lime-50 text-lime-800" : "border-slate-200 bg-white text-slate-500"}`}
+                    aria-label={`Suma de bultos de ${item.descripcion}`}
+                  >
+                    {Icons.scale}
+                    <span className="hidden sm:inline">{item.bultos?.length || "+"}</span>
+                    <span className="sm:hidden">{item.bultos?.length || "+"}</span>
+                  </button>
                   <TouchNumericInput
                     value={item.grossUnitPrice}
                     onValueChange={(value) => updateItem(item.art_id, "grossUnitPrice", value)}
                     label={`Precio final ${item.descripcion}`}
                     decimals={2}
-                    placeholder="Precio"
-                    className="app-input text-center font-black text-cyan-800"
+                    placeholder="0.00"
+                    className="app-input h-10 !min-h-10 rounded-lg px-1 text-center text-[11px] font-black text-[#4d7c0f] sm:px-2 sm:text-sm"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setItems((current) => current.filter((row) => row.art_id !== item.art_id))}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50"
+                    aria-label={`Quitar ${item.descripcion}`}
+                  >
+                    {Icons.trash}
+                  </button>
                 </div>
-                <div className="rounded-xl bg-white px-3 py-3 text-right">
-                  <div className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">Importe</div>
-                  <div className="mt-1 font-black text-slate-950">{formatMoney(lineTotal)}</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setItems((current) => current.filter((row) => row.art_id !== item.art_id))}
-                  className="app-icon-button text-rose-600"
-                  aria-label={`Quitar ${item.descripcion}`}
-                >
-                  {Icons.trash}
-                </button>
-              </div>
-            );
-          })}
-          {items.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 px-5 py-10 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">{Icons.box}</div>
-              <div className="mt-3 text-sm font-black text-slate-700">Busca y agrega los productos recibidos</div>
+              ))}
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : (
+          <button type="button" onClick={openProductSearch} className="mt-3 flex min-h-24 w-full items-center justify-center gap-3 rounded-xl border border-dashed border-lime-300 bg-lime-50/40 text-sm font-black text-lime-800">
+            {Icons.plus}
+            Agregar el primer producto
+          </button>
+        )}
       </section>
 
       <div className="fixed inset-x-0 bottom-[88px] z-40 px-3 lg:bottom-4 lg:left-auto lg:right-5 lg:w-[460px]">
@@ -529,7 +668,7 @@ export default function ProveedoresExternos({ user }) {
               type="button"
               onClick={requestPaymentMethod}
               disabled={loading || connection !== "online"}
-              className="min-h-14 rounded-2xl bg-cyan-500 px-5 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
+              className="min-h-14 rounded-2xl bg-[#76b900] px-5 text-sm font-black text-[#101807] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {loading ? "Validando..." : "Recibir en SICAR"}
             </button>
@@ -548,10 +687,98 @@ export default function ProveedoresExternos({ user }) {
         />
       ) : null}
 
+      {bultosArticleId !== null && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="app-modal z-[120] items-end px-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:items-center sm:p-4"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) closeBultos();
+              }}
+            >
+              <div className="w-full max-w-md rounded-[1.5rem] border border-lime-200 bg-white p-4 shadow-[0_30px_80px_-24px_rgba(30,50,12,0.55)] sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#5d9100]">Suma de bultos</div>
+                    <h3 className="mt-1 truncate text-lg font-black text-slate-950">{activeBultoItem?.descripcion}</h3>
+                  </div>
+                  <button type="button" onClick={closeBultos} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500" aria-label="Cerrar">
+                    {Icons.close}
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-3 rounded-2xl bg-lime-50 px-4 py-3">
+                  <div>
+                    <div className="text-[9px] font-black uppercase tracking-[0.14em] text-lime-700">Peso total</div>
+                    <div className="mt-1 font-mono text-3xl font-black text-slate-950">{formatBultoWeight(bultosTotal)}</div>
+                  </div>
+                  <div className="rounded-full bg-white px-3 py-2 text-xs font-black text-lime-800">{bultosTemporal.length} bultos</div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-[minmax(0,1fr)_46px] gap-2">
+                  <input
+                    ref={bultoInputRef}
+                    type="text"
+                    inputMode="decimal"
+                    enterKeyHint="next"
+                    value={bultoTemporal}
+                    onChange={(event) => {
+                      setBultoTemporal(event.target.value);
+                      setBultoError("");
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addBulto();
+                      }
+                    }}
+                    onFocus={(event) => event.target.select()}
+                    className="app-input !min-h-12 border-lime-200 text-center font-mono text-xl font-black"
+                    placeholder="Peso"
+                  />
+                  <button type="button" onClick={addBulto} className="flex min-h-12 items-center justify-center rounded-xl bg-[#76b900] text-[#101807]" aria-label="Agregar peso">
+                    {Icons.plus}
+                  </button>
+                </div>
+                <div className={`mt-2 min-h-5 text-xs font-bold ${bultoError ? "text-rose-600" : "text-slate-400"}`}>
+                  {bultoError || "Peso + Enter para agregar otro."}
+                </div>
+
+                {bultosTemporal.length > 0 ? (
+                  <div className="mt-2 max-h-44 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
+                    {[...bultosTemporal].reverse().map((weight, reverseIndex) => {
+                      const originalIndex = bultosTemporal.length - 1 - reverseIndex;
+                      return (
+                        <div key={`${originalIndex}-${weight}`} className="flex min-h-10 items-center justify-between gap-3 px-3 py-1.5">
+                          <span className="text-xs font-bold text-slate-400">#{originalIndex + 1}</span>
+                          <span className="ml-auto font-mono text-sm font-black text-slate-900">{formatBultoWeight(weight)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setBultosTemporal((current) => current.filter((_, index) => index !== originalIndex))}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50"
+                            aria-label={`Quitar bulto ${originalIndex + 1}`}
+                          >
+                            {Icons.trash}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                <div className="mt-4 grid grid-cols-[0.8fr_1.2fr] gap-2">
+                  <button type="button" onClick={closeBultos} className="app-button app-button-secondary">Cancelar</button>
+                  <button type="button" onClick={finishBultos} className="min-h-12 rounded-xl bg-[#76b900] text-sm font-black text-[#101807]">Finalizar</button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
       {paymentPromptOpen ? (
         <div className="app-modal z-[115] px-4" role="dialog" aria-modal="true" aria-labelledby="payment-method-title">
           <div className="app-modal-panel w-full max-w-xl p-5 sm:p-6">
-            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-700">Antes de terminar</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-lime-700">Antes de terminar</div>
             <h2 id="payment-method-title" className="mt-1 text-2xl font-black text-slate-950">Metodo de pago</h2>
             <p className="mt-2 text-sm font-semibold text-slate-500">Selecciona como debe quedar registrada la compra en SICAR.</p>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -559,11 +786,11 @@ export default function ProveedoresExternos({ user }) {
                 type="button"
                 onClick={() => openPreview("credit")}
                 disabled={loading}
-                className="min-h-32 rounded-[1.4rem] border-2 border-cyan-200 bg-cyan-50 p-5 text-left text-cyan-950 transition hover:border-cyan-500 hover:bg-cyan-100 disabled:opacity-50"
+                className="min-h-32 rounded-[1.4rem] border-2 border-lime-200 bg-lime-50 p-5 text-left text-lime-950 transition hover:border-lime-500 hover:bg-lime-100 disabled:opacity-50"
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-600 text-white">{Icons.credit}</span>
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#76b900] text-[#101807]">{Icons.credit}</span>
                 <span className="mt-4 block text-lg font-black">Credito</span>
-                <span className="mt-1 block text-xs font-bold leading-5 text-cyan-700">Genera la cuenta por pagar al proveedor.</span>
+                <span className="mt-1 block text-xs font-bold leading-5 text-lime-700">Genera la cuenta por pagar al proveedor.</span>
               </button>
               <button
                 type="button"
@@ -591,16 +818,16 @@ export default function ProveedoresExternos({ user }) {
       {preview ? (
         <div className="app-modal z-[110] px-4" role="dialog" aria-modal="true">
           <div className="app-modal-panel w-full max-w-xl p-5 sm:p-6">
-            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-700">Confirmar recepcion</div>
+            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-lime-700">Confirmar recepcion</div>
             <h2 className="mt-1 text-2xl font-black text-slate-950">{preview.supplier?.nombre}</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl bg-slate-50 p-4">
                 <div className="text-[10px] font-black uppercase text-slate-400">Productos</div>
                 <div className="mt-1 text-xl font-black">{preview.summary?.lines}</div>
               </div>
-              <div className="rounded-2xl bg-cyan-50 p-4 text-right">
-                <div className="text-[10px] font-black uppercase text-cyan-700">Total con IVA</div>
-                <div className="mt-1 text-xl font-black text-cyan-950">{formatMoney(preview.summary?.total)}</div>
+              <div className="rounded-2xl bg-lime-50 p-4 text-right">
+                <div className="text-[10px] font-black uppercase text-lime-700">Total con IVA</div>
+                <div className="mt-1 text-xl font-black text-lime-950">{formatMoney(preview.summary?.total)}</div>
               </div>
             </div>
             <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4">
@@ -608,7 +835,7 @@ export default function ProveedoresExternos({ user }) {
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-base font-black text-slate-950">{preview.payment?.label}</div>
                 {preview.payment?.method === "credit" ? (
-                  <div className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-black text-cyan-800">
+                  <div className="rounded-full bg-lime-100 px-3 py-1 text-xs font-black text-lime-800">
                     Vence {preview.payment?.dueDate}
                   </div>
                 ) : null}

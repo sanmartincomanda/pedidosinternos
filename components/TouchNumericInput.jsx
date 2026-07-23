@@ -129,6 +129,7 @@ const TouchNumericInput = forwardRef(function TouchNumericInput(
     className = "",
     placeholder = "0",
     onKeyDown,
+    onConfirmValue,
     enterKeyHint = "next",
     min = 0,
   },
@@ -149,6 +150,7 @@ const TouchNumericInput = forwardRef(function TouchNumericInput(
     const normalized = normalizeNumericValue(nextValue, decimals);
     onValueChange(normalized);
     setKeypadOpen(false);
+    onConfirmValue?.(normalized);
   };
 
   return (
