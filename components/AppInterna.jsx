@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
 import { onValue, ref } from "firebase/database";
 import {
@@ -102,14 +102,26 @@ const Icons = {
       <path d="m12 3 1.8 4.8L19 9.5l-4 3.2 1.3 5.1L12 15.2 7.7 17.8 9 12.7 5 9.5l5.2-1.7L12 3Z" />
     </svg>
   ),
+  bell: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+      <path d="M10 21h4" />
+    </svg>
+  ),
+  monitor: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="4" width="18" height="13" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+    </svg>
+  ),
 };
 
 const NAV_ITEMS = [
-  { key: "formulario", label: "Pedido", title: "Realizar Pedido", icon: Icons.clipboard, accent: "#e30613" },
-  { key: "vacuna", label: "Traspaso", title: "Traspaso", icon: Icons.vaccine, accent: "#d97706" },
-  { key: "cocina", label: "Cocina", title: "Cocina - Preparacion", icon: Icons.chef, accent: "#f97316" },
-  { key: "estados", label: "Recibir", title: "Recibir Producto", icon: Icons.truck, accent: "#0f766e" },
-  { key: "historial", label: "Historial", title: "Historial", icon: Icons.history, accent: "#1d4ed8" },
+  { key: "formulario", label: "Pedido", title: "Realizar Pedido", icon: Icons.clipboard, accent: "#76b900" },
+  { key: "vacuna", label: "Traspaso", title: "Traspaso", icon: Icons.vaccine, accent: "#16a36a" },
+  { key: "cocina", label: "Cocina", title: "Cocina - Preparacion", icon: Icons.chef, accent: "#f59e0b" },
+  { key: "estados", label: "Recibir", title: "Recibir Producto", icon: Icons.truck, accent: "#0ea5e9" },
+  { key: "historial", label: "Historial", title: "Historial", icon: Icons.history, accent: "#8b9a8f" },
 ];
 
 const INITIAL_CONFIG = {
@@ -121,6 +133,53 @@ const INITIAL_CONFIG = {
     formato: "80mm",
   },
 };
+
+const FINAL_ORDER_STATUSES = new Set(["RECIBIDO_CONFORME", "ENTREGADO", "ANULADO"]);
+const PREPARATION_STATUSES = new Set(["NUEVO", "STANDBY_ENTREGA", "PREPARACION", "LISTO"]);
+const STATUS_NOTIFICATIONS = {
+  NUEVO: { title: "Nuevo pedido recibido", view: "cocina" },
+  STANDBY_ENTREGA: { title: "Pedido pendiente de preparar", view: "cocina" },
+  PREPARACION: { title: "Pedido en preparacion", view: "cocina" },
+  LISTO: { title: "Pedido listo para enviar", view: "cocina" },
+  ENVIADO: { title: "Pedido enviado", view: "estados" },
+  RECIBIDO_CONFORME: { title: "Pedido recibido conforme", view: "historial" },
+  ENTREGADO: { title: "Pedido entregado", view: "historial" },
+  ANULADO: { title: "Pedido anulado", view: "historial" },
+};
+
+function getPedidoIdentity(pedido) {
+  return `${pedido?.firebaseId || pedido?.id || pedido?.numeroOrden || ""}`;
+}
+
+function notifyPedidoChanges(pedidos, previousStatusesRef) {
+  const currentStatuses = Object.fromEntries(
+    pedidos.map((pedido) => [getPedidoIdentity(pedido), `${pedido?.estado || ""}`]),
+  );
+  const previousStatuses = previousStatusesRef.current;
+
+  if (previousStatuses && typeof window !== "undefined" && window.desktopAPI?.notify) {
+    pedidos.forEach((pedido) => {
+      const pedidoId = getPedidoIdentity(pedido);
+      const previousStatus = previousStatuses[pedidoId];
+      const currentStatus = `${pedido?.estado || ""}`;
+      const isNewOperationalOrder = !previousStatus && ["NUEVO", "ENVIADO"].includes(currentStatus);
+
+      if ((previousStatus && previousStatus !== currentStatus) || isNewOperationalOrder) {
+        const notification = STATUS_NOTIFICATIONS[currentStatus];
+        if (!notification) return;
+
+        window.desktopAPI.notify({
+          title: notification.title,
+          body: `${pedido?.numeroOrden || "Pedido"} - Estado actualizado correctamente`,
+          orderId: pedidoId,
+          view: notification.view,
+        });
+      }
+    });
+  }
+
+  previousStatusesRef.current = currentStatuses;
+}
 
 function DesktopNavButton({ item, active, onClick }) {
   return (
@@ -137,6 +196,21 @@ function DesktopNavButton({ item, active, onClick }) {
     >
       <span style={{ color: item.accent }}>{item.icon}</span>
       <span className="text-sm font-black">{item.label}</span>
+    </button>
+  );
+}
+
+function SidebarNavButton({ item, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`desktop-rail-item ${active ? "is-active" : ""}`}
+      style={{ "--nav-accent": item.accent }}
+    >
+      <span className="desktop-rail-icon">{item.icon}</span>
+      <span>{item.label}</span>
+      <span className="desktop-rail-indicator" />
     </button>
   );
 }
@@ -160,7 +234,11 @@ function MobileNavButton({ item, active, onClick }) {
 }
 
 export default function AppInterna() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const savedBranch = window.localStorage.getItem("csmDesktopBranch");
+    return ["Granada", "Nindiri"].includes(savedBranch) ? savedBranch : null;
+  });
   const [view, setView] = useState("formulario");
   const [pedidos, setPedidos] = useState([]);
   const [pedidoEditar, setPedidoEditar] = useState(null);
@@ -181,6 +259,33 @@ export default function AppInterna() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  const [isDesktop, setIsDesktop] = useState(false);
+  const previousOrderStatusesRef = useRef(null);
+
+  useEffect(() => {
+    const desktopMode = Boolean(window.desktopAPI?.isDesktop);
+    queueMicrotask(() => setIsDesktop(desktopMode));
+    document.documentElement.classList.toggle("desktop-runtime", desktopMode);
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    const disposeNavigation = window.desktopAPI?.onNavigate?.((nextView) => {
+      if (NAV_ITEMS.some((item) => item.key === nextView) || nextView === "configuracion") {
+        setView(nextView);
+      }
+    });
+
+    return () => {
+      document.documentElement.classList.remove("desktop-runtime");
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      if (typeof disposeNavigation === "function") disposeNavigation();
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("appConfig", JSON.stringify(config));
@@ -242,7 +347,9 @@ export default function AppInterna() {
           isSameBranch(pedido.sucursalDestino, user),
       );
 
-      setPedidos(pedidosRelevantes.reverse());
+      const pedidosOrdenados = pedidosRelevantes.reverse();
+      notifyPedidoChanges(pedidosOrdenados, previousOrderStatusesRef);
+      setPedidos(pedidosOrdenados);
     });
 
     return () => unsubscribe();
@@ -258,6 +365,8 @@ export default function AppInterna() {
       return;
     }
 
+    window.localStorage.setItem("csmDesktopBranch", found.id);
+    previousOrderStatusesRef.current = null;
     setUser(found.id);
     setError("");
     setPassword("");
@@ -266,6 +375,8 @@ export default function AppInterna() {
   };
 
   const handleLogout = () => {
+    window.localStorage.removeItem("csmDesktopBranch");
+    previousOrderStatusesRef.current = null;
     setUser(null);
     setPassword("");
     setPedidoEditar(null);
@@ -286,6 +397,13 @@ export default function AppInterna() {
     day: "numeric",
     month: "short",
   }).format(new Date());
+
+  const operationalSummary = useMemo(() => {
+    const active = pedidos.filter((pedido) => !FINAL_ORDER_STATUSES.has(pedido.estado)).length;
+    const preparation = pedidos.filter((pedido) => PREPARATION_STATUSES.has(pedido.estado)).length;
+    const inTransit = pedidos.filter((pedido) => pedido.estado === "ENVIADO").length;
+    return { active, preparation, inTransit };
+  }, [pedidos]);
 
   const renderCurrentView = () => {
     const commonPrinterSettings = config.impresion || INITIAL_CONFIG.impresion;
@@ -351,7 +469,7 @@ export default function AppInterna() {
       <div className="login-shell flex items-center px-4 py-6">
         <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[1.05fr_0.95fr]">
           <section className="login-aside page-enter p-6 sm:p-8 lg:p-10">
-            <div className="text-[10px] font-black uppercase tracking-[0.38em] text-[#f5b51b]">
+            <div className="text-[10px] font-black uppercase tracking-[0.38em] text-[#9bdd3a]">
               Carnes San Martin
             </div>
             <h1 className="app-title mt-3 text-4xl font-black text-white sm:text-5xl">
@@ -378,8 +496,8 @@ export default function AppInterna() {
 
             <div className="mt-7 grid gap-3">
               {[
-                "Serie A · Granada",
-                "Serie B · Nindiri",
+                "Serie A - Granada",
+                "Serie B - Nindiri",
                 "Costo total reflejado en historial y requisa",
               ].map((item) => (
                 <div
@@ -395,7 +513,7 @@ export default function AppInterna() {
           <section className="login-panel page-enter p-6 sm:p-8">
             <div className="mx-auto max-w-md">
               <div className="mb-6 flex items-center gap-4">
-                <div className="flex h-15 w-15 items-center justify-center rounded-[1.35rem] bg-[linear-gradient(135deg,#e30613_0%,#9f111a_100%)] text-white shadow-[0_18px_38px_-22px_rgba(159,17,26,0.55)]">
+                <div className="flex h-15 w-15 items-center justify-center rounded-[1.35rem] bg-[linear-gradient(135deg,#9bdd3a_0%,#4f8f00_100%)] text-[#08110a] shadow-[0_18px_38px_-22px_rgba(118,185,0,0.62)]">
                   {Icons.app}
                 </div>
                 <div>
@@ -471,66 +589,108 @@ export default function AppInterna() {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="command-header">
-        <div className="mx-auto max-w-[1460px] px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] bg-white/10 text-white">
-                {navMeta.icon}
-              </div>
-              <div className="min-w-0">
-                <div className="text-[9px] font-black uppercase tracking-[0.28em] text-[#f5b51b]">Carnes San Martin</div>
-                <div className="app-title truncate text-xl font-black text-white sm:text-2xl">{navMeta.title}</div>
-              </div>
-            </div>
+    <div className="desktop-app-frame min-h-screen">
+      <aside className="desktop-sidebar hidden xl:flex">
+        <div className="desktop-brand-block">
+          <div className="desktop-brand-mark">CSM</div>
+          <div>
+            <div className="desktop-brand-kicker">Carnes San Martin</div>
+            <div className="desktop-brand-title">Pedidos</div>
+          </div>
+        </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <div className="hidden app-chip border-white/12 bg-white/10 text-white md:inline-flex">
-                {Icons.calendar}
-                {fechaActual}
-              </div>
-              <div className="hidden app-chip border-white/12 bg-white/10 text-white sm:inline-flex">
-                {Icons.user}
-                {getBranchDisplayName(user)}
-              </div>
-              <button
-                type="button"
-                onClick={() => setView("configuracion")}
-                className="app-icon-button border-white/12 bg-white/10 text-white shadow-none"
-                aria-label="Configuracion"
-                title="Configuracion"
-              >
-                {Icons.settings}
-              </button>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="app-icon-button border-white/12 bg-white/10 text-white shadow-none"
-                aria-label="Salir"
-                title="Salir"
-              >
-                {Icons.logout}
-              </button>
+        <div className="desktop-live-card">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="desktop-live-label">Operacion</div>
+              <div className="desktop-live-value">{isOnline ? "En linea" : "Sin conexion"}</div>
+            </div>
+            <span className={`desktop-live-dot ${isOnline ? "is-online" : "is-offline"}`} />
+          </div>
+          <div className="desktop-live-branch">{getBranchDisplayName(user)}</div>
+        </div>
+
+        <nav className="desktop-rail-nav">
+          <div className="desktop-rail-caption">Modulos</div>
+          {NAV_ITEMS.map((item) => (
+            <SidebarNavButton
+              key={item.key}
+              item={item}
+              active={view === item.key}
+              onClick={() => setView(item.key)}
+            />
+          ))}
+        </nav>
+
+        <div className="desktop-sidebar-summary">
+          <div className="desktop-rail-caption">Actividad</div>
+          <div className="desktop-metric-row"><span>Activos</span><strong>{operationalSummary.active}</strong></div>
+          <div className="desktop-metric-row"><span>Preparacion</span><strong>{operationalSummary.preparation}</strong></div>
+          <div className="desktop-metric-row"><span>En camino</span><strong>{operationalSummary.inTransit}</strong></div>
+        </div>
+
+        <div className="desktop-sidebar-footer">
+          <span className="desktop-footer-icon">{isDesktop ? Icons.bell : Icons.monitor}</span>
+          <div>
+            <div className="desktop-footer-title">{isDesktop ? "Avisos activos" : "Modo web"}</div>
+            <div className="desktop-footer-copy">{isDesktop ? "Segundo plano" : "Navegador"}</div>
+          </div>
+        </div>
+      </aside>
+
+      <section className="desktop-content min-h-screen min-w-0">
+        <header className="desktop-topbar">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="desktop-module-icon">{navMeta.icon}</div>
+            <div className="min-w-0">
+              <div className="desktop-topbar-kicker">Panel operativo</div>
+              <h1 className="desktop-topbar-title">{navMeta.title}</h1>
             </div>
           </div>
 
-          <nav className="mt-3 hidden grid-cols-5 gap-2 lg:grid">
-            {NAV_ITEMS.map((item) => (
-              <DesktopNavButton
-                key={item.key}
-                item={item}
-                active={view === item.key}
-                onClick={() => setView(item.key)}
-              />
-            ))}
-          </nav>
-        </div>
-      </header>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className={`desktop-connection-pill hidden md:flex ${isOnline ? "is-online" : "is-offline"}`}>
+              <span />
+              {isOnline ? "Sincronizado" : "Sin conexion"}
+            </div>
+            <div className="app-chip hidden lg:inline-flex">{Icons.calendar}{fechaActual}</div>
+            <div className="app-chip hidden sm:inline-flex">{Icons.user}{getBranchDisplayName(user)}</div>
+            <button
+              type="button"
+              onClick={() => setView("configuracion")}
+              className="app-icon-button desktop-topbar-action"
+              aria-label="Configuracion"
+              title="Configuracion"
+            >
+              {Icons.settings}
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="app-icon-button desktop-topbar-action"
+              aria-label="Salir"
+              title="Salir"
+            >
+              {Icons.logout}
+            </button>
+          </div>
+        </header>
 
-      <div className="app-shell">
-        <main className="app-route-shell page-enter">{renderCurrentView()}</main>
-      </div>
+        <nav className="desktop-compact-nav hidden grid-cols-5 gap-2 px-4 pb-3 pt-3 lg:grid xl:hidden sm:px-6">
+          {NAV_ITEMS.map((item) => (
+            <DesktopNavButton
+              key={item.key}
+              item={item}
+              active={view === item.key}
+              onClick={() => setView(item.key)}
+            />
+          ))}
+        </nav>
+
+        <div className="app-shell">
+          <main className="app-route-shell page-enter" key={view}>{renderCurrentView()}</main>
+        </div>
+      </section>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-4 lg:hidden">
         <div className="mx-auto flex max-w-4xl gap-2 rounded-[24px] border border-slate-200 bg-white/94 p-2 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">

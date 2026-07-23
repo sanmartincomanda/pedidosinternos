@@ -1,7 +1,10 @@
 {
   "name": "app-pedidos-internos",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "Pedidos y traspasos internos de Carnes San Martin",
+  "author": "Carnes San Martin",
   "private": true,
+  "main": "desktop/main.cjs",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,7 +13,11 @@
     "android:open": "npx cap open android",
     "android:build": "npm run build:web && npm run android:sync",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "desktop:dev": "concurrently -k -s first \"next dev\" \"wait-on http://127.0.0.1:3000 && cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .\"",
+    "desktop:start": "cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .",
+    "desktop:build": "npm run build:web && electron-builder --win nsis",
+    "desktop:unpacked": "npm run build:web && electron-builder --win --dir"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",
@@ -26,9 +33,51 @@
   "devDependencies": {
     "@capacitor/cli": "^7.4.3",
     "@tailwindcss/postcss": "^4",
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "wait-on": "^9.1.0"
+  },
+  "build": {
+    "appId": "com.carnessanmartin.pedidosinternos",
+    "productName": "CSM Pedidos",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "out/**/*",
+      "app/favicon.ico",
+      "package.json",
+      "!node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "app/favicon.ico",
+      "artifactName": "CSM-Pedidos-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CSM Pedidos",
+      "runAfterFinish": true
+    }
   }
 }
