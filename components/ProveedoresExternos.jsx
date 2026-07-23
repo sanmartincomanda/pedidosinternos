@@ -47,6 +47,18 @@ const Icons = {
       <path d="m5 12 4 4L19 6" />
     </svg>
   ),
+  credit: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="5" width="18" height="14" rx="3" />
+      <path d="M3 10h18M7 15h4" />
+    </svg>
+  ),
+  otherPayment: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12h8M12 8v8" />
+    </svg>
+  ),
 };
 
 function localDate() {
@@ -67,13 +79,14 @@ function roundMoney(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
 
-function buildPurchasePayload({ supplier, invoiceNumber, comment, items, requestId }) {
+function buildPurchasePayload({ supplier, invoiceNumber, comment, items, requestId, paymentMethod }) {
   return {
     requestId,
     supplierId: Number(supplier.pro_id),
     invoiceNumber: `${invoiceNumber || ""}`.trim(),
     date: localDate(),
     comment: `${comment || ""}`.trim(),
+    paymentMethod,
     items: items.map((item) => ({
       articleId: Number(item.art_id),
       quantity: Number(item.quantity),
@@ -145,6 +158,8 @@ export default function ProveedoresExternos({ user }) {
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [paymentPromptOpen, setPaymentPromptOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("");
   const [preview, setPreview] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const requestIdRef = useRef(globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`);
@@ -223,18 +238,33 @@ export default function ProveedoresExternos({ user }) {
     return "";
   };
 
-  const openPreview = async () => {
+  const requestPaymentMethod = () => {
     const validationError = validate();
     if (validationError) {
       setMessage({ type: "error", text: validationError });
       return;
     }
 
+    setMessage(null);
+    setPaymentPromptOpen(true);
+  };
+
+  const openPreview = async (selectedPaymentMethod) => {
+    setPaymentMethod(selectedPaymentMethod);
+    setPaymentPromptOpen(false);
+
     setLoading(true);
     setMessage(null);
     try {
       const result = await previewSicarPurchase(
-        buildPurchasePayload({ supplier, invoiceNumber, comment, items, requestId: requestIdRef.current }),
+        buildPurchasePayload({
+          supplier,
+          invoiceNumber,
+          comment,
+          items,
+          requestId: requestIdRef.current,
+          paymentMethod: selectedPaymentMethod,
+        }),
       );
       setPreview(result);
     } catch (error) {
@@ -249,10 +279,18 @@ export default function ProveedoresExternos({ user }) {
     setMessage(null);
     try {
       const result = await receiveSicarPurchase(
-        buildPurchasePayload({ supplier, invoiceNumber, comment, items, requestId: requestIdRef.current }),
+        buildPurchasePayload({
+          supplier,
+          invoiceNumber,
+          comment,
+          items,
+          requestId: requestIdRef.current,
+          paymentMethod,
+        }),
       );
-      setReceipt(result.purchase);
+      setReceipt({ ...result.purchase, payment: result.payment });
       setPreview(null);
+      setPaymentMethod("");
       setItems([]);
       setInvoiceNumber("");
       setComment("");
@@ -489,7 +527,7 @@ export default function ProveedoresExternos({ user }) {
             </div>
             <button
               type="button"
-              onClick={openPreview}
+              onClick={requestPaymentMethod}
               disabled={loading || connection !== "online"}
               className="min-h-14 rounded-2xl bg-cyan-500 px-5 text-sm font-black text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -510,6 +548,46 @@ export default function ProveedoresExternos({ user }) {
         />
       ) : null}
 
+      {paymentPromptOpen ? (
+        <div className="app-modal z-[115] px-4" role="dialog" aria-modal="true" aria-labelledby="payment-method-title">
+          <div className="app-modal-panel w-full max-w-xl p-5 sm:p-6">
+            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-700">Antes de terminar</div>
+            <h2 id="payment-method-title" className="mt-1 text-2xl font-black text-slate-950">Metodo de pago</h2>
+            <p className="mt-2 text-sm font-semibold text-slate-500">Selecciona como debe quedar registrada la compra en SICAR.</p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => openPreview("credit")}
+                disabled={loading}
+                className="min-h-32 rounded-[1.4rem] border-2 border-cyan-200 bg-cyan-50 p-5 text-left text-cyan-950 transition hover:border-cyan-500 hover:bg-cyan-100 disabled:opacity-50"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-600 text-white">{Icons.credit}</span>
+                <span className="mt-4 block text-lg font-black">Credito</span>
+                <span className="mt-1 block text-xs font-bold leading-5 text-cyan-700">Genera la cuenta por pagar al proveedor.</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openPreview("other")}
+                disabled={loading}
+                className="min-h-32 rounded-[1.4rem] border-2 border-slate-200 bg-slate-50 p-5 text-left text-slate-950 transition hover:border-slate-500 hover:bg-slate-100 disabled:opacity-50"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-800 text-white">{Icons.otherPayment}</span>
+                <span className="mt-4 block text-lg font-black">Otro medio de pago</span>
+                <span className="mt-1 block text-xs font-bold leading-5 text-slate-500">Conserva la clasificacion actual de SICAR.</span>
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPaymentPromptOpen(false)}
+              disabled={loading}
+              className="app-button app-button-secondary mt-4 w-full"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {preview ? (
         <div className="app-modal z-[110] px-4" role="dialog" aria-modal="true">
           <div className="app-modal-panel w-full max-w-xl p-5 sm:p-6">
@@ -525,11 +603,31 @@ export default function ProveedoresExternos({ user }) {
                 <div className="mt-1 text-xl font-black text-cyan-950">{formatMoney(preview.summary?.total)}</div>
               </div>
             </div>
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Metodo de pago</div>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-base font-black text-slate-950">{preview.payment?.label}</div>
+                {preview.payment?.method === "credit" ? (
+                  <div className="rounded-full bg-cyan-100 px-3 py-1 text-xs font-black text-cyan-800">
+                    Vence {preview.payment?.dueDate}
+                  </div>
+                ) : null}
+              </div>
+            </div>
             <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
               Esta accion registra la compra y aumenta inventario. No modifica precios de venta ni la configuracion de IVA.
             </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <button type="button" onClick={() => setPreview(null)} className="app-button app-button-secondary">Revisar</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPreview(null);
+                  setPaymentMethod("");
+                }}
+                className="app-button app-button-secondary"
+              >
+                Revisar
+              </button>
               <button type="button" onClick={receivePurchase} disabled={loading} className="app-button app-button-primary">
                 {loading ? "Registrando..." : "Confirmar recepcion"}
               </button>
@@ -545,6 +643,9 @@ export default function ProveedoresExternos({ user }) {
             <div className="mt-4 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Compra registrada</div>
             <h2 className="mt-1 text-2xl font-black text-slate-950">Folio {receipt.folio}</h2>
             <div className="mt-3 text-3xl font-black text-slate-950">{formatMoney(receipt.total)}</div>
+            <div className="mt-3 rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-700">
+              {receipt.payment?.label}
+            </div>
             <p className="mt-2 text-sm font-semibold text-slate-500">Inventario actualizado en SICAR.</p>
             <button type="button" onClick={() => setReceipt(null)} className="app-button app-button-primary mt-6 w-full">Cerrar</button>
           </div>

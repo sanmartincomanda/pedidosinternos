@@ -11,7 +11,8 @@ const configPath = configArgumentIndex >= 0
   : path.join(serviceDirectory, "config.local.json");
 
 const config = JSON.parse((await readFile(configPath, "utf8")).replace(/^\uFEFF/, ""));
-const port = Number(config.port || 43110);
+const portArgumentIndex = process.argv.indexOf("--port");
+const port = Number(portArgumentIndex >= 0 ? process.argv[portArgumentIndex + 1] : config.port || 43110);
 const host = config.host || "0.0.0.0";
 const cacheTtlMs = Math.max(10, Number(config.cacheSeconds || 60)) * 1000;
 const cache = new Map();
@@ -31,6 +32,21 @@ function sqlNumber(value, decimals = 6) {
   const number = Number(value);
   if (!Number.isFinite(number)) throw new Error("Se recibio un valor numerico invalido.");
   return number.toFixed(decimals);
+}
+
+function localDateTime() {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: config.timeZone || "America/Managua",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).format(new Date());
+}
+
+function addDays(dateText, days) {
+  const [year, month, day] = dateText.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + Math.max(0, Math.trunc(Number(days) || 0)));
+  return date.toISOString().slice(0, 10);
 }
 
 function parseTsv(output) {
@@ -156,12 +172,12 @@ async function cached(key, loader) {
 async function getSuppliers() {
   return cached("suppliers", async () => {
     const rows = await query(`
-      SELECT pro_id, nombre, alias, rfc
+      SELECT pro_id, nombre, alias, rfc, COALESCE(diasCredito, 0) AS diasCredito
       FROM proveedor
       WHERE status = 1
       ORDER BY nombre;
     `);
-    return rows.map((row) => ({ ...row, pro_id: Number(row.pro_id) }));
+    return rows.map((row) => ({ ...row, pro_id: Number(row.pro_id), diasCredito: Number(row.diasCredito || 0) }));
   });
 }
 
@@ -222,7 +238,10 @@ async function getPurchaseContext(payload) {
   const requestId = `${payload.requestId || ""}`.trim();
   if (!/^[a-zA-Z0-9-]{8,64}$/.test(requestId)) throw new Error("Identificador de recepcion invalido.");
 
-  const supplierRows = await query(`SELECT pro_id, nombre FROM proveedor WHERE pro_id = ${supplierId} AND status = 1 LIMIT 1;`);
+  const paymentMethod = `${payload.paymentMethod || ""}`.trim().toLowerCase();
+  if (!new Set(["credit", "other"]).has(paymentMethod)) throw new Error("Selecciona Credito u Otro medio de pago.");
+
+  const supplierRows = await query(`SELECT pro_id, nombre, COALESCE(diasCredito, 0) AS diasCredito FROM proveedor WHERE pro_id = ${supplierId} AND status = 1 LIMIT 1;`);
   if (supplierRows.length !== 1) throw new Error("El proveedor no existe o esta inactivo en SICAR.");
 
   const itemMap = new Map();
@@ -311,12 +330,20 @@ async function getPurchaseContext(payload) {
       orden: Number(row.orden),
       tipoFactor: row.tipoFactor,
     }));
+  const purchaseDate = localDateTime().slice(0, 10);
+  const creditDays = Math.max(0, Math.trunc(Number(supplierRows[0].diasCredito || 0)));
   return {
     requestId,
-    supplier: { pro_id: supplierId, nombre: supplierRows[0].nombre },
+    supplier: { pro_id: supplierId, nombre: supplierRows[0].nombre, diasCredito: creditDays },
     invoiceNumber: `${payload.invoiceNumber || ""}`.trim().slice(0, 19),
     comment: `${payload.comment || ""}`.trim().slice(0, 180),
-    date: new Date().toISOString().slice(0, 10),
+    date: purchaseDate,
+    payment: {
+      method: paymentMethod,
+      label: paymentMethod === "credit" ? "Credito" : "Otro medio de pago",
+      creditDays: paymentMethod === "credit" ? creditDays : null,
+      dueDate: paymentMethod === "credit" ? addDays(purchaseDate, creditDays) : null,
+    },
     items,
     activeTaxes,
     summary: { lines: items.length, subtotal, taxes: Math.round((total - subtotal + Number.EPSILON) * 100) / 100, total, subtotal0 },
@@ -324,12 +351,7 @@ async function getPurchaseContext(payload) {
 }
 
 function buildPurchaseSql(context) {
-  const now = new Date();
-  const dateParts = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: config.timeZone || "America/Managua",
-    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
-    hour12: false,
-  }).format(now).replace(" ", " ");
+  const dateParts = localDateTime();
   const automaticFolio = `APP-${dateParts.replace(/[-: ]/g, "").slice(2)}`.slice(0, 19);
   const folio = context.invoiceNumber || automaticFolio;
   const marker = `[CSM:${context.requestId}]`;
@@ -342,8 +364,14 @@ function buildPurchaseSql(context) {
     "START TRANSACTION;",
     `INSERT INTO compra (folio, fecha, subtotal, total, decimales, monTipoCambio, comentario, descuento, peso, subtotal0, gasto, status, pro_id, caj_id, mon_id) VALUES (${sqlText(folio)}, ${sqlText(dateParts)}, ${sqlNumber(context.summary.subtotal, 2)}, ${sqlNumber(context.summary.total, 2)}, 2, 1.000000, ${sqlText(comment)}, 0.00, ${sqlNumber(context.items.reduce((sum, item) => sum + item.quantity, 0), 4)}, ${sqlNumber(context.summary.subtotal0, 2)}, 0, 1, ${context.supplier.pro_id}, ${cashRegisterId}, 1);`,
     "SET @purchase_id = LAST_INSERT_ID();",
-    `INSERT INTO historial (movimiento, fecha, tabla, id, usu_id) VALUES (0, ${sqlText(dateParts)}, 'Compra', @purchase_id, ${historyUserId});`,
   ];
+
+  if (context.payment.method === "credit") {
+    sql.push(`INSERT INTO compratipopago (com_id, tpa_id, total, monTotal) VALUES (@purchase_id, 3, ${sqlNumber(context.summary.total, 2)}, ${sqlNumber(context.summary.total, 2)});`);
+    sql.push(`INSERT INTO creditoproveedor (fechaLimite, total, comentario, status, pro_id, com_id) VALUES (${sqlText(context.payment.dueDate)}, ${sqlNumber(context.summary.total, 2)}, '', 1, ${context.supplier.pro_id}, @purchase_id);`);
+  }
+
+  sql.push(`INSERT INTO historial (movimiento, fecha, tabla, id, usu_id) VALUES (0, ${sqlText(dateParts)}, 'Compra', @purchase_id, ${historyUserId});`);
 
   for (const item of context.items) {
     sql.push(`INSERT INTO detallec (com_id, art_id, clave, descripcion, cantidad, factor, unidad, precioSin, precioCon, importeSin, importeCon, receta, orden, movCom, movComC, precioNorSin, precioNorCon, importeNorSin, importeNorCon, descPorcentaje, descTotal, claveProdServ, claveUnidad, sinGravar, tipo) VALUES (@purchase_id, ${item.articleId}, ${sqlText(item.clave)}, ${sqlText(item.descripcion)}, ${sqlNumber(item.quantity, 4)}, ${sqlNumber(item.factor, 3)}, ${sqlText(item.unidad)}, ${sqlNumber(item.netUnitPrice, 6)}, ${sqlNumber(item.grossUnitPrice, 6)}, ${sqlNumber(item.netAmount, 2)}, ${sqlNumber(item.grossAmount, 2)}, ${item.receta ? 1 : 0}, ${item.order}, 1, -2, ${sqlNumber(item.netUnitPrice, 6)}, ${sqlNumber(item.grossUnitPrice, 6)}, ${sqlNumber(item.netAmount, 2)}, ${sqlNumber(item.grossAmount, 2)}, 0.00, 0.00, ${item.claveProdServ ? sqlText(item.claveProdServ) : "NULL"}, ${item.claveUnidad ? sqlText(item.claveUnidad) : "NULL"}, ${item.taxRate === 0 ? 1 : 0}, 0);`);
@@ -441,7 +469,7 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "POST" && url.pathname === "/compras/preview") {
       const context = await getPurchaseContext(await readBody(request));
-      sendJson(response, 200, { ok: true, supplier: context.supplier, items: context.items, summary: context.summary });
+      sendJson(response, 200, { ok: true, supplier: context.supplier, items: context.items, summary: context.summary, payment: context.payment });
       return;
     }
     if (request.method === "POST" && url.pathname === "/compras/recibir") {
@@ -452,14 +480,14 @@ const server = createServer(async (request, response) => {
         const { sql, folio, marker } = buildPurchaseSql(context);
         const duplicate = await query(`SELECT com_id, folio, total FROM compra WHERE comentario LIKE ${sqlText(`%${marker}%`)} ORDER BY com_id DESC LIMIT 1;`);
         if (duplicate.length > 0) {
-          return { status: 200, duplicate: true, purchase: { com_id: Number(duplicate[0].com_id), folio: duplicate[0].folio, total: Number(duplicate[0].total) } };
+          return { status: 200, duplicate: true, purchase: { com_id: Number(duplicate[0].com_id), folio: duplicate[0].folio, total: Number(duplicate[0].total) }, payment: context.payment };
         }
         const rows = parseTsv(await runMysql(sql));
         const purchase = rows[rows.length - 1];
         cache.clear();
-        return { status: 201, duplicate: false, purchase: { com_id: Number(purchase.com_id), folio: purchase.folio || folio, total: Number(purchase.total) } };
+        return { status: 201, duplicate: false, purchase: { com_id: Number(purchase.com_id), folio: purchase.folio || folio, total: Number(purchase.total) }, payment: context.payment };
       });
-      sendJson(response, result.status, { ok: true, duplicate: result.duplicate, purchase: result.purchase });
+      sendJson(response, result.status, { ok: true, duplicate: result.duplicate, purchase: result.purchase, payment: result.payment });
       return;
     }
     sendJson(response, 404, { ok: false, error: "Endpoint no encontrado." });
