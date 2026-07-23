@@ -14,9 +14,9 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: "Pedidos Internos",
-  description: "Pedidos internos entre sucursales",
-  applicationName: "Pedidos Internos",
+  title: "CSM Operaciones",
+  description: "Traspasos internos y recepcion de proveedores",
+  applicationName: "CSM Operaciones",
 };
 
 export const viewport = {

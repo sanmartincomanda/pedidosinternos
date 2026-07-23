@@ -14,6 +14,7 @@ import {
   getUserOrderPrefix,
   MAX_ORDER_NUMBER,
 } from "@/lib/orderUtils";
+import TouchNumericInput from "./TouchNumericInput";
 
 const Icons = {
   plus: (
@@ -1132,17 +1133,15 @@ export default function Formulario({
                   </div>
 
                   <div className="col-start-2 lg:col-auto">
-                    <input
+                    <TouchNumericInput
                       ref={(element) => (quantityInputRefs.current[idx] = element)}
-                      type="number"
                       value={item.cantidad}
-                      onChange={(event) => handleInputChange(idx, "cantidad", event.target.value)}
+                      onValueChange={(value) => handleInputChange(idx, "cantidad", value)}
                       onKeyDown={(event) => handleKeyDown(event, idx, "cantidad")}
-                      onFocus={(event) => event.target.select()}
+                      label={`Peso o cantidad de ${item.producto || "producto"}`}
+                      decimals={4}
                       placeholder="Peso"
                       min="0"
-                      step="0.01"
-                      inputMode="decimal"
                       enterKeyHint="next"
                       className="app-input text-center text-slate-900"
                     />

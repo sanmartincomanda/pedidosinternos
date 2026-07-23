@@ -15,6 +15,7 @@ import {
   getUserOrderPrefix,
   MAX_ORDER_NUMBER,
 } from "@/lib/orderUtils";
+import TouchNumericInput from "./TouchNumericInput";
 
 const Icons = {
   plus: (
@@ -950,17 +951,15 @@ export default function PedidoVacuna({
                   </div>
 
                   <div className="col-start-2 lg:col-auto">
-                    <input
+                    <TouchNumericInput
                       ref={(element) => (pesoInputRefs.current[idx] = element)}
-                      type="number"
                       value={item.pesoReal}
-                      onChange={(event) => handlePesoChange(idx, event.target.value)}
+                      onValueChange={(value) => handlePesoChange(idx, value)}
                       onKeyDown={(event) => handleKeyDown(event, idx, "pesoReal")}
-                      onFocus={(event) => event.target.select()}
+                      label={`Peso de ${item.producto || "producto"}`}
+                      decimals={4}
                       placeholder="Peso lb"
                       min="0"
-                      step="0.01"
-                      inputMode="decimal"
                       enterKeyHint="next"
                       className="app-input text-center text-slate-900"
                     />

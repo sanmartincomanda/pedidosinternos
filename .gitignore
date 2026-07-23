@@ -29,6 +29,9 @@
 # misc
 .DS_Store
 *.pem
+sicar-purchase-service/config.local.json
+sicar-purchase-service/logs/
+sicar-purchase-service/state/
 android/.idea/
 
 # debug

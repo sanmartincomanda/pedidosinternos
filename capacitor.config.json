@@ -1,6 +1,6 @@
 {
   "appId": "com.pedidosinternos.app",
-  "appName": "CSM Pedidos",
+  "appName": "CSM Operaciones",
   "webDir": "out",
   "bundledWebRuntime": false,
   "server": {

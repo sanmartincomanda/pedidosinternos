@@ -27,6 +27,7 @@ import EstadoPedidos from "./EstadoPedidos";
 import Formulario from "./Formulario";
 import Historial from "./Historial";
 import PedidoVacuna from "./PedidoVacuna";
+import ProveedoresExternos from "./ProveedoresExternos";
 
 const Icons = {
   app: (
@@ -125,6 +126,21 @@ const Icons = {
       <path d="M8 21h8M12 17v4" />
     </svg>
   ),
+  internal: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 7h11v8H3z" />
+      <path d="M14 10h4l3 3v2h-7z" />
+      <path d="m8 4 2-2 2 2M10 2v5" />
+      <circle cx="7.5" cy="18" r="2" />
+      <circle cx="17.5" cy="18" r="2" />
+    </svg>
+  ),
+  external: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 21h18M5 21V7l7-4 7 4v14" />
+      <path d="M9 9h2v2H9zM14 9h2v2h-2zM9 14h2v2H9zM14 14h2v2h-2z" />
+    </svg>
+  ),
 };
 
 const NAV_ITEMS = [
@@ -133,6 +149,11 @@ const NAV_ITEMS = [
   { key: "cocina", label: "Cocina", title: "Cocina - Preparacion", icon: Icons.chef, accent: "#f59e0b" },
   { key: "estados", label: "Recibir", title: "Recibir Producto", icon: Icons.truck, accent: "#0ea5e9" },
   { key: "historial", label: "Historial", title: "Historial", icon: Icons.history, accent: "#8b9a8f" },
+];
+
+const BUSINESS_MODULES = [
+  { key: "internos", label: "Traspasos internos", shortLabel: "Internos", icon: Icons.internal, accent: "#16a36a" },
+  { key: "proveedores", label: "Proveedores externos", shortLabel: "Proveedores", icon: Icons.external, accent: "#0ea5e9" },
 ];
 
 const INITIAL_CONFIG = {
@@ -341,12 +362,9 @@ function MobileNavButton({ item, active, onClick }) {
 }
 
 export default function AppInterna() {
-  const [user, setUser] = useState(() => {
-    if (typeof window === "undefined") return null;
-    const savedBranch = window.localStorage.getItem("csmDesktopBranch");
-    return ["Granada", "Nindiri"].includes(savedBranch) ? savedBranch : null;
-  });
+  const [user, setUser] = useState(null);
   const [view, setView] = useState("formulario");
+  const [businessModule, setBusinessModule] = useState("internos");
   const [pedidos, setPedidos] = useState([]);
   const [pedidoEditar, setPedidoEditar] = useState(null);
   const [config, setConfig] = useState(() => {
@@ -373,6 +391,20 @@ export default function AppInterna() {
   const previousOrderStatusesRef = useRef(null);
 
   useEffect(() => {
+    const savedBranch = window.localStorage.getItem("csmDesktopBranch");
+    const savedModule = window.localStorage.getItem("csmBusinessModule");
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (["Granada", "Nindiri"].includes(savedBranch)) setUser(savedBranch);
+      if (savedModule === "proveedores") setBusinessModule("proveedores");
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const desktopMode = Boolean(window.desktopAPI?.isDesktop);
     const mobileMode = isNativeAndroidApp();
     queueMicrotask(() => {
@@ -390,6 +422,7 @@ export default function AppInterna() {
     const disposeNavigation = window.desktopAPI?.onNavigate?.((destination) => {
       const nextView = typeof destination === "string" ? destination : destination?.view;
       if (NAV_ITEMS.some((item) => item.key === nextView) || nextView === "configuracion") {
+        setBusinessModule("internos");
         setView(nextView);
       }
 
@@ -417,6 +450,7 @@ export default function AppInterna() {
     let cleanup = stopMobileNotificationListeners;
     initializeMobileNotifications(user, (nextView, notificationData) => {
       if (NAV_ITEMS.some((item) => item.key === nextView) || nextView === "configuracion") {
+        setBusinessModule("internos");
         setView(nextView);
       }
 
@@ -447,6 +481,10 @@ export default function AppInterna() {
   useEffect(() => {
     localStorage.setItem("appConfig", JSON.stringify(config));
   }, [config]);
+
+  useEffect(() => {
+    localStorage.setItem("csmBusinessModule", businessModule);
+  }, [businessModule]);
 
   useEffect(() => {
     const configRef = ref(db, "configuracion");
@@ -538,6 +576,7 @@ export default function AppInterna() {
     setError("");
     setPassword("");
     setPedidoEditar(null);
+    setBusinessModule("internos");
     setView("formulario");
   };
 
@@ -551,17 +590,20 @@ export default function AppInterna() {
     setUser(null);
     setPassword("");
     setPedidoEditar(null);
+    setBusinessModule("internos");
     setView("formulario");
   };
 
-  const navMeta = useMemo(
-    () =>
-      NAV_ITEMS.find((item) => item.key === view) || {
-        title: "Configuracion",
-        icon: Icons.settings,
-      },
-    [view],
-  );
+  const navMeta = useMemo(() => {
+    if (businessModule === "proveedores") {
+      return { title: "Recibir de proveedor", icon: Icons.external };
+    }
+
+    return NAV_ITEMS.find((item) => item.key === view) || {
+      title: "Configuracion",
+      icon: Icons.settings,
+    };
+  }, [businessModule, view]);
 
   const fechaActual = new Intl.DateTimeFormat("es-NI", {
     weekday: "short",
@@ -584,11 +626,16 @@ export default function AppInterna() {
   const openOperationalAlert = () => {
     if (!activeOperationalAlert) return;
     markAlertReviewed(user, activeOperationalAlert.key);
+    setBusinessModule("internos");
     setView(activeOperationalAlert.view);
     setOperationalAlerts((current) => current.slice(1));
   };
 
   const renderCurrentView = () => {
+    if (businessModule === "proveedores") {
+      return <ProveedoresExternos user={user} />;
+    }
+
     const commonPrinterSettings = config.impresion || INITIAL_CONFIG.impresion;
     const branchOptions = getSelectableBranches(user);
 
@@ -656,10 +703,10 @@ export default function AppInterna() {
               Carnes San Martin
             </div>
             <h1 className="app-title mt-3 text-4xl font-black text-white sm:text-5xl">
-              Pedidos Internos
+              CSM Operaciones
             </h1>
             <div className="mt-3 text-sm font-semibold text-slate-300 sm:text-base">
-              Granada y Nindiri
+              Traspasos y proveedores
             </div>
 
             <div className="mt-7 grid gap-3 sm:grid-cols-3">
@@ -778,7 +825,7 @@ export default function AppInterna() {
           <div className="desktop-brand-mark">CSM</div>
           <div>
             <div className="desktop-brand-kicker">Carnes San Martin</div>
-            <div className="desktop-brand-title">Pedidos</div>
+            <div className="desktop-brand-title">Operaciones</div>
           </div>
         </div>
 
@@ -793,17 +840,43 @@ export default function AppInterna() {
           <div className="desktop-live-branch">{getBranchDisplayName(user)}</div>
         </div>
 
-        <nav className="desktop-rail-nav">
-          <div className="desktop-rail-caption">Modulos</div>
-          {NAV_ITEMS.map((item) => (
-            <SidebarNavButton
+        <div className="desktop-business-switch">
+          <div className="desktop-rail-caption">Operacion</div>
+          {BUSINESS_MODULES.map((item) => (
+            <button
               key={item.key}
-              item={item}
-              active={view === item.key}
-              onClick={() => setView(item.key)}
-            />
+              type="button"
+              onClick={() => setBusinessModule(item.key)}
+              className={`desktop-business-button ${businessModule === item.key ? "is-active" : ""}`}
+              style={{ "--module-accent": item.accent }}
+            >
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
           ))}
-        </nav>
+        </div>
+
+        {businessModule === "internos" ? (
+          <nav className="desktop-rail-nav">
+            <div className="desktop-rail-caption">Traspasos internos</div>
+            {NAV_ITEMS.map((item) => (
+              <SidebarNavButton
+                key={item.key}
+                item={item}
+                active={view === item.key}
+                onClick={() => setView(item.key)}
+              />
+            ))}
+          </nav>
+        ) : (
+          <div className="desktop-external-note">
+            <span>{Icons.external}</span>
+            <div>
+              <strong>Recepcion SICAR</strong>
+              <small>Inventario y costo de compra</small>
+            </div>
+          </div>
+        )}
 
         <div className="desktop-sidebar-summary">
           <div className="desktop-rail-caption">Actividad</div>
@@ -842,7 +915,10 @@ export default function AppInterna() {
             <div className="app-chip hidden sm:inline-flex">{Icons.user}{getBranchDisplayName(user)}</div>
             <button
               type="button"
-              onClick={() => setView("configuracion")}
+              onClick={() => {
+                setBusinessModule("internos");
+                setView("configuracion");
+              }}
               className="app-icon-button desktop-topbar-action"
               aria-label="Configuracion"
               title="Configuracion"
@@ -861,34 +937,56 @@ export default function AppInterna() {
           </div>
         </header>
 
-        <nav className="desktop-compact-nav hidden grid-cols-5 gap-2 px-4 pb-3 pt-3 lg:grid xl:hidden sm:px-6">
-          {NAV_ITEMS.map((item) => (
-            <DesktopNavButton
-              key={item.key}
-              item={item}
-              active={view === item.key}
-              onClick={() => setView(item.key)}
-            />
-          ))}
-        </nav>
+        <div className="px-3 pt-3 sm:px-6 xl:hidden">
+          <div className="grid grid-cols-2 gap-2 rounded-[1.35rem] border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur-xl">
+            {BUSINESS_MODULES.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setBusinessModule(item.key)}
+                className={`flex min-h-14 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-black transition ${
+                  businessModule === item.key ? "bg-slate-950 text-white shadow-lg" : "text-slate-500"
+                }`}
+              >
+                <span style={{ color: businessModule === item.key ? "#67e8f9" : item.accent }}>{item.icon}</span>
+                <span>{item.shortLabel}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {businessModule === "internos" ? (
+          <nav className="desktop-compact-nav hidden grid-cols-5 gap-2 px-4 pb-3 pt-3 lg:grid xl:hidden sm:px-6">
+            {NAV_ITEMS.map((item) => (
+              <DesktopNavButton
+                key={item.key}
+                item={item}
+                active={view === item.key}
+                onClick={() => setView(item.key)}
+              />
+            ))}
+          </nav>
+        ) : null}
 
         <div className="app-shell">
           <main className="app-route-shell page-enter" key={view}>{renderCurrentView()}</main>
         </div>
       </section>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-4 lg:hidden">
-        <div className="mx-auto flex max-w-4xl gap-2 rounded-[24px] border border-slate-200 bg-white/94 p-2 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">
-          {NAV_ITEMS.map((item) => (
-            <MobileNavButton
-              key={item.key}
-              item={item}
-              active={view === item.key}
-              onClick={() => setView(item.key)}
-            />
-          ))}
-        </div>
-      </nav>
+      {businessModule === "internos" ? (
+        <nav className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-4 lg:hidden">
+          <div className="mx-auto flex max-w-4xl gap-2 rounded-[24px] border border-slate-200 bg-white/94 p-2 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">
+            {NAV_ITEMS.map((item) => (
+              <MobileNavButton
+                key={item.key}
+                item={item}
+                active={view === item.key}
+                onClick={() => setView(item.key)}
+              />
+            ))}
+          </div>
+        </nav>
+      ) : null}
 
       {activeOperationalAlert ? (
         <div className="app-modal z-[90] px-4" role="dialog" aria-modal="true" aria-labelledby="operational-alert-title">
