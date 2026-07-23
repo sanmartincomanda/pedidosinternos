@@ -8,8 +8,10 @@ Este servicio es independiente de los workers de traspasos. No lee Firebase y no
 - Previsualiza precios con IVA desde la configuracion vigente de SICAR.
 - Registra una compra de inventario en una sola transaccion.
 - Actualiza existencia, ultimo costo, costo promedio, proveedor-articulo e historial.
+- Guarda retenciones y foto de factura en una cola local para el integrador contable.
 - No crea movimientos de caja, pagos ni creditos de proveedor.
 - No cambia impuestos ni precios de venta del articulo.
+- No guarda retenciones ni fotos dentro de SICAR.
 
 La escritura requiere `allowPurchases: true`. Mantener una `apiKey` privada para los equipos de la red local.
 
@@ -23,3 +25,7 @@ powershell -ExecutionPolicy Bypass -File .\Install-SicarPurchaseService.ps1 `
 ```
 
 El instalador crea solamente la tarea `CSM SICAR Proveedores API` y una regla privada de firewall para el puerto 43110. No detiene, reemplaza ni modifica los workers de traspasos.
+
+## Complemento contable opcional
+
+La app puede enviar `retentionIr2`, `retentionMunicipal1` y una foto JPG, PNG o WEBP de hasta 8 MB. Despues de confirmar la compra en SICAR, el servicio deja el complemento en `C:\SICAR\state\sicar-purchase-accounting`. El worker de compras contables lo une al mismo `com_id`, sube la foto a Storage y actualiza los documentos ya existentes sin crear otra compra.

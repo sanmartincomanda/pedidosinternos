@@ -75,7 +75,16 @@ const Icons = {
       <path d="m6 6 12 12M18 6 6 18" />
     </svg>
   ),
+  invoice: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M6 3h9l3 3v15H6z" />
+      <path d="M14 3v4h4M9 12h6M9 16h6" />
+    </svg>
+  ),
 };
+
+const MAX_INVOICE_FILE_BYTES = 8 * 1024 * 1024;
+const ALLOWED_INVOICE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function localDate() {
   const now = new Date();
@@ -109,7 +118,26 @@ function formatBultoWeight(value) {
   return `${Math.round(Number(value || 0) * 10000) / 10000}`;
 }
 
-function buildPurchasePayload({ supplier, invoiceNumber, comment, items, requestId, paymentMethod }) {
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(`${reader.result || ""}`);
+    reader.onerror = () => reject(new Error("No se pudo leer la foto de la factura."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function buildPurchasePayload({
+  supplier,
+  invoiceNumber,
+  comment,
+  items,
+  requestId,
+  paymentMethod,
+  retentionIr2,
+  retentionMunicipal1,
+  invoiceSupport = null,
+}) {
   return {
     requestId,
     supplierId: Number(supplier.pro_id),
@@ -118,6 +146,11 @@ function buildPurchasePayload({ supplier, invoiceNumber, comment, items, request
     comment: `${comment || ""}`.trim(),
     paymentMethod,
     priceMode: "net",
+    accounting: {
+      retentionIr2: roundMoney(retentionIr2),
+      retentionMunicipal1: roundMoney(retentionMunicipal1),
+      ...(invoiceSupport ? { invoiceSupport } : {}),
+    },
     items: items.map((item) => ({
       articleId: Number(item.art_id),
       quantity: Number(item.quantity),
@@ -191,6 +224,13 @@ export default function ProveedoresExternos({ user }) {
   const [bultoError, setBultoError] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [comment, setComment] = useState("");
+  const [retentionIrEnabled, setRetentionIrEnabled] = useState(false);
+  const [retentionMunicipalEnabled, setRetentionMunicipalEnabled] = useState(false);
+  const [retentionIr2, setRetentionIr2] = useState("");
+  const [retentionMunicipal1, setRetentionMunicipal1] = useState("");
+  const [retentionIrEdited, setRetentionIrEdited] = useState(false);
+  const [retentionMunicipalEdited, setRetentionMunicipalEdited] = useState(false);
+  const [invoiceSupport, setInvoiceSupport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [paymentPromptOpen, setPaymentPromptOpen] = useState(false);
@@ -199,6 +239,9 @@ export default function ProveedoresExternos({ user }) {
   const [receipt, setReceipt] = useState(null);
   const requestIdRef = useRef(globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`);
   const productSearchRef = useRef(null);
+  const supplierPickerRef = useRef(null);
+  const productPickerRef = useRef(null);
+  const invoiceSupportInputRef = useRef(null);
   const quantityRefs = useRef(new Map());
   const bultoInputRef = useRef(null);
 
@@ -216,6 +259,25 @@ export default function ProveedoresExternos({ user }) {
 
   useEffect(() => {
     checkConnection();
+  }, []);
+
+  useEffect(() => {
+    const closeSearchLists = (event) => {
+      if (!supplierPickerRef.current?.contains(event.target)) setSupplierOpen(false);
+      if (!productPickerRef.current?.contains(event.target)) setProductOpen(false);
+    };
+    const closeWithEscape = (event) => {
+      if (event.key === "Escape") {
+        setSupplierOpen(false);
+        setProductOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeSearchLists);
+    document.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeSearchLists);
+      document.removeEventListener("keydown", closeWithEscape);
+    };
   }, []);
 
   useEffect(() => {
@@ -239,14 +301,83 @@ export default function ProveedoresExternos({ user }) {
   }, [connection, productQuery, supplier?.pro_id]);
 
   const totals = useMemo(() => {
+    const subtotal = items.reduce(
+      (sum, item) => sum + roundMoney(Number(item.quantity || 0) * Number(item.netUnitPrice || 0)),
+      0,
+    );
     const gross = items.reduce((sum, item) => {
       const grossUnitPrice = roundUnitPrice(
         Number(item.netUnitPrice || 0) * (1 + Number(item.taxPercent || 0) / 100),
       );
       return sum + roundMoney(Number(item.quantity || 0) * grossUnitPrice);
     }, 0);
-    return { lines: items.length, gross: roundMoney(gross) };
+    const roundedSubtotal = roundMoney(subtotal);
+    const roundedGross = roundMoney(gross);
+    return {
+      lines: items.length,
+      subtotal: roundedSubtotal,
+      taxes: roundMoney(roundedGross - roundedSubtotal),
+      gross: roundedGross,
+    };
   }, [items]);
+
+  useEffect(() => {
+    if (retentionIrEnabled && !retentionIrEdited) {
+      setRetentionIr2(roundMoney(totals.subtotal * 0.02).toFixed(2));
+    }
+  }, [retentionIrEdited, retentionIrEnabled, totals.subtotal]);
+
+  useEffect(() => {
+    if (retentionMunicipalEnabled && !retentionMunicipalEdited) {
+      setRetentionMunicipal1(roundMoney(totals.subtotal * 0.01).toFixed(2));
+    }
+  }, [retentionMunicipalEdited, retentionMunicipalEnabled, totals.subtotal]);
+
+  const retentionTotal = roundMoney(
+    (retentionIrEnabled ? Number(retentionIr2 || 0) : 0)
+      + (retentionMunicipalEnabled ? Number(retentionMunicipal1 || 0) : 0),
+  );
+  const netTotal = roundMoney(Math.max(totals.gross - retentionTotal, 0));
+
+  const toggleRetentionIr = () => {
+    setRetentionIrEnabled((enabled) => {
+      if (enabled) {
+        setRetentionIr2("");
+        setRetentionIrEdited(false);
+      } else {
+        setRetentionIr2(roundMoney(totals.subtotal * 0.02).toFixed(2));
+        setRetentionIrEdited(false);
+      }
+      return !enabled;
+    });
+  };
+
+  const toggleRetentionMunicipal = () => {
+    setRetentionMunicipalEnabled((enabled) => {
+      if (enabled) {
+        setRetentionMunicipal1("");
+        setRetentionMunicipalEdited(false);
+      } else {
+        setRetentionMunicipal1(roundMoney(totals.subtotal * 0.01).toFixed(2));
+        setRetentionMunicipalEdited(false);
+      }
+      return !enabled;
+    });
+  };
+
+  const selectInvoiceSupport = (file) => {
+    if (!file) return;
+    if (!ALLOWED_INVOICE_TYPES.has(file.type)) {
+      setMessage({ type: "error", text: "La factura debe ser una imagen JPG, PNG o WEBP." });
+      return;
+    }
+    if (file.size > MAX_INVOICE_FILE_BYTES) {
+      setMessage({ type: "error", text: "La foto de la factura no puede superar 8 MB." });
+      return;
+    }
+    setInvoiceSupport(file);
+    setMessage(null);
+  };
 
   const addProduct = (product) => {
     setItems((current) => {
@@ -350,6 +481,9 @@ export default function ProveedoresExternos({ user }) {
     if (items.length === 0) return "Agrega al menos un producto.";
     if (items.some((item) => Number(item.quantity) <= 0)) return "Completa una cantidad mayor que cero en todos los productos.";
     if (items.some((item) => Number(item.netUnitPrice) < 0 || item.netUnitPrice === "")) return "Revisa el precio sin IVA de todos los productos.";
+    if (retentionIrEnabled && (!Number.isFinite(Number(retentionIr2)) || Number(retentionIr2) < 0)) return "Revisa la retencion IR.";
+    if (retentionMunicipalEnabled && (!Number.isFinite(Number(retentionMunicipal1)) || Number(retentionMunicipal1) < 0)) return "Revisa la retencion municipal.";
+    if (retentionTotal > totals.subtotal) return "Las retenciones no pueden superar el subtotal de la factura.";
     return "";
   };
 
@@ -379,6 +513,8 @@ export default function ProveedoresExternos({ user }) {
           items,
           requestId: requestIdRef.current,
           paymentMethod: selectedPaymentMethod,
+          retentionIr2: retentionIrEnabled ? retentionIr2 : 0,
+          retentionMunicipal1: retentionMunicipalEnabled ? retentionMunicipal1 : 0,
         }),
       );
       setPreview(result);
@@ -393,6 +529,13 @@ export default function ProveedoresExternos({ user }) {
     setLoading(true);
     setMessage(null);
     try {
+      const invoiceSupportPayload = invoiceSupport
+        ? {
+            fileName: invoiceSupport.name,
+            contentType: invoiceSupport.type,
+            dataUrl: await readFileAsDataUrl(invoiceSupport),
+          }
+        : null;
       const result = await receiveSicarPurchase(
         buildPurchasePayload({
           supplier,
@@ -401,14 +544,25 @@ export default function ProveedoresExternos({ user }) {
           items,
           requestId: requestIdRef.current,
           paymentMethod,
+          retentionIr2: retentionIrEnabled ? retentionIr2 : 0,
+          retentionMunicipal1: retentionMunicipalEnabled ? retentionMunicipal1 : 0,
+          invoiceSupport: invoiceSupportPayload,
         }),
       );
-      setReceipt({ ...result.purchase, payment: result.payment });
+      setReceipt({ ...result.purchase, payment: result.payment, accounting: result.accounting });
       setPreview(null);
       setPaymentMethod("");
       setItems([]);
       setInvoiceNumber("");
       setComment("");
+      setRetentionIrEnabled(false);
+      setRetentionMunicipalEnabled(false);
+      setRetentionIr2("");
+      setRetentionMunicipal1("");
+      setRetentionIrEdited(false);
+      setRetentionMunicipalEdited(false);
+      setInvoiceSupport(null);
+      if (invoiceSupportInputRef.current) invoiceSupportInputRef.current.value = "";
       requestIdRef.current = globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`;
     } catch (error) {
       setMessage({ type: "error", text: error.message });
@@ -481,7 +635,7 @@ export default function ProveedoresExternos({ user }) {
 
       <section className={`app-panel relative min-w-0 max-w-full overflow-visible p-4 sm:p-5 ${supplierOpen ? "z-50" : "z-20"}`}>
         <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)]">
-          <div className="relative min-w-0">
+          <div ref={supplierPickerRef} className="relative min-w-0">
             <label className="app-label">Proveedor</label>
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{Icons.supplier}</span>
@@ -541,6 +695,105 @@ export default function ProveedoresExternos({ user }) {
         </div>
       </section>
 
+      <section className="app-panel min-w-0 max-w-full border-lime-200 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-base font-black text-slate-950">Datos contables <span className="text-xs text-slate-400">Opcional</span></div>
+            <div className="mt-1 text-xs font-semibold text-slate-500">No se guardan en SICAR.</div>
+          </div>
+          <div className="rounded-full bg-lime-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-lime-700">
+            Base {formatMoney(totals.subtotal)}
+          </div>
+        </div>
+
+        <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_1fr_1.2fr]">
+          <div className={`rounded-xl border p-2.5 ${retentionIrEnabled ? "border-lime-300 bg-lime-50" : "border-slate-200 bg-white"}`}>
+            <button type="button" onClick={toggleRetentionIr} className="flex min-h-9 w-full items-center justify-between gap-2 text-left">
+              <span className="text-xs font-black text-slate-800">Retencion IR 2%</span>
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full ${retentionIrEnabled ? "bg-[#76b900] text-[#101807]" : "bg-slate-100 text-slate-400"}`}>
+                {retentionIrEnabled ? Icons.check : Icons.plus}
+              </span>
+            </button>
+            {retentionIrEnabled ? (
+              <TouchNumericInput
+                value={retentionIr2}
+                onValueChange={(value) => {
+                  setRetentionIr2(value);
+                  setRetentionIrEdited(true);
+                }}
+                label="Monto retencion IR 2%"
+                decimals={2}
+                placeholder="0.00"
+                className="app-input mt-2 h-10 !min-h-10 rounded-lg text-right text-sm font-black text-lime-800"
+              />
+            ) : null}
+          </div>
+
+          <div className={`rounded-xl border p-2.5 ${retentionMunicipalEnabled ? "border-lime-300 bg-lime-50" : "border-slate-200 bg-white"}`}>
+            <button type="button" onClick={toggleRetentionMunicipal} className="flex min-h-9 w-full items-center justify-between gap-2 text-left">
+              <span className="text-xs font-black text-slate-800">Retencion municipal 1%</span>
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full ${retentionMunicipalEnabled ? "bg-[#76b900] text-[#101807]" : "bg-slate-100 text-slate-400"}`}>
+                {retentionMunicipalEnabled ? Icons.check : Icons.plus}
+              </span>
+            </button>
+            {retentionMunicipalEnabled ? (
+              <TouchNumericInput
+                value={retentionMunicipal1}
+                onValueChange={(value) => {
+                  setRetentionMunicipal1(value);
+                  setRetentionMunicipalEdited(true);
+                }}
+                label="Monto retencion municipal 1%"
+                decimals={2}
+                placeholder="0.00"
+                className="app-input mt-2 h-10 !min-h-10 rounded-lg text-right text-sm font-black text-lime-800"
+              />
+            ) : null}
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-2.5">
+            <input
+              ref={invoiceSupportInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => selectInvoiceSupport(event.target.files?.[0])}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => invoiceSupportInputRef.current?.click()}
+              className="flex min-h-9 w-full items-center gap-2 text-left"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">{Icons.invoice}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-black text-slate-800">Foto de factura</span>
+                <span className="block truncate text-[10px] font-semibold text-slate-400">{invoiceSupport?.name || "Agregar foto opcional"}</span>
+              </span>
+              <span className="text-lime-700">{invoiceSupport ? Icons.check : Icons.plus}</span>
+            </button>
+            {invoiceSupport ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setInvoiceSupport(null);
+                  if (invoiceSupportInputRef.current) invoiceSupportInputRef.current.value = "";
+                }}
+                className="mt-1 w-full text-right text-[10px] font-black uppercase tracking-wider text-rose-500"
+              >
+                Quitar foto
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {retentionTotal > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-white">
+            <span className="text-xs font-bold text-slate-300">Retenciones {formatMoney(retentionTotal)}</span>
+            <span className="text-sm font-black">Neto a pagar {formatMoney(netTotal)}</span>
+          </div>
+        ) : null}
+      </section>
+
       <section className={`app-panel relative min-w-0 max-w-full overflow-visible border-lime-200 p-3 sm:p-4 ${productOpen ? "z-40" : "z-10"}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -558,7 +811,7 @@ export default function ProveedoresExternos({ user }) {
           </button>
         </div>
 
-        <div className="relative mt-3 min-w-0 max-w-full">
+        <div ref={productPickerRef} className="relative mt-3 min-w-0 max-w-full">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5d9100]">{Icons.search}</span>
           <input
             ref={productSearchRef}
@@ -670,6 +923,7 @@ export default function ProveedoresExternos({ user }) {
             <div className="px-2">
               <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Total factura con IVA</div>
               <div className="mt-1 text-2xl font-black">{formatMoney(totals.gross)}</div>
+              {retentionTotal > 0 ? <div className="mt-0.5 text-[10px] font-bold text-lime-300">Neto {formatMoney(netTotal)}</div> : null}
             </div>
             <button
               type="button"
@@ -827,16 +1081,30 @@ export default function ProveedoresExternos({ user }) {
           <div className="app-modal-panel w-full max-w-xl p-5 sm:p-6">
             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-lime-700">Confirmar recepcion</div>
             <h2 className="mt-1 text-2xl font-black text-slate-950">{preview.supplier?.nombre}</h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid grid-cols-3 gap-2">
               <div className="rounded-2xl bg-slate-50 p-4">
-                <div className="text-[10px] font-black uppercase text-slate-400">Productos</div>
-                <div className="mt-1 text-xl font-black">{preview.summary?.lines}</div>
+                <div className="text-[9px] font-black uppercase text-slate-400">Productos</div>
+                <div className="mt-1 text-sm font-black sm:text-xl">{preview.summary?.lines}</div>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4 text-right">
+                <div className="text-[9px] font-black uppercase text-slate-400">Subtotal sin IVA</div>
+                <div className="mt-1 text-sm font-black text-slate-950 sm:text-xl">{formatMoney(preview.summary?.subtotal)}</div>
               </div>
               <div className="rounded-2xl bg-lime-50 p-4 text-right">
-                <div className="text-[10px] font-black uppercase text-lime-700">Total con IVA</div>
-                <div className="mt-1 text-xl font-black text-lime-950">{formatMoney(preview.summary?.total)}</div>
+                <div className="text-[9px] font-black uppercase text-lime-700">Total factura</div>
+                <div className="mt-1 text-sm font-black text-lime-950 sm:text-xl">{formatMoney(preview.summary?.total)}</div>
               </div>
             </div>
+            {retentionTotal > 0 || invoiceSupport ? (
+              <div className="mt-3 rounded-2xl border border-lime-200 bg-lime-50 p-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-lime-700">Datos para contabilidad</div>
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm font-bold text-slate-700">
+                  <span>Retenciones {formatMoney(retentionTotal)}</span>
+                  <span className="font-black text-slate-950">Neto {formatMoney(netTotal)}</span>
+                </div>
+                {invoiceSupport ? <div className="mt-1 truncate text-xs font-semibold text-lime-800">Factura: {invoiceSupport.name}</div> : null}
+              </div>
+            ) : null}
             <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4">
               <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Metodo de pago</div>
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
@@ -881,6 +1149,13 @@ export default function ProveedoresExternos({ user }) {
               {receipt.payment?.label}
             </div>
             <p className="mt-2 text-sm font-semibold text-slate-500">Inventario actualizado en SICAR.</p>
+            {receipt.accounting?.requested ? (
+              <p className={`mt-3 rounded-xl px-3 py-2 text-xs font-bold ${receipt.accounting?.queued ? "bg-lime-50 text-lime-800" : "bg-amber-50 text-amber-800"}`}>
+                {receipt.accounting?.queued
+                  ? "Retenciones y factura preparadas para el sistema contable."
+                  : `Compra registrada; complemento contable pendiente: ${receipt.accounting?.error || "vuelve a intentarlo desde el servidor."}`}
+              </p>
+            ) : null}
             <button type="button" onClick={() => setReceipt(null)} className="app-button app-button-primary mt-6 w-full">Cerrar</button>
           </div>
         </div>

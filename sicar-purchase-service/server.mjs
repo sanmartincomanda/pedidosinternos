@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +15,8 @@ const portArgumentIndex = process.argv.indexOf("--port");
 const port = Number(portArgumentIndex >= 0 ? process.argv[portArgumentIndex + 1] : config.port || 43110);
 const host = config.host || "0.0.0.0";
 const cacheTtlMs = Math.max(10, Number(config.cacheSeconds || 60)) * 1000;
+const accountingQueueDirectory = config.accounting?.queueDirectory || "C:\\SICAR\\state\\sicar-purchase-accounting";
+const maxInvoiceFileBytes = 8 * 1024 * 1024;
 const cache = new Map();
 let purchaseQueue = Promise.resolve();
 
@@ -47,6 +49,104 @@ function addDays(dateText, days) {
   const date = new Date(Date.UTC(year, month - 1, day));
   date.setUTCDate(date.getUTCDate() + Math.max(0, Math.trunc(Number(days) || 0)));
   return date.toISOString().slice(0, 10);
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function safeFilePart(value, fallback = "archivo") {
+  return `${value || ""}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80) || fallback;
+}
+
+async function readJsonIfExists(filePath) {
+  try {
+    return JSON.parse((await readFile(filePath, "utf8")).replace(/^\uFEFF/, ""));
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function atomicWrite(filePath, content) {
+  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temporaryPath, content);
+  await rename(temporaryPath, filePath);
+}
+
+async function persistInvoiceSupport(sourceRecordId, input) {
+  if (!input) return null;
+  const match = `${input.dataUrl || ""}`.match(/^data:(image\/(?:jpeg|png|webp));base64,([a-zA-Z0-9+/=\r\n]+)$/);
+  if (!match) throw new Error("La foto de factura no tiene un formato valido.");
+
+  const contentType = match[1];
+  const buffer = Buffer.from(match[2], "base64");
+  if (buffer.length === 0 || buffer.length > maxInvoiceFileBytes) {
+    throw new Error("La foto de factura debe pesar entre 1 byte y 8 MB.");
+  }
+
+  const extension = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[contentType];
+  const baseName = safeFilePart(input.fileName, `factura_${sourceRecordId}`).replace(/_(jpg|jpeg|png|webp)$/i, "");
+  const filePath = path.join(accountingQueueDirectory, `compra_${safeFilePart(sourceRecordId)}_${baseName}.${extension}`);
+  await atomicWrite(filePath, buffer);
+  return {
+    fileName: `${input.fileName || `factura.${extension}`}`.slice(0, 160),
+    contentType,
+    localPath: filePath,
+  };
+}
+
+async function queueAccountingMetadata(payload, context, purchase) {
+  const accounting = payload?.accounting || {};
+  const retentionIr2 = roundMoney(accounting.retentionIr2);
+  const retentionMunicipal1 = roundMoney(accounting.retentionMunicipal1);
+  if (retentionIr2 < 0 || retentionMunicipal1 < 0) throw new Error("Las retenciones no pueden ser negativas.");
+
+  const retentionTotal = roundMoney(retentionIr2 + retentionMunicipal1);
+  if (retentionTotal > context.summary.subtotal) throw new Error("Las retenciones superan el subtotal de la factura.");
+  const requested = retentionTotal > 0 || Boolean(accounting.invoiceSupport);
+  if (!requested) return { requested: false, queued: false };
+
+  await mkdir(accountingQueueDirectory, { recursive: true });
+  const sourceRecordId = `${purchase.com_id}`;
+  const metadataPath = path.join(accountingQueueDirectory, `compra_${safeFilePart(sourceRecordId)}.json`);
+  const existing = await readJsonIfExists(metadataPath);
+  const invoiceSupport = accounting.invoiceSupport
+    ? await persistInvoiceSupport(sourceRecordId, accounting.invoiceSupport)
+    : existing?.invoiceSupport || null;
+  const metadata = {
+    version: 1,
+    source: "proveedores-app",
+    sourceRecordId,
+    rawId: `compra_${sourceRecordId}`,
+    purchaseId: Number(purchase.com_id),
+    folio: purchase.folio || "",
+    supplier: context.supplier.nombre,
+    invoiceNumber: context.invoiceNumber,
+    date: context.date,
+    total: context.summary.total,
+    subtotal: context.summary.subtotal,
+    retentionIr2,
+    retentionMunicipal1,
+    retentionTotal,
+    netTotal: roundMoney(Math.max(context.summary.total - retentionTotal, 0)),
+    invoiceSupport,
+    uploadedSupport: existing?.uploadedSupport || null,
+    capturedAt: new Date().toISOString(),
+  };
+  await atomicWrite(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
+  return {
+    requested: true,
+    queued: true,
+    retentionTotal,
+    netTotal: metadata.netTotal,
+    hasInvoiceSupport: Boolean(invoiceSupport),
+  };
 }
 
 function parseTsv(output) {
@@ -425,11 +525,11 @@ function sendJson(response, status, payload) {
   response.end(JSON.stringify(payload));
 }
 
-async function readBody(request) {
+async function readBody(request, maximumLength = 262144) {
   let body = "";
   for await (const chunk of request) {
     body += chunk;
-    if (body.length > 262144) throw new Error("La solicitud es demasiado grande.");
+    if (body.length > maximumLength) throw new Error("La solicitud es demasiado grande.");
   }
   return body ? JSON.parse(body) : {};
 }
@@ -484,20 +584,27 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "POST" && url.pathname === "/compras/recibir") {
       if (config.allowPurchases !== true) throw new Error("La escritura de compras esta deshabilitada en la configuracion del servicio.");
-      const body = await readBody(request);
+      const body = await readBody(request, 12 * 1024 * 1024);
       const result = await enqueuePurchase(async () => {
         const context = await getPurchaseContext(body);
         const { sql, folio, marker } = buildPurchaseSql(context);
         const duplicate = await query(`SELECT com_id, folio, total FROM compra WHERE comentario LIKE ${sqlText(`%${marker}%`)} ORDER BY com_id DESC LIMIT 1;`);
         if (duplicate.length > 0) {
-          return { status: 200, duplicate: true, purchase: { com_id: Number(duplicate[0].com_id), folio: duplicate[0].folio, total: Number(duplicate[0].total) }, payment: context.payment };
+          return { status: 200, duplicate: true, purchase: { com_id: Number(duplicate[0].com_id), folio: duplicate[0].folio, total: Number(duplicate[0].total) }, payment: context.payment, context };
         }
         const rows = parseTsv(await runMysql(sql));
         const purchase = rows[rows.length - 1];
         cache.clear();
-        return { status: 201, duplicate: false, purchase: { com_id: Number(purchase.com_id), folio: purchase.folio || folio, total: Number(purchase.total) }, payment: context.payment };
+        return { status: 201, duplicate: false, purchase: { com_id: Number(purchase.com_id), folio: purchase.folio || folio, total: Number(purchase.total) }, payment: context.payment, context };
       });
-      sendJson(response, result.status, { ok: true, duplicate: result.duplicate, purchase: result.purchase, payment: result.payment });
+      let accounting;
+      try {
+        accounting = await queueAccountingMetadata(body, result.context, result.purchase);
+      } catch (error) {
+        console.error(new Date().toISOString(), "Complemento contable:", error.message);
+        accounting = { requested: true, queued: false, error: error.message };
+      }
+      sendJson(response, result.status, { ok: true, duplicate: result.duplicate, purchase: result.purchase, payment: result.payment, accounting });
       return;
     }
     sendJson(response, 404, { ok: false, error: "Endpoint no encontrado." });
