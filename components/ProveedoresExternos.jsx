@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import ProviderPurchaseHistory from "./ProviderPurchaseHistory";
 import TouchNumericInput from "./TouchNumericInput";
 import {
   checkSicarPurchaseApi,
+  getSicarPurchaseHistory,
   getSicarApiConnection,
   previewSicarPurchase,
   receiveSicarPurchase,
@@ -12,6 +14,11 @@ import {
   searchSicarArticles,
   searchSicarSuppliers,
 } from "@/lib/sicarPurchaseApi";
+import {
+  deleteProviderPurchaseDraft,
+  listProviderPurchaseDrafts,
+  saveProviderPurchaseDraft,
+} from "@/lib/providerDraftStore";
 
 const Icons = {
   search: (
@@ -127,6 +134,20 @@ function readFileAsDataUrl(file) {
   });
 }
 
+async function serializeInvoiceSupport(support) {
+  if (!support) return null;
+  if (support.dataUrl) return support;
+  const file = support.file || support;
+  return {
+    fileName: support.name || file.name,
+    name: support.name || file.name,
+    contentType: support.type || file.type,
+    type: support.type || file.type,
+    size: support.size || file.size,
+    dataUrl: await readFileAsDataUrl(file),
+  };
+}
+
 function buildPurchasePayload({
   supplier,
   invoiceNumber,
@@ -207,9 +228,15 @@ function ConnectionDialog({ initial, onClose, onSaved }) {
 }
 
 export default function ProveedoresExternos({ user }) {
+  const [view, setView] = useState("form");
   const [connection, setConnection] = useState("checking");
   const [connectionError, setConnectionError] = useState("");
   const [connectionDialog, setConnectionDialog] = useState(false);
+  const [drafts, setDrafts] = useState([]);
+  const [editingDraftId, setEditingDraftId] = useState(null);
+  const [purchaseHistory, setPurchaseHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const [supplierQuery, setSupplierQuery] = useState("");
   const [suppliers, setSuppliers] = useState([]);
   const [supplier, setSupplier] = useState(null);
@@ -242,8 +269,34 @@ export default function ProveedoresExternos({ user }) {
   const supplierPickerRef = useRef(null);
   const productPickerRef = useRef(null);
   const invoiceSupportInputRef = useRef(null);
+  const invoiceCameraInputRef = useRef(null);
   const quantityRefs = useRef(new Map());
   const bultoInputRef = useRef(null);
+
+  const refreshDrafts = async () => {
+    const rows = await listProviderPurchaseDrafts();
+    setDrafts(rows);
+    return rows;
+  };
+
+  const refreshHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      await refreshDrafts();
+      if (connection !== "online") {
+        setHistoryError("SICAR no esta conectado. Los pendientes locales siguen disponibles.");
+        return;
+      }
+      const result = await getSicarPurchaseHistory();
+      setPurchaseHistory(result.rows || []);
+    } catch (error) {
+      setHistoryError(error.message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+  const refreshHistoryEvent = useEffectEvent(refreshHistory);
 
   const checkConnection = async () => {
     setConnection("checking");
@@ -259,7 +312,12 @@ export default function ProveedoresExternos({ user }) {
 
   useEffect(() => {
     checkConnection();
+    refreshDrafts().catch((error) => setMessage({ type: "error", text: error.message }));
   }, []);
+
+  useEffect(() => {
+    if (view === "history") refreshHistoryEvent();
+  }, [view, connection]);
 
   useEffect(() => {
     const closeSearchLists = (event) => {
@@ -367,7 +425,12 @@ export default function ProveedoresExternos({ user }) {
 
   const selectInvoiceSupport = (file) => {
     if (!file) return;
-    if (!ALLOWED_INVOICE_TYPES.has(file.type)) {
+    const inferredType = file.type || (
+      /\.png$/i.test(file.name) ? "image/png"
+        : /\.webp$/i.test(file.name) ? "image/webp"
+          : "image/jpeg"
+    );
+    if (!ALLOWED_INVOICE_TYPES.has(inferredType)) {
       setMessage({ type: "error", text: "La factura debe ser una imagen JPG, PNG o WEBP." });
       return;
     }
@@ -375,7 +438,12 @@ export default function ProveedoresExternos({ user }) {
       setMessage({ type: "error", text: "La foto de la factura no puede superar 8 MB." });
       return;
     }
-    setInvoiceSupport(file);
+    setInvoiceSupport({
+      file,
+      name: file.name || `factura-${Date.now()}.jpg`,
+      type: inferredType,
+      size: file.size,
+    });
     setMessage(null);
   };
 
@@ -487,6 +555,100 @@ export default function ProveedoresExternos({ user }) {
     return "";
   };
 
+  const resetForm = ({ keepSupplier = false } = {}) => {
+    if (!keepSupplier) {
+      setSupplier(null);
+      setSupplierQuery("");
+    }
+    setItems([]);
+    setInvoiceNumber("");
+    setComment("");
+    setRetentionIrEnabled(false);
+    setRetentionMunicipalEnabled(false);
+    setRetentionIr2("");
+    setRetentionMunicipal1("");
+    setRetentionIrEdited(false);
+    setRetentionMunicipalEdited(false);
+    setInvoiceSupport(null);
+    setPaymentMethod("");
+    setPreview(null);
+    setEditingDraftId(null);
+    if (invoiceSupportInputRef.current) invoiceSupportInputRef.current.value = "";
+    if (invoiceCameraInputRef.current) invoiceCameraInputRef.current.value = "";
+    requestIdRef.current = globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`;
+  };
+
+  const savePendingReception = async () => {
+    const validationError = validate();
+    if (validationError) {
+      setMessage({ type: "error", text: validationError });
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+    try {
+      const now = new Date().toISOString();
+      const existing = drafts.find((row) => row.id === editingDraftId);
+      const serializedSupport = await serializeInvoiceSupport(invoiceSupport);
+      const draft = {
+        id: editingDraftId || `provider-draft-${globalThis.crypto?.randomUUID?.() || Date.now()}`,
+        requestId: requestIdRef.current,
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+        supplier,
+        invoiceNumber: `${invoiceNumber || ""}`.trim(),
+        comment: `${comment || ""}`.trim(),
+        items: items.map((item) => ({ ...item })),
+        totals,
+        retentionIrEnabled,
+        retentionMunicipalEnabled,
+        retentionIr2: retentionIrEnabled ? `${retentionIr2 || 0}` : "",
+        retentionMunicipal1: retentionMunicipalEnabled ? `${retentionMunicipal1 || 0}` : "",
+        invoiceSupport: serializedSupport,
+      };
+      await saveProviderPurchaseDraft(draft);
+      await refreshDrafts();
+      resetForm();
+      setView("history");
+      setMessage(null);
+    } catch (error) {
+      setMessage({ type: "error", text: `No se pudo guardar la recepcion local: ${error.message}` });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const editPendingReception = (draft) => {
+    setSupplier(draft.supplier || null);
+    setSupplierQuery(draft.supplier?.nombre || "");
+    setItems((draft.items || []).map((item) => ({ ...item })));
+    setInvoiceNumber(draft.invoiceNumber || "");
+    setComment(draft.comment || "");
+    setRetentionIrEnabled(Boolean(draft.retentionIrEnabled));
+    setRetentionMunicipalEnabled(Boolean(draft.retentionMunicipalEnabled));
+    setRetentionIr2(`${draft.retentionIr2 || ""}`);
+    setRetentionMunicipal1(`${draft.retentionMunicipal1 || ""}`);
+    setRetentionIrEdited(Boolean(draft.retentionIrEnabled));
+    setRetentionMunicipalEdited(Boolean(draft.retentionMunicipalEnabled));
+    setInvoiceSupport(draft.invoiceSupport || null);
+    setEditingDraftId(draft.id);
+    requestIdRef.current = draft.requestId || globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`;
+    setMessage({ type: "success", text: "Recepcion local abierta. Puedes corregirla y enviarla a SICAR." });
+    setView("form");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const removePendingReception = async (draft) => {
+    try {
+      await deleteProviderPurchaseDraft(draft.id);
+      await refreshDrafts();
+      if (editingDraftId === draft.id) resetForm();
+    } catch (error) {
+      setHistoryError(`No se pudo eliminar el pendiente: ${error.message}`);
+    }
+  };
+
   const requestPaymentMethod = () => {
     const validationError = validate();
     if (validationError) {
@@ -529,13 +691,15 @@ export default function ProveedoresExternos({ user }) {
     setLoading(true);
     setMessage(null);
     try {
-      const invoiceSupportPayload = invoiceSupport
+      const serializedSupport = await serializeInvoiceSupport(invoiceSupport);
+      const invoiceSupportPayload = serializedSupport
         ? {
-            fileName: invoiceSupport.name,
-            contentType: invoiceSupport.type,
-            dataUrl: await readFileAsDataUrl(invoiceSupport),
+            fileName: serializedSupport.fileName || serializedSupport.name,
+            contentType: serializedSupport.contentType || serializedSupport.type,
+            dataUrl: serializedSupport.dataUrl,
           }
         : null;
+      const completedDraftId = editingDraftId;
       const result = await receiveSicarPurchase(
         buildPurchasePayload({
           supplier,
@@ -549,21 +713,19 @@ export default function ProveedoresExternos({ user }) {
           invoiceSupport: invoiceSupportPayload,
         }),
       );
+      let draftCleanupWarning = "";
+      if (completedDraftId) {
+        try {
+          await deleteProviderPurchaseDraft(completedDraftId);
+          await refreshDrafts();
+        } catch (error) {
+          draftCleanupWarning = ` La compra se registro, pero no se pudo quitar el pendiente local: ${error.message}`;
+        }
+      }
       setReceipt({ ...result.purchase, payment: result.payment, accounting: result.accounting });
       setPreview(null);
-      setPaymentMethod("");
-      setItems([]);
-      setInvoiceNumber("");
-      setComment("");
-      setRetentionIrEnabled(false);
-      setRetentionMunicipalEnabled(false);
-      setRetentionIr2("");
-      setRetentionMunicipal1("");
-      setRetentionIrEdited(false);
-      setRetentionMunicipalEdited(false);
-      setInvoiceSupport(null);
-      if (invoiceSupportInputRef.current) invoiceSupportInputRef.current.value = "";
-      requestIdRef.current = globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`;
+      resetForm({ keepSupplier: true });
+      if (draftCleanupWarning) setMessage({ type: "error", text: draftCleanupWarning.trim() });
     } catch (error) {
       setMessage({ type: "error", text: error.message });
       setPreview(null);
@@ -571,6 +733,24 @@ export default function ProveedoresExternos({ user }) {
       setLoading(false);
     }
   };
+
+  if (view === "history") {
+    return (
+      <ProviderPurchaseHistory
+        drafts={drafts}
+        purchases={purchaseHistory}
+        loading={historyLoading}
+        error={historyError}
+        onBack={() => {
+          setView("form");
+          setMessage(null);
+        }}
+        onDeleteDraft={removePendingReception}
+        onEditDraft={editPendingReception}
+        onRefresh={refreshHistory}
+      />
+    );
+  }
 
   const activeBultoItem = items.find((item) => Number(item.art_id) === Number(bultosArticleId));
   const bultosTotal = bultosTemporal.reduce((sum, weight) => sum + weight, 0);
@@ -594,15 +774,37 @@ export default function ProveedoresExternos({ user }) {
               <p className="mt-1 max-w-2xl text-sm font-semibold text-slate-300">Factura de compra e inventario SICAR.</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setConnectionDialog(true)}
-            className="flex min-h-11 items-center gap-2 rounded-xl border border-lime-300/25 bg-white/10 px-4 text-sm font-black text-white"
-          >
-            {Icons.settings}
-            SICAR
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setView("history")}
+              className="flex min-h-11 items-center gap-2 rounded-xl bg-[#76b900] px-4 text-sm font-black text-[#101807]"
+            >
+              {Icons.invoice}
+              Historial
+              {drafts.length > 0 ? <span className="rounded-full bg-amber-300 px-2 py-0.5 text-[10px] text-amber-950">{drafts.length}</span> : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConnectionDialog(true)}
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-lime-300/25 bg-white/10 px-4 text-sm font-black text-white"
+            >
+              {Icons.settings}
+              SICAR
+            </button>
+          </div>
         </div>
+        {editingDraftId ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-300/40 bg-amber-300/10 px-4 py-3">
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-300">Recepcion en espera</div>
+              <div className="mt-0.5 text-sm font-black text-white">Editando antes de enviarla a SICAR</div>
+            </div>
+            <button type="button" onClick={() => resetForm()} className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-black text-white">
+              Cancelar edicion
+            </button>
+          </div>
+        ) : null}
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-white/7 p-4">
             <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Sucursal</div>
@@ -755,28 +957,41 @@ export default function ProveedoresExternos({ user }) {
             <input
               ref={invoiceSupportInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               onChange={(event) => selectInvoiceSupport(event.target.files?.[0])}
               className="hidden"
             />
-            <button
-              type="button"
-              onClick={() => invoiceSupportInputRef.current?.click()}
-              className="flex min-h-9 w-full items-center gap-2 text-left"
-            >
+            <input
+              ref={invoiceCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(event) => selectInvoiceSupport(event.target.files?.[0])}
+              className="hidden"
+            />
+            <div className="flex min-h-9 w-full items-center gap-2 text-left">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">{Icons.invoice}</span>
               <span className="min-w-0 flex-1">
                 <span className="block text-xs font-black text-slate-800">Foto de factura</span>
                 <span className="block truncate text-[10px] font-semibold text-slate-400">{invoiceSupport?.name || "Agregar foto opcional"}</span>
               </span>
               <span className="text-lime-700">{invoiceSupport ? Icons.check : Icons.plus}</span>
-            </button>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              <button type="button" onClick={() => invoiceCameraInputRef.current?.click()} className="min-h-9 rounded-lg bg-[#76b900] px-2 text-[10px] font-black text-[#101807]">
+                Tomar foto
+              </button>
+              <button type="button" onClick={() => invoiceSupportInputRef.current?.click()} className="min-h-9 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-black text-slate-700">
+                Elegir archivo
+              </button>
+            </div>
             {invoiceSupport ? (
               <button
                 type="button"
                 onClick={() => {
                   setInvoiceSupport(null);
                   if (invoiceSupportInputRef.current) invoiceSupportInputRef.current.value = "";
+                  if (invoiceCameraInputRef.current) invoiceCameraInputRef.current.value = "";
                 }}
                 className="mt-1 w-full text-right text-[10px] font-black uppercase tracking-wider text-rose-500"
               >
@@ -846,16 +1061,17 @@ export default function ProveedoresExternos({ user }) {
 
         {items.length > 0 ? (
           <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="grid grid-cols-[minmax(70px,1fr)_62px_46px_76px_34px] items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-2 text-[8px] font-black uppercase tracking-[0.1em] text-slate-400 sm:grid-cols-[minmax(180px,1fr)_88px_72px_120px_40px] sm:gap-2 sm:px-3 sm:text-[9px]">
+            <div className="grid grid-cols-[minmax(56px,1fr)_48px_38px_64px_72px_32px] items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-1.5 py-2 text-[7px] font-black uppercase tracking-[0.08em] text-slate-400 sm:grid-cols-[minmax(160px,1fr)_76px_64px_104px_110px_36px] sm:gap-2 sm:px-3 sm:text-[9px]">
               <span>Producto</span>
               <span className="text-center">Cant.</span>
               <span className="text-center">Bultos</span>
               <span className="text-center">P. sin IVA</span>
+              <span className="text-right">Subtotal</span>
               <span />
             </div>
             <div className="max-h-[min(52vh,560px)] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
               {items.map((item) => (
-                <div key={item.art_id} className="grid min-h-12 grid-cols-[minmax(70px,1fr)_62px_46px_76px_34px] items-center gap-1 px-2 py-1.5 sm:grid-cols-[minmax(180px,1fr)_88px_72px_120px_40px] sm:gap-2 sm:px-3">
+                <div key={item.art_id} className="grid min-h-12 grid-cols-[minmax(56px,1fr)_48px_38px_64px_72px_32px] items-center gap-0.5 px-1.5 py-1.5 sm:grid-cols-[minmax(160px,1fr)_76px_64px_104px_110px_36px] sm:gap-2 sm:px-3">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="hidden shrink-0 rounded-md bg-lime-100 px-2 py-1 font-mono text-[9px] font-black text-lime-800 md:inline">{item.clave}</span>
                     <span className="min-w-0 truncate text-xs font-black text-slate-900 sm:text-sm" title={item.descripcion}>{item.descripcion}</span>
@@ -897,10 +1113,13 @@ export default function ProveedoresExternos({ user }) {
                     placeholder="0.00"
                     className="app-input h-10 !min-h-10 rounded-lg px-1 text-center text-[11px] font-black text-[#4d7c0f] sm:px-2 sm:text-sm"
                   />
+                  <div className="truncate text-right text-[10px] font-black text-slate-900 sm:text-sm" title="Cantidad por precio sin IVA">
+                    {formatMoney(roundMoney(Number(item.quantity || 0) * Number(item.netUnitPrice || 0)))}
+                  </div>
                   <button
                     type="button"
                     onClick={() => setItems((current) => current.filter((row) => row.art_id !== item.art_id))}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 sm:h-9 sm:w-9"
                     aria-label={`Quitar ${item.descripcion}`}
                   >
                     {Icons.trash}
@@ -917,19 +1136,32 @@ export default function ProveedoresExternos({ user }) {
         )}
       </section>
 
-      <div className="fixed inset-x-0 bottom-[88px] z-40 px-3 lg:bottom-4 lg:left-auto lg:right-5 lg:w-[460px]">
+      <div className="fixed inset-x-0 bottom-[88px] z-40 px-3 lg:bottom-4 lg:left-auto lg:right-5 lg:w-[560px]">
         <div className="rounded-[1.4rem] border border-slate-700 bg-slate-950 p-3 text-white shadow-[0_24px_60px_-28px_rgba(2,6,23,0.85)]">
-          <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-            <div className="px-2">
+          <div className="flex items-center justify-between gap-3 px-2 pb-2">
+            <div>
               <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Total factura con IVA</div>
-              <div className="mt-1 text-2xl font-black">{formatMoney(totals.gross)}</div>
-              {retentionTotal > 0 ? <div className="mt-0.5 text-[10px] font-bold text-lime-300">Neto {formatMoney(netTotal)}</div> : null}
+              <div className="mt-0.5 text-xl font-black sm:text-2xl">{formatMoney(totals.gross)}</div>
             </div>
+            <div className="text-right">
+              {retentionTotal > 0 ? <div className="text-[10px] font-bold text-lime-300">Neto {formatMoney(netTotal)}</div> : null}
+              {editingDraftId ? <div className="mt-1 text-[9px] font-black uppercase tracking-wide text-amber-300">Pendiente abierto</div> : null}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={savePendingReception}
+              disabled={loading}
+              className="min-h-13 rounded-2xl border border-amber-300/60 bg-amber-300/10 px-3 text-xs font-black text-amber-200 disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
+            >
+              {loading ? "Guardando..." : "Recibir sin factura"}
+            </button>
             <button
               type="button"
               onClick={requestPaymentMethod}
               disabled={loading || connection !== "online"}
-              className="min-h-14 rounded-2xl bg-[#76b900] px-5 text-sm font-black text-[#101807] disabled:cursor-not-allowed disabled:opacity-40"
+              className="min-h-13 rounded-2xl bg-[#76b900] px-3 text-xs font-black text-[#101807] disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
             >
               {loading ? "Validando..." : "Recibir en SICAR"}
             </button>
@@ -1117,7 +1349,7 @@ export default function ProveedoresExternos({ user }) {
               </div>
             </div>
             <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
-              Esta accion registra la compra y aumenta inventario. No modifica precios de venta ni la configuracion de IVA.
+              SICAR recibira el total completo de la factura: subtotal mas IVA. Las retenciones no se envian a SICAR; se guardan solamente en el sistema contable.
             </p>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button

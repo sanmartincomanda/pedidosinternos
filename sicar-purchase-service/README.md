@@ -8,6 +8,7 @@ Este servicio es independiente de los workers de traspasos. No lee Firebase y no
 - Previsualiza precios con IVA desde la configuracion vigente de SICAR.
 - Registra una compra de inventario en una sola transaccion.
 - Actualiza existencia, ultimo costo, costo promedio, proveedor-articulo e historial.
+- Consulta el historial de compras creadas por la app con su detalle de productos.
 - Guarda retenciones y foto de factura en una cola local para el integrador contable.
 - No crea movimientos de caja, pagos ni creditos de proveedor.
 - No cambia impuestos ni precios de venta del articulo.
@@ -29,3 +30,7 @@ El instalador crea solamente la tarea `CSM SICAR Proveedores API` y una regla pr
 ## Complemento contable opcional
 
 La app puede enviar `retentionIr2`, `retentionMunicipal1` y una foto JPG, PNG o WEBP de hasta 8 MB. Despues de confirmar la compra en SICAR, el servicio deja el complemento en `C:\SICAR\state\sicar-purchase-accounting`. El worker de compras contables lo une al mismo `com_id`, sube la foto a Storage y actualiza los documentos ya existentes sin crear otra compra.
+
+## Historial y recepciones en espera
+
+`GET /compras/historial` devuelve solamente compras identificadas con el marcador `APP PROVEEDORES [CSM:...]`. Los borradores de recepciones sin factura no pasan por este servicio: permanecen en IndexedDB dentro del dispositivo hasta que el operador los edita y confirma. Al confirmar, SICAR recibe subtotal mas IVA; las retenciones siguen fuera de SICAR.

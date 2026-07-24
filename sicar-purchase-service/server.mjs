@@ -159,6 +159,103 @@ function parseTsv(output) {
   });
 }
 
+function cleanPurchaseComment(value = "") {
+  return `${value || ""}`.replace(/^APP PROVEEDORES\s+\[CSM:[^\]]+\]\s*/i, "").trim();
+}
+
+function getPurchaseRequestId(value = "") {
+  return `${value || ""}`.match(/\[CSM:([^\]]+)\]/i)?.[1] || "";
+}
+
+async function getAppPurchaseHistory(limit = 150) {
+  const safeLimit = Math.min(300, Math.max(1, Math.trunc(Number(limit) || 150)));
+  const purchases = await query(`
+    SELECT
+      c.com_id,
+      c.folio,
+      c.fecha,
+      c.subtotal,
+      c.total,
+      c.status,
+      c.comentario,
+      c.pro_id,
+      p.nombre AS supplierName,
+      CASE
+        WHEN EXISTS (
+          SELECT 1
+          FROM compratipopago ctp
+          WHERE ctp.com_id = c.com_id AND ctp.tpa_id = 3
+        ) THEN 'credit'
+        ELSE 'other'
+      END AS paymentMethod
+    FROM compra c
+    INNER JOIN proveedor p ON p.pro_id = c.pro_id
+    WHERE c.comentario LIKE 'APP PROVEEDORES [CSM:%'
+    ORDER BY c.com_id DESC
+    LIMIT ${safeLimit};
+  `);
+
+  if (purchases.length === 0) return [];
+  const purchaseIds = purchases.map((row) => Number(row.com_id)).filter(Number.isInteger);
+  if (purchaseIds.length === 0) return [];
+  const details = await query(`
+    SELECT
+      d.com_id,
+      d.art_id,
+      d.clave,
+      d.descripcion,
+      d.cantidad,
+      d.unidad,
+      d.precioSin,
+      d.precioCon,
+      d.importeSin,
+      d.importeCon,
+      d.orden
+    FROM detallec d
+    WHERE d.com_id IN (${purchaseIds.join(",")})
+    ORDER BY d.com_id DESC, d.orden ASC;
+  `);
+  const detailsByPurchase = new Map();
+  for (const row of details) {
+    const purchaseId = Number(row.com_id);
+    if (!detailsByPurchase.has(purchaseId)) detailsByPurchase.set(purchaseId, []);
+    detailsByPurchase.get(purchaseId).push({
+      art_id: Number(row.art_id),
+      clave: row.clave || "",
+      descripcion: row.descripcion || "",
+      cantidad: Number(row.cantidad || 0),
+      unidad: row.unidad || "",
+      precioSin: Number(row.precioSin || 0),
+      precioCon: Number(row.precioCon || 0),
+      importeSin: Number(row.importeSin || 0),
+      importeCon: Number(row.importeCon || 0),
+      orden: Number(row.orden || 0),
+    });
+  }
+
+  return purchases.map((row) => {
+    const status = Number(row.status);
+    const paymentMethod = row.paymentMethod === "credit" ? "credit" : "other";
+    return {
+      com_id: Number(row.com_id),
+      folio: row.folio || "",
+      fecha: row.fecha || "",
+      subtotal: Number(row.subtotal || 0),
+      taxes: roundMoney(Number(row.total || 0) - Number(row.subtotal || 0)),
+      total: Number(row.total || 0),
+      status,
+      statusLabel: status === 1 ? "Aplicada" : status === -1 ? "Cancelada" : `Estado ${status}`,
+      pro_id: Number(row.pro_id),
+      supplierName: row.supplierName || "",
+      paymentMethod,
+      paymentLabel: paymentMethod === "credit" ? "Credito" : "Otro medio",
+      comment: cleanPurchaseComment(row.comentario),
+      requestId: getPurchaseRequestId(row.comentario),
+      items: detailsByPurchase.get(Number(row.com_id)) || [],
+    };
+  });
+}
+
 function runMysql(sql) {
   return new Promise((resolve, reject) => {
     const args = [
@@ -574,6 +671,11 @@ const server = createServer(async (request, response) => {
       const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 40)));
       const supplierId = Math.max(0, Number(url.searchParams.get("pro_id") || 0));
       const rows = filterRows(await getArticles(supplierId), url.searchParams.get("q") || "", limit, ["clave", "descripcion"]);
+      sendJson(response, 200, { ok: true, source: "sicar-mysql", rows });
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/compras/historial") {
+      const rows = await getAppPurchaseHistory(url.searchParams.get("limit"));
       sendJson(response, 200, { ok: true, source: "sicar-mysql", rows });
       return;
     }
