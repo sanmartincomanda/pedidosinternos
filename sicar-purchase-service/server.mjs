@@ -674,6 +674,17 @@ const server = createServer(async (request, response) => {
       sendJson(response, 200, { ok: true, source: "sicar-mysql", rows });
       return;
     }
+    if (request.method === "GET" && url.pathname === "/catalogos/offline") {
+      const [suppliers, articles] = await Promise.all([getSuppliers(), getArticles(0)]);
+      sendJson(response, 200, {
+        ok: true,
+        source: "sicar-mysql",
+        generatedAt: new Date().toISOString(),
+        suppliers,
+        articles,
+      });
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/compras/historial") {
       const rows = await getAppPurchaseHistory(url.searchParams.get("limit"));
       sendJson(response, 200, { ok: true, source: "sicar-mysql", rows });

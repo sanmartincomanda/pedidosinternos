@@ -6,14 +6,14 @@ import ProviderPurchaseHistory from "./ProviderPurchaseHistory";
 import TouchNumericInput from "./TouchNumericInput";
 import {
   checkSicarPurchaseApi,
+  getSicarOfflineCatalog,
   getSicarPurchaseHistory,
   getSicarApiConnection,
   previewSicarPurchase,
   receiveSicarPurchase,
   saveSicarApiConnection,
-  searchSicarArticles,
-  searchSicarSuppliers,
 } from "@/lib/sicarPurchaseApi";
+import { loadProviderCatalog, saveProviderCatalog } from "@/lib/providerCatalogStore";
 import {
   deleteProviderPurchaseDraft,
   listProviderPurchaseDrafts,
@@ -89,6 +89,34 @@ const Icons = {
     </svg>
   ),
 };
+
+const CATALOG_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const CATALOG_RESULT_LIMIT = 80;
+
+function normalizeCatalogSearch(value = "") {
+  return `${value}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function filterLocalCatalog(rows, query, fields) {
+  const tokens = normalizeCatalogSearch(query).split(" ").filter(Boolean);
+  const matches = tokens.length === 0
+    ? rows
+    : rows.filter((row) => {
+      const searchable = normalizeCatalogSearch(fields.map((field) => row[field] || "").join(" "));
+      return tokens.every((token) => searchable.includes(token));
+    });
+  return matches.slice(0, CATALOG_RESULT_LIMIT);
+}
+
+function catalogIsFresh(catalog) {
+  const updatedAt = Date.parse(catalog?.updatedAt || "");
+  return Number.isFinite(updatedAt) && Date.now() - updatedAt < CATALOG_MAX_AGE_MS;
+}
 
 const MAX_INVOICE_FILE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_INVOICE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -219,7 +247,7 @@ function ConnectionDialog({ initial, onClose, onSaved }) {
             }}
             className="app-button app-button-primary"
           >
-            Guardar y probar
+            Guardar y actualizar
           </button>
         </div>
       </div>
@@ -238,11 +266,13 @@ export default function ProveedoresExternos({ user }) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [supplierQuery, setSupplierQuery] = useState("");
-  const [suppliers, setSuppliers] = useState([]);
+  const [supplierCatalog, setSupplierCatalog] = useState([]);
   const [supplier, setSupplier] = useState(null);
   const [supplierOpen, setSupplierOpen] = useState(false);
   const [productQuery, setProductQuery] = useState("");
-  const [products, setProducts] = useState([]);
+  const [articleCatalog, setArticleCatalog] = useState([]);
+  const [catalogUpdatedAt, setCatalogUpdatedAt] = useState("");
+  const [catalogSyncing, setCatalogSyncing] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [bultosArticleId, setBultosArticleId] = useState(null);
@@ -298,7 +328,37 @@ export default function ProveedoresExternos({ user }) {
   };
   const refreshHistoryEvent = useEffectEvent(refreshHistory);
 
-  const checkConnection = async () => {
+  const applyCatalog = (catalog) => {
+    if (!catalog) return;
+    setSupplierCatalog(Array.isArray(catalog.suppliers) ? catalog.suppliers : []);
+    setArticleCatalog(Array.isArray(catalog.articles) ? catalog.articles : []);
+    setCatalogUpdatedAt(catalog.updatedAt || "");
+  };
+
+  const synchronizeCatalog = async ({ showMessage = false } = {}) => {
+    setCatalogSyncing(true);
+    try {
+      const result = await getSicarOfflineCatalog();
+      const catalog = {
+        updatedAt: result.generatedAt || new Date().toISOString(),
+        suppliers: result.suppliers || [],
+        articles: result.articles || [],
+      };
+      await saveProviderCatalog(catalog);
+      applyCatalog(catalog);
+      if (showMessage) {
+        setMessage({
+          type: "success",
+          text: `Catalogo local actualizado: ${catalog.suppliers.length} proveedores y ${catalog.articles.length} productos.`,
+        });
+      }
+      return catalog;
+    } finally {
+      setCatalogSyncing(false);
+    }
+  };
+
+  const checkConnection = async ({ forceCatalog = false, cachedCatalog = null, showMessage = false } = {}) => {
     setConnection("checking");
     setConnectionError("");
     try {
@@ -307,12 +367,42 @@ export default function ProveedoresExternos({ user }) {
     } catch (error) {
       setConnection("offline");
       setConnectionError(error.message);
+      return;
+    }
+
+    const availableCatalog = cachedCatalog || {
+      updatedAt: catalogUpdatedAt,
+      suppliers: supplierCatalog,
+      articles: articleCatalog,
+    };
+    if (forceCatalog || availableCatalog.suppliers.length === 0 || availableCatalog.articles.length === 0 || !catalogIsFresh(availableCatalog)) {
+      try {
+        await synchronizeCatalog({ showMessage });
+      } catch (error) {
+        setConnectionError(`SICAR esta disponible, pero no se pudo actualizar el catalogo local: ${error.message}`);
+      }
     }
   };
+  const checkConnectionEvent = useEffectEvent(checkConnection);
 
   useEffect(() => {
-    checkConnection();
+    let cancelled = false;
+    loadProviderCatalog()
+      .then((catalog) => {
+        if (cancelled) return;
+        applyCatalog(catalog);
+        return checkConnectionEvent({ cachedCatalog: catalog });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setConnectionError(`No se pudo abrir el catalogo local: ${error.message}`);
+          checkConnectionEvent();
+        }
+      });
     refreshDrafts().catch((error) => setMessage({ type: "error", text: error.message }));
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -338,25 +428,15 @@ export default function ProveedoresExternos({ user }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (connection !== "online") return undefined;
-    const timeout = setTimeout(() => {
-      searchSicarSuppliers(supplierQuery)
-        .then((result) => setSuppliers(result.rows || []))
-        .catch((error) => setConnectionError(error.message));
-    }, 180);
-    return () => clearTimeout(timeout);
-  }, [connection, supplierQuery]);
+  const suppliers = useMemo(
+    () => filterLocalCatalog(supplierCatalog, supplierQuery, ["nombre", "alias", "rfc"]),
+    [supplierCatalog, supplierQuery],
+  );
 
-  useEffect(() => {
-    if (connection !== "online") return undefined;
-    const timeout = setTimeout(() => {
-      searchSicarArticles(productQuery, supplier?.pro_id)
-        .then((result) => setProducts(result.rows || []))
-        .catch((error) => setConnectionError(error.message));
-    }, 180);
-    return () => clearTimeout(timeout);
-  }, [connection, productQuery, supplier?.pro_id]);
+  const products = useMemo(
+    () => filterLocalCatalog(articleCatalog, productQuery, ["clave", "descripcion"]),
+    [articleCatalog, productQuery],
+  );
 
   const totals = useMemo(() => {
     const subtotal = items.reduce(
@@ -817,15 +897,21 @@ export default function ProveedoresExternos({ user }) {
           <div className="rounded-2xl border border-white/10 bg-white/7 p-4">
             <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Conexion local</div>
             <div className={`mt-1 font-black ${connection === "online" ? "text-emerald-300" : connection === "checking" ? "text-amber-300" : "text-rose-300"}`}>
-              {connection === "online" ? "SICAR disponible" : connection === "checking" ? "Verificando..." : "Sin conexion"}
+              {catalogSyncing ? "Actualizando catalogo..." : connection === "online" ? "SICAR disponible" : connection === "checking" ? "Verificando..." : "Sin conexion"}
             </div>
+            {articleCatalog.length > 0 ? (
+              <div className="mt-1 text-[10px] font-bold text-lime-200">
+                {articleCatalog.length} productos y {supplierCatalog.length} proveedores disponibles sin conexion
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
 
       {connectionError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+        <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${articleCatalog.length > 0 ? "border-amber-200 bg-amber-50 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
           {connectionError}
+          {articleCatalog.length > 0 ? " Puedes continuar buscando en el catalogo local y guardar Recibir sin factura." : ""}
         </div>
       ) : null}
 
@@ -851,7 +937,7 @@ export default function ProveedoresExternos({ user }) {
                 onFocus={() => setSupplierOpen(true)}
                 className="app-input pl-12"
                 placeholder="Buscar proveedor"
-                disabled={connection !== "online"}
+                disabled={supplierCatalog.length === 0}
               />
             </div>
             {supplierOpen ? (
@@ -870,7 +956,11 @@ export default function ProveedoresExternos({ user }) {
                     {row.nombre}
                   </button>
                 ))}
-                {suppliers.length === 0 ? <div className="p-4 text-center text-sm text-slate-400">Sin coincidencias</div> : null}
+                {suppliers.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-slate-400">
+                    {supplierCatalog.length === 0 ? "Conecta una vez con SICAR para descargar proveedores" : "Sin coincidencias"}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -1018,7 +1108,7 @@ export default function ProveedoresExternos({ user }) {
           <button
             type="button"
             onClick={openProductSearch}
-            disabled={connection !== "online"}
+            disabled={articleCatalog.length === 0}
             className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#76b900] px-4 text-sm font-black text-[#101807] shadow-[0_14px_28px_-18px_rgba(78,124,15,0.9)] disabled:opacity-40"
           >
             {Icons.plus}
@@ -1038,7 +1128,7 @@ export default function ProveedoresExternos({ user }) {
             onFocus={() => setProductOpen(true)}
             className="app-input !min-h-12 border-lime-200 bg-lime-50/40 pl-11 text-base focus:border-[#76b900]"
             placeholder="Clave o nombre del producto"
-            disabled={connection !== "online"}
+            disabled={articleCatalog.length === 0}
           />
           {productOpen ? (
             <div className="absolute inset-x-0 top-full z-[60] mt-2 max-h-[min(360px,55vh)] max-w-full overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-lime-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(30,50,12,0.45)]">
@@ -1054,7 +1144,11 @@ export default function ProveedoresExternos({ user }) {
                   <span className="shrink-0 text-right text-xs font-black text-[#4d7c0f]" title="Precio sin IVA">{formatMoney(product.lastPurchaseNet ?? product.precioCompra)}</span>
                 </button>
               ))}
-              {products.length === 0 ? <div className="p-5 text-center text-sm text-slate-400">Sin coincidencias</div> : null}
+              {products.length === 0 ? (
+                <div className="p-5 text-center text-sm text-slate-400">
+                  {articleCatalog.length === 0 ? "Conecta una vez con SICAR para descargar productos" : "Sin coincidencias"}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -1175,7 +1269,7 @@ export default function ProveedoresExternos({ user }) {
           onClose={() => setConnectionDialog(false)}
           onSaved={() => {
             setConnectionDialog(false);
-            checkConnection();
+            checkConnection({ forceCatalog: true, showMessage: true });
           }}
         />
       ) : null}
