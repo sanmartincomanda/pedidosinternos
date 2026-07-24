@@ -430,6 +430,8 @@ async function getArticles(supplierId = 0) {
 async function getPurchaseContext(payload) {
   const supplierId = Number(payload?.supplierId);
   if (!Number.isInteger(supplierId) || supplierId <= 0) throw new Error("Proveedor invalido.");
+  const invoiceNumber = `${payload?.invoiceNumber || ""}`.trim().slice(0, 19);
+  if (!invoiceNumber) throw new Error("El numero de factura es obligatorio para recibir en SICAR.");
   if (!Array.isArray(payload?.items) || payload.items.length === 0 || payload.items.length > 100) {
     throw new Error("La compra debe contener entre 1 y 100 productos.");
   }
@@ -542,7 +544,7 @@ async function getPurchaseContext(payload) {
   return {
     requestId,
     supplier: { pro_id: supplierId, nombre: supplierRows[0].nombre, diasCredito: creditDays },
-    invoiceNumber: `${payload.invoiceNumber || ""}`.trim().slice(0, 19),
+    invoiceNumber,
     comment: `${payload.comment || ""}`.trim().slice(0, 180),
     date: purchaseDate,
     payment: {
@@ -559,8 +561,7 @@ async function getPurchaseContext(payload) {
 
 function buildPurchaseSql(context) {
   const dateParts = localDateTime();
-  const automaticFolio = `APP-${dateParts.replace(/[-: ]/g, "").slice(2)}`.slice(0, 19);
-  const folio = context.invoiceNumber || automaticFolio;
+  const folio = context.invoiceNumber;
   const marker = `[CSM:${context.requestId}]`;
   const comment = `APP PROVEEDORES ${marker}${context.comment ? ` ${context.comment}` : ""}`.slice(0, 255);
   const historyUserId = Number(config.sicar.historyUserId || 1);

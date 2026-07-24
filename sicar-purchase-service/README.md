@@ -33,6 +33,6 @@ La app puede enviar `retentionIr2`, `retentionMunicipal1` y una foto JPG, PNG o 
 
 ## Historial y recepciones en espera
 
-`GET /compras/historial` devuelve solamente compras identificadas con el marcador `APP PROVEEDORES [CSM:...]`. Los borradores de recepciones sin factura no pasan por este servicio: permanecen en IndexedDB dentro del dispositivo hasta que el operador los edita y confirma. Al confirmar, SICAR recibe subtotal mas IVA; las retenciones siguen fuera de SICAR.
+`GET /compras/historial` devuelve solamente compras identificadas con el marcador `APP PROVEEDORES [CSM:...]`. Los borradores de recepciones sin factura no pasan por este servicio: permanecen en IndexedDB dentro del dispositivo hasta que el operador los edita y confirma. Al confirmar, el numero de factura es obligatorio y SICAR recibe subtotal mas IVA; las retenciones siguen fuera de SICAR.
 
 `GET /catalogos/offline` devuelve el catalogo completo de proveedores y articulos. La app lo guarda localmente y realiza las busquedas de proveedor, clave y descripcion sin llamar al servicio por cada texto escrito.

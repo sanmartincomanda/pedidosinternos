@@ -309,6 +309,7 @@ export default function ProveedoresExternos({ user }) {
   const productPickerRef = useRef(null);
   const invoiceSupportInputRef = useRef(null);
   const invoiceCameraInputRef = useRef(null);
+  const invoiceNumberInputRef = useRef(null);
   const quantityRefs = useRef(new Map());
   const bultoInputRef = useRef(null);
 
@@ -679,8 +680,9 @@ export default function ProveedoresExternos({ user }) {
     openProductSearch();
   };
 
-  const validate = () => {
+  const validate = ({ requireInvoice = false } = {}) => {
     if (!supplier) return "Selecciona el proveedor.";
+    if (requireInvoice && !`${invoiceNumber || ""}`.trim()) return "Ingresa el numero de factura antes de recibir en SICAR.";
     if (items.length === 0) return "Agrega al menos un producto.";
     if (items.some((item) => Number(item.quantity) <= 0)) return "Completa una cantidad mayor que cero en todos los productos.";
     if (items.some((item) => Number(item.netUnitPrice) < 0 || item.netUnitPrice === "")) return "Revisa el precio sin IVA de todos los productos.";
@@ -785,9 +787,13 @@ export default function ProveedoresExternos({ user }) {
   };
 
   const requestPaymentMethod = () => {
-    const validationError = validate();
+    const validationError = validate({ requireInvoice: true });
     if (validationError) {
       setMessage({ type: "error", text: validationError });
+      if (!`${invoiceNumber || ""}`.trim()) {
+        invoiceNumberInputRef.current?.focus();
+        invoiceNumberInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
       return;
     }
 
@@ -823,6 +829,14 @@ export default function ProveedoresExternos({ user }) {
   };
 
   const receivePurchase = async () => {
+    const validationError = validate({ requireInvoice: true });
+    if (validationError) {
+      setMessage({ type: "error", text: validationError });
+      setPreview(null);
+      if (!`${invoiceNumber || ""}`.trim()) invoiceNumberInputRef.current?.focus();
+      return;
+    }
+
     setLoading(true);
     setMessage(null);
     try {
@@ -1020,13 +1034,19 @@ export default function ProveedoresExternos({ user }) {
             ) : null}
           </div>
           <div className="min-w-0">
-            <label className="app-label">Factura / remision</label>
+            <label className="app-label" htmlFor="provider-invoice-number">
+              Numero de factura <span className="text-rose-600">*</span>
+            </label>
             <input
+              ref={invoiceNumberInputRef}
+              id="provider-invoice-number"
               value={invoiceNumber}
               onChange={(event) => setInvoiceNumber(event.target.value.toUpperCase())}
               className="app-input uppercase"
-              placeholder="Opcional"
+              placeholder="Obligatorio para SICAR"
               maxLength={19}
+              required
+              aria-required="true"
             />
           </div>
           <div className="min-w-0">
