@@ -2,6 +2,8 @@
 
 import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { Capacitor } from "@capacitor/core";
 import ProviderPurchaseHistory from "./ProviderPurchaseHistory";
 import TouchNumericInput from "./TouchNumericInput";
 import {
@@ -162,6 +164,12 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function getDataUrlSize(dataUrl = "") {
+  const base64 = `${dataUrl}`.split(",")[1] || "";
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
 async function serializeInvoiceSupport(support) {
   if (!support) return null;
   if (support.dataUrl) return support;
@@ -288,6 +296,7 @@ export default function ProveedoresExternos({ user }) {
   const [retentionIrEdited, setRetentionIrEdited] = useState(false);
   const [retentionMunicipalEdited, setRetentionMunicipalEdited] = useState(false);
   const [invoiceSupport, setInvoiceSupport] = useState(null);
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [paymentPromptOpen, setPaymentPromptOpen] = useState(false);
@@ -525,6 +534,52 @@ export default function ProveedoresExternos({ user }) {
       size: file.size,
     });
     setMessage(null);
+  };
+
+  const takeInvoicePhoto = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      invoiceCameraInputRef.current?.click();
+      return;
+    }
+
+    setCameraLoading(true);
+    setMessage(null);
+    try {
+      const photo = await Camera.getPhoto({
+        source: CameraSource.Camera,
+        resultType: CameraResultType.DataUrl,
+        quality: 82,
+        width: 1920,
+        correctOrientation: true,
+        allowEditing: false,
+        saveToGallery: false,
+      });
+      if (!photo.dataUrl) throw new Error("La camara no devolvio una imagen.");
+
+      const contentType = photo.format === "png" ? "image/png" : "image/jpeg";
+      const extension = contentType === "image/png" ? "png" : "jpg";
+      const size = getDataUrlSize(photo.dataUrl);
+      if (size > MAX_INVOICE_FILE_BYTES) {
+        throw new Error("La foto de la factura no puede superar 8 MB.");
+      }
+
+      const fileName = `factura-${Date.now()}.${extension}`;
+      setInvoiceSupport({
+        fileName,
+        name: fileName,
+        contentType,
+        type: contentType,
+        size,
+        dataUrl: photo.dataUrl,
+      });
+      setMessage({ type: "success", text: "Foto de factura capturada." });
+    } catch (error) {
+      if (!/cancel/i.test(`${error?.message || error}`)) {
+        setMessage({ type: "error", text: `No se pudo abrir la camara: ${error.message || error}` });
+      }
+    } finally {
+      setCameraLoading(false);
+    }
   };
 
   const addProduct = (product) => {
@@ -1068,8 +1123,8 @@ export default function ProveedoresExternos({ user }) {
               <span className="text-lime-700">{invoiceSupport ? Icons.check : Icons.plus}</span>
             </div>
             <div className="mt-2 grid grid-cols-2 gap-1.5">
-              <button type="button" onClick={() => invoiceCameraInputRef.current?.click()} className="min-h-9 rounded-lg bg-[#76b900] px-2 text-[10px] font-black text-[#101807]">
-                Tomar foto
+              <button type="button" onClick={takeInvoicePhoto} disabled={cameraLoading} className="min-h-9 rounded-lg bg-[#76b900] px-2 text-[10px] font-black text-[#101807] disabled:opacity-60">
+                {cameraLoading ? "Abriendo..." : "Tomar foto"}
               </button>
               <button type="button" onClick={() => invoiceSupportInputRef.current?.click()} className="min-h-9 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-black text-slate-700">
                 Elegir archivo

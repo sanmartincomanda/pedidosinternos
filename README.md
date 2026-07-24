@@ -29,7 +29,7 @@ La aplicacion de escritorio incluye:
 npm run desktop:build
 ```
 
-El instalador queda en `release/CSM-Operaciones-1.1.7-Setup.exe`.
+El instalador queda en `release/CSM-Operaciones-1.1.8-Setup.exe`.
 
 El modulo de proveedores conserva en IndexedDB una copia local de los proveedores y articulos de SICAR. Despues de sincronizar una vez, la busqueda y `Recibir sin factura` funcionan sin conexion, incluso tras reiniciar la app. Enviar la compra definitivamente a SICAR sigue requiriendo acceso al servicio local.
 

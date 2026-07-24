@@ -1,6 +1,6 @@
 {
   "name": "app-pedidos-internos",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Traspasos internos y recepcion de proveedores de Carnes San Martin",
   "author": "Carnes San Martin",
   "private": true,
@@ -24,6 +24,7 @@
   "dependencies": {
     "@capacitor/android": "^7.4.3",
     "@capacitor/app": "^7.1.2",
+    "@capacitor/camera": "^7.0.5",
     "@capacitor/core": "^7.4.3",
     "@capacitor/local-notifications": "^7.0.7",
     "@capacitor/push-notifications": "^7.0.7",
