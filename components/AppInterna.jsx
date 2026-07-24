@@ -162,7 +162,7 @@ const INITIAL_CONFIG = {
   impresion: {
     impresoraPredeterminada: "",
     impresionAutomaticaEnvio: true,
-    formato: "80mm",
+    formato: "letter",
   },
 };
 
@@ -645,7 +645,6 @@ export default function AppInterna() {
           <Formulario
             user={user}
             pedidos={pedidos}
-            printerSettings={commonPrinterSettings}
             setView={setView}
             pedidoEditar={pedidoEditar}
             setPedidoEditar={setPedidoEditar}
@@ -686,7 +685,7 @@ export default function AppInterna() {
           />
         );
       case "historial":
-        return <Historial user={user} pedidos={pedidos} printerSettings={commonPrinterSettings} />;
+        return <Historial user={user} pedidos={pedidos} />;
       case "configuracion":
         return <Configuracion config={config} setConfig={setConfig} />;
       default:

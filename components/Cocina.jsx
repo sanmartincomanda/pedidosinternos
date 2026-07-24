@@ -266,15 +266,17 @@ export default function Cocina({
       await update(ref(db, `pedidos_internos/${firebaseId}`), marcaEnvio);
 
       if (printerSettings?.impresionAutomaticaEnvio !== false) {
-        printTransferRequisition(
-          {
+        try {
+          await printTransferRequisition({
             ...pedido,
             ...marcaEnvio,
             historyDate: pedido.fechaEntrega || pedido.fechaPedido,
             statusMeta: { label: "Enviado" },
-          },
-          printerSettings,
-        );
+          });
+        } catch (printError) {
+          console.error("El pedido fue enviado, pero no se pudo abrir la impresion:", printError);
+          alert("El pedido fue enviado, pero no se pudo abrir la impresion. Puedes imprimir la requisa desde Historial.");
+        }
       }
 
       setModalRepartidor(null);

@@ -223,15 +223,17 @@ export default function EstadoPedidos({
 
     const pedidoActual = pedidos.find((pedido) => pedido.firebaseId === firebaseId);
     if (pedidoActual && printerSettings?.impresionAutomaticaEnvio !== false) {
-      printTransferRequisition(
-        {
+      try {
+        await printTransferRequisition({
           ...pedidoActual,
           ...marcaEnvio,
           historyDate: pedidoActual.fechaEntrega || pedidoActual.fechaPedido,
           statusMeta: STATUS_CONFIG.ENVIADO,
-        },
-        printerSettings,
-      );
+        });
+      } catch (printError) {
+        console.error("El pedido fue enviado, pero no se pudo abrir la impresion:", printError);
+        alert("El pedido fue enviado, pero no se pudo abrir la impresion. Puedes imprimir la requisa desde Historial.");
+      }
     }
 
     setTimeout(() => {

@@ -29,9 +29,11 @@ La aplicacion de escritorio incluye:
 npm run desktop:build
 ```
 
-El instalador queda en `release/CSM-Operaciones-1.1.6-Setup.exe`.
+El instalador queda en `release/CSM-Operaciones-1.1.7-Setup.exe`.
 
 El modulo de proveedores conserva en IndexedDB una copia local de los proveedores y articulos de SICAR. Despues de sincronizar una vez, la busqueda y `Recibir sin factura` funcionan sin conexion, incluso tras reiniciar la app. Enviar la compra definitivamente a SICAR sigue requiriendo acceso al servicio local.
+
+Al marcar un traspaso como enviado, las apps de Windows y Android abren el selector nativo de impresion con la misma requisa PDF en papel carta disponible desde Historial. Cancelar la impresion no cambia el estado del pedido ni deja una pantalla interna abierta.
 
 ## Android
 

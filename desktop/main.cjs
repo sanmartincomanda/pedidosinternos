@@ -9,8 +9,10 @@ const {
   Tray,
 } = require("electron");
 const { createReadStream, existsSync, statSync } = require("node:fs");
+const { mkdir, unlink, writeFile } = require("node:fs/promises");
 const { createServer } = require("node:http");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 
 const APP_ID = "com.carnessanmartin.pedidosinternos";
 const APP_TITLE = "CSM Pedidos";
@@ -39,6 +41,7 @@ let tray = null;
 let staticServer = null;
 let staticOrigin = "";
 let isQuitting = false;
+const printWindows = new Set();
 
 app.setAppUserModelId(APP_ID);
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -107,6 +110,83 @@ function showDesktopNotification(payload = {}) {
     view: payload.view || "estados",
   }));
   notification.show();
+}
+
+function safePrintFileName(value = "Requisa.pdf") {
+  const normalized = String(value).replace(/[\\/:*?"<>|]+/g, "-").slice(0, 100);
+  return normalized.toLowerCase().endsWith(".pdf") ? normalized : `${normalized}.pdf`;
+}
+
+async function showPdfPrintDialog(payload = {}) {
+  const base64 = String(payload.base64 || "").replace(/\s+/g, "");
+  if (!base64 || base64.length > 28_000_000) {
+    return { ok: false, error: "El archivo PDF es invalido o demasiado grande." };
+  }
+
+  const pdfBuffer = Buffer.from(base64, "base64");
+  if (pdfBuffer.length < 5 || pdfBuffer.subarray(0, 4).toString("ascii") !== "%PDF") {
+    return { ok: false, error: "El documento recibido no es un PDF valido." };
+  }
+
+  const printDirectory = path.join(app.getPath("temp"), "csm-operaciones-print");
+  await mkdir(printDirectory, { recursive: true });
+  const fileName = `${Date.now()}-${safePrintFileName(payload.fileName)}`;
+  const pdfPath = path.join(printDirectory, fileName);
+  await writeFile(pdfPath, pdfBuffer);
+
+  const printWindow = new BrowserWindow({
+    width: 980,
+    height: 820,
+    show: false,
+    parent: mainWindow || undefined,
+    title: `Imprimir ${safePrintFileName(payload.fileName)}`,
+    autoHideMenuBar: true,
+    backgroundColor: "#f4f7f5",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      plugins: true,
+    },
+  });
+  printWindows.add(printWindow);
+
+  return new Promise((resolve) => {
+    let finished = false;
+    const finish = (result) => {
+      if (finished) return;
+      finished = true;
+      printWindows.delete(printWindow);
+      if (!printWindow.isDestroyed()) printWindow.destroy();
+      unlink(pdfPath).catch(() => undefined);
+      resolve(result);
+    };
+
+    printWindow.on("closed", () => finish({ ok: false, cancelled: true }));
+    printWindow.webContents.once("did-fail-load", (_event, _code, description) => {
+      finish({ ok: false, error: description || "No se pudo abrir el PDF." });
+    });
+    printWindow.webContents.once("did-finish-load", () => {
+      printWindow.show();
+      printWindow.focus();
+      setTimeout(() => {
+        if (printWindow.isDestroyed()) return;
+        printWindow.webContents.print(
+          { silent: false, printBackground: true, pageSize: "Letter" },
+          (success, failureReason) => {
+            const cancelled = !success && /cancel/i.test(String(failureReason || ""));
+            finish(success
+              ? { ok: true, platform: "windows" }
+              : { ok: false, cancelled, error: cancelled ? "" : failureReason || "No se pudo imprimir." });
+          },
+        );
+      }, 700);
+    });
+
+    printWindow.loadURL(pathToFileURL(pdfPath).toString()).catch((error) => {
+      finish({ ok: false, error: error.message });
+    });
+  });
 }
 
 function createTray() {
@@ -254,6 +334,7 @@ function registerIpc() {
 
   ipcMain.on("desktop:notify", (_event, payload) => showDesktopNotification(payload));
   ipcMain.on("desktop:show", (_event, view) => showMainWindow(view));
+  ipcMain.handle("desktop:print-pdf", (_event, payload) => showPdfPrintDialog(payload));
 }
 
 if (singleInstanceLock) {

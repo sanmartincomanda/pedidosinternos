@@ -800,19 +800,22 @@ export default function PedidoVacuna({
       const pedidoCreadoRef = await push(ref(db, "pedidos_internos"), nuevaOrden);
       await sincronizarContabilidad(nuevaOrden, pedidoCreadoRef.key);
 
+      let printWarning = "";
       if (printerSettings?.impresionAutomaticaEnvio !== false) {
-        printTransferRequisition(
-          {
+        try {
+          await printTransferRequisition({
             ...nuevaOrden,
             historyDate: nuevaOrden.fechaEntrega || nuevaOrden.fechaPedido,
             statusMeta: { label: "Enviado" },
-          },
-          printerSettings,
-        );
+          });
+        } catch (printError) {
+          console.error("No se pudo abrir la impresion de la requisa:", printError);
+          printWarning = "\nNo se pudo abrir la impresion; puedes imprimir la requisa desde Historial.";
+        }
       }
 
       setCounterValue(nuevoId);
-      alert(`Traspaso ${numeroOrden} enviado con exito.`);
+      alert(`Traspaso ${numeroOrden} enviado con exito.${printWarning}`);
 
       setItems([createEmptyItem()]);
       setNotaGeneral("");

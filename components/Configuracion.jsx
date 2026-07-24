@@ -155,7 +155,7 @@ export default function Configuracion({ setConfig }) {
   const [impresionLocal, setImpresionLocal] = useState({
     impresoraPredeterminada: "",
     impresionAutomaticaEnvio: true,
-    formato: "80mm",
+    formato: "letter",
   });
   const [previewCSV, setPreviewCSV] = useState([]);
   const [mostrarPreview, setMostrarPreview] = useState(false);
@@ -186,7 +186,7 @@ export default function Configuracion({ setConfig }) {
               typeof data.impresion?.impresionAutomaticaEnvio === "boolean"
                 ? data.impresion.impresionAutomaticaEnvio
                 : true,
-            formato: data.impresion?.formato || "80mm",
+            formato: "letter",
           });
           if (setConfig) setConfig(data);
         } else {
@@ -196,7 +196,7 @@ export default function Configuracion({ setConfig }) {
           setImpresionLocal({
             impresoraPredeterminada: "",
             impresionAutomaticaEnvio: true,
-            formato: "80mm",
+            formato: "letter",
           });
         }
       },
@@ -425,7 +425,7 @@ export default function Configuracion({ setConfig }) {
           <StatCard
             label="Impresion"
             value={impresionLocal.impresionAutomaticaEnvio ? "Auto" : "Manual"}
-            helper={impresionLocal.impresoraPredeterminada || "Sin impresora"}
+            helper="Requisa PDF carta"
             accent="#22c55e"
           />
         </div>
@@ -649,39 +649,16 @@ export default function Configuracion({ setConfig }) {
             <h3 className="app-title text-2xl font-black text-slate-900">Impresion</h3>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div>
-              <FieldLabel icon={Icons.print} label="Impresora sugerida" />
-              <input
-                type="text"
-                value={impresionLocal.impresoraPredeterminada}
-                onChange={(event) =>
-                  setImpresionLocal((prev) => ({
-                    ...prev,
-                    impresoraPredeterminada: event.target.value,
-                  }))
-                }
-                placeholder="Ej. EPSON TM-T20III / Bluetooth 80mm"
-                className="app-input"
-              />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="app-card-soft p-5">
+              <FieldLabel icon={Icons.file} label="Documento" />
+              <div className="mt-2 text-lg font-black text-slate-900">Requisa PDF</div>
+              <div className="mt-1 text-sm font-semibold text-slate-500">El mismo reporte disponible en Historial.</div>
             </div>
-
-            <div>
-              <FieldLabel icon={Icons.file} label="Formato" />
-              <select
-                value={impresionLocal.formato}
-                onChange={(event) =>
-                  setImpresionLocal((prev) => ({
-                    ...prev,
-                    formato: event.target.value,
-                  }))
-                }
-                className="app-select"
-              >
-                <option value="80mm" style={{ background: "#ffffff", color: "#12324e" }}>
-                  Termica 80mm
-                </option>
-              </select>
+            <div className="app-card-soft p-5">
+              <FieldLabel icon={Icons.print} label="Papel" />
+              <div className="mt-2 text-lg font-black text-slate-900">Carta</div>
+              <div className="mt-1 text-sm font-semibold text-slate-500">El sistema permite elegir impresora y opciones.</div>
             </div>
           </div>
 
@@ -690,7 +667,7 @@ export default function Configuracion({ setConfig }) {
               <div>
                 <div className="text-base font-black text-slate-900">Impresion automatica al enviar</div>
                 <div className="mt-1 text-sm text-slate-600">
-                  Al marcar un pedido como <strong>ENVIADO</strong>, la app abrira automaticamente la requisa termica para imprimir.
+                  Al marcar un pedido como <strong>ENVIADO</strong>, la app abrira automaticamente el selector de impresion con la requisa PDF carta.
                 </div>
               </div>
 
@@ -715,8 +692,7 @@ export default function Configuracion({ setConfig }) {
           <div className="rounded-[24px] border border-emerald-300/35 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
             <div className="mb-2 font-black uppercase tracking-[0.16em] text-emerald-700">Importante</div>
             <p className="leading-6">
-              La app guarda la impresora sugerida y abre la impresion automaticamente, pero Android o el navegador siguen siendo quienes eligen
-              la impresora fisica final segun la ultima seleccion del sistema.
+              Android o Windows mostraran su selector de impresion. Puedes elegir impresora, copias y orientacion, o cancelar para regresar a la app sin afectar el pedido enviado.
             </p>
           </div>
         </section>

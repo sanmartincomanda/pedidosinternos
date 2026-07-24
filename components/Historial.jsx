@@ -187,7 +187,7 @@ function EmptyState({ title, text }) {
   );
 }
 
-function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
+function OrderCard({ pedido, role, isOpen, onToggle }) {
   const counterpart = role === "recibidos" ? getPhysicalSender(pedido) : getPhysicalReceiver(pedido);
   const roleLabel = role === "recibidos" ? "Enviado por" : "Recibe";
 
@@ -319,7 +319,12 @@ function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
           </button>
           <button
             type="button"
-            onClick={() => printTransferRequisition(pedido, printerSettings)}
+            onClick={() => {
+              printTransferRequisition(pedido).catch((error) => {
+                console.error("No se pudo abrir la impresion de la requisa:", error);
+                alert(`No se pudo abrir la impresion: ${error.message}`);
+              });
+            }}
             style={{
               padding: "11px 16px",
               borderRadius: "12px",
@@ -335,7 +340,7 @@ function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
             }}
           >
             {Icons.print}
-            Imprimir 80mm
+            Imprimir requisa
           </button>
         </div>
       </div>
@@ -472,7 +477,7 @@ function OrderCard({ pedido, role, isOpen, onToggle, printerSettings }) {
   );
 }
 
-function OrderList({ title, pedidos, role, expandedId, onToggle, printerSettings }) {
+function OrderList({ title, pedidos, role, expandedId, onToggle }) {
   if (!pedidos.length) {
     return (
       <EmptyState
@@ -495,7 +500,6 @@ function OrderList({ title, pedidos, role, expandedId, onToggle, printerSettings
           role={role}
           isOpen={expandedId === pedido.firebaseId}
           onToggle={() => onToggle(pedido.firebaseId)}
-          printerSettings={printerSettings}
         />
       ))}
     </div>
@@ -565,7 +569,7 @@ function ReportActionCard({ title, description, accent, onPdfClick, onExcelClick
   );
 }
 
-export default function Historial({ user, pedidos, printerSettings = {} }) {
+export default function Historial({ user, pedidos }) {
   const today = new Date().toISOString().split("T")[0];
   const branchLabel = getBranchDisplayName(user);
   const [modoFecha, setModoFecha] = useState("dia");
@@ -951,11 +955,11 @@ export default function Historial({ user, pedidos, printerSettings = {} }) {
       </div>
 
       {activeTab === "recibidos" ? (
-        <OrderList title="Pedidos recibidos" pedidos={pedidosRecibidos} role="recibidos" expandedId={expandedId} onToggle={handleToggleOrder} printerSettings={printerSettings} />
+        <OrderList title="Pedidos recibidos" pedidos={pedidosRecibidos} role="recibidos" expandedId={expandedId} onToggle={handleToggleOrder} />
       ) : null}
 
       {activeTab === "enviados" ? (
-        <OrderList title="Pedidos enviados" pedidos={pedidosEnviados} role="enviados" expandedId={expandedId} onToggle={handleToggleOrder} printerSettings={printerSettings} />
+        <OrderList title="Pedidos enviados" pedidos={pedidosEnviados} role="enviados" expandedId={expandedId} onToggle={handleToggleOrder} />
       ) : null}
 
       {activeTab === "reportes" ? (
