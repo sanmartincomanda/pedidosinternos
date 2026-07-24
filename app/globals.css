@@ -1011,3 +1011,779 @@ textarea {
     border-radius: 1.35rem 1.35rem 0.75rem 0.75rem;
   }
 }
+
+/* Compiled only for the dedicated Android Hand Held profile. */
+.handheld-runtime {
+  font-size: 13px;
+}
+
+.handheld-runtime body {
+  background: linear-gradient(180deg, #f7faf8 0%, #e8efea 100%);
+}
+
+.handheld-app.login-shell {
+  min-height: 100dvh;
+  padding: 10px;
+}
+
+.handheld-app.login-shell > div {
+  display: block;
+  max-width: 390px;
+}
+
+.handheld-app.login-shell .login-aside {
+  display: none;
+}
+
+.handheld-app.login-shell .login-panel {
+  border-radius: 18px;
+  padding: 18px !important;
+}
+
+.handheld-app .desktop-topbar {
+  min-height: 54px;
+  padding: 6px 8px;
+}
+
+.handheld-app .desktop-module-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.handheld-app .desktop-topbar-kicker {
+  font-size: 8px;
+  letter-spacing: 0.15em;
+}
+
+.handheld-app .desktop-topbar-title {
+  max-width: 150px;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handheld-app .desktop-topbar-action {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.handheld-app .mobile-business-switch {
+  gap: 4px;
+  border-radius: 14px;
+  padding: 4px;
+}
+
+.handheld-app .mobile-business-switch button {
+  min-height: 40px !important;
+  gap: 5px;
+  border-radius: 10px;
+  padding: 5px 7px;
+  font-size: 10px;
+}
+
+.handheld-app .mobile-business-switch svg {
+  width: 16px;
+  height: 16px;
+}
+
+.handheld-app .app-shell {
+  padding: 7px 6px calc(86px + env(safe-area-inset-bottom));
+}
+
+.handheld-app .app-route-shell::before {
+  display: none;
+}
+
+.handheld-app .page-enter.space-y-4,
+.handheld-app .handheld-form.space-y-4 {
+  row-gap: 7px;
+}
+
+.handheld-app .module-heading {
+  border-radius: 13px;
+  padding: 8px 11px;
+}
+
+.handheld-app .module-heading > div:first-child {
+  display: none;
+}
+
+.handheld-app .module-heading h1 {
+  margin-top: 0;
+  font-size: 18px !important;
+  letter-spacing: -0.025em;
+}
+
+.handheld-app .app-panel,
+.handheld-app .app-section,
+.handheld-app .app-card,
+.handheld-app .app-card-soft {
+  border-radius: 12px;
+}
+
+.handheld-app .handheld-meta-panel,
+.handheld-app .handheld-products-panel,
+.handheld-app .handheld-actions {
+  padding: 7px !important;
+}
+
+.handheld-app .handheld-meta-panel > .grid,
+.handheld-app .handheld-meta-panel > div > .grid {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 6px;
+}
+
+.handheld-app .handheld-meta-panel > .grid > div:nth-child(3),
+.handheld-app .handheld-meta-panel > div > .grid > div:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+.handheld-app .app-label {
+  margin-bottom: 3px;
+  font-size: 8px;
+  letter-spacing: 0.11em;
+}
+
+.handheld-app .app-input,
+.handheld-app .app-select,
+.handheld-app .compact-order-line .app-input,
+.handheld-app .compact-order-line .app-button-ghost {
+  min-height: 38px;
+  border-radius: 9px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+
+.handheld-app .app-card-soft {
+  min-height: 38px !important;
+  padding: 7px 9px !important;
+  font-size: 12px !important;
+}
+
+.handheld-app .handheld-products-panel > div:first-child {
+  margin-bottom: 6px;
+}
+
+.handheld-app .handheld-products-panel h3 {
+  font-size: 15px;
+}
+
+.handheld-app .handheld-products-panel .app-icon-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+
+.handheld-app .handheld-order-line {
+  position: relative;
+  z-index: 1;
+  display: grid !important;
+  grid-template-columns: 26px minmax(0, 1fr) 52px 74px 36px !important;
+  grid-template-rows: 38px 38px auto;
+  gap: 4px !important;
+  padding: 5px !important;
+}
+
+.handheld-app .handheld-order-line:focus-within {
+  z-index: 75;
+}
+
+.handheld-app .handheld-order-line .order-line-index {
+  grid-column: 1;
+  grid-row: 1;
+  width: 26px;
+  height: 38px;
+  border-radius: 8px;
+  font-size: 9px;
+}
+
+.handheld-app .handheld-order-line .order-line-product {
+  grid-column: 2 / 5;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.handheld-app .handheld-order-line .order-line-product .app-input {
+  padding-left: 31px;
+}
+
+.handheld-app .handheld-order-line .order-line-product svg {
+  width: 15px;
+  height: 15px;
+}
+
+.handheld-app .handheld-order-line .order-line-delete {
+  grid-column: 5;
+  grid-row: 1;
+}
+
+.handheld-app .handheld-request-line .order-line-quantity {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.handheld-app .handheld-request-line .order-line-unit {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.handheld-app .handheld-request-line .order-line-bultos {
+  grid-column: 4;
+  grid-row: 2;
+}
+
+.handheld-app .handheld-request-line .order-line-note,
+.handheld-app .handheld-transfer-line .order-line-note {
+  grid-column: 5;
+  grid-row: 2;
+}
+
+.handheld-app .handheld-transfer-line .order-line-quantity {
+  grid-column: 2 / 4;
+  grid-row: 2;
+}
+
+.handheld-app .handheld-transfer-line .order-line-bultos {
+  grid-column: 4;
+  grid-row: 2;
+}
+
+.handheld-app .handheld-order-line .order-line-unit .app-button-ghost,
+.handheld-app .handheld-order-line .order-line-bultos {
+  gap: 3px;
+  justify-content: center;
+  padding: 4px !important;
+  font-size: 9px;
+}
+
+.handheld-app .handheld-order-line .order-line-bultos svg {
+  display: none;
+}
+
+.handheld-app .handheld-order-line .order-line-note-preview {
+  grid-column: 2 / 6;
+  grid-row: 3;
+  padding: 2px;
+  font-size: 9px;
+}
+
+.handheld-app .handheld-product-results {
+  overflow-y: auto;
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.handheld-app .handheld-product-result {
+  min-height: 36px;
+  margin-bottom: 3px;
+  gap: 5px;
+  border-radius: 8px;
+  padding: 5px 6px;
+}
+
+.handheld-app .handheld-product-result > span:first-child {
+  max-width: 82px;
+  overflow: hidden;
+  padding: 3px 5px;
+  font-size: 8px;
+  text-overflow: ellipsis;
+}
+
+.handheld-app .handheld-product-result > span:last-child {
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handheld-app .handheld-actions {
+  position: sticky;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  z-index: 35;
+}
+
+.handheld-app .handheld-actions > .grid {
+  grid-template-columns: 0.7fr 1.3fr;
+  gap: 5px;
+}
+
+.handheld-app .handheld-actions .app-button-primary,
+.handheld-app .handheld-actions .app-button-secondary {
+  min-height: 42px;
+  border-radius: 10px;
+  padding: 7px;
+  font-size: 11px;
+}
+
+.handheld-app .mobile-bottom-nav {
+  padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+}
+
+.handheld-app .mobile-bottom-nav > div {
+  gap: 1px;
+  border-radius: 14px;
+  padding: 3px;
+}
+
+.handheld-app .mobile-nav-button {
+  min-height: 52px;
+  gap: 1px;
+  border-radius: 10px;
+  padding: 3px 1px;
+  font-size: 8px;
+}
+
+.handheld-app .mobile-nav-button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.handheld-app .handheld-provider-form {
+  padding-bottom: 90px;
+}
+
+.handheld-app .handheld-provider-form > section:first-child {
+  border-radius: 13px;
+  padding: 9px !important;
+}
+
+.handheld-app .handheld-provider-form > section:first-child .h-16 {
+  width: 70px;
+  height: 48px;
+  border-radius: 10px;
+}
+
+.handheld-app .handheld-provider-form > section:first-child h2 {
+  font-size: 18px;
+}
+
+.handheld-app .handheld-provider-form > section:first-child p {
+  display: none;
+}
+
+.handheld-app .handheld-provider-hero > div:first-child {
+  align-items: center;
+  gap: 6px;
+}
+
+.handheld-app .handheld-provider-hero > div:first-child > div:first-child {
+  flex: 1;
+  gap: 0;
+}
+
+.handheld-app .handheld-provider-hero > div:first-child > div:first-child > div:first-child {
+  display: none;
+}
+
+.handheld-app .handheld-provider-hero h2 {
+  margin-top: 0 !important;
+}
+
+.handheld-app .handheld-provider-hero > div:first-child > div:last-child {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.handheld-app .handheld-provider-hero > div:first-child > div:last-child button {
+  min-height: 36px;
+  gap: 4px;
+  border-radius: 9px;
+  padding: 5px 8px;
+  font-size: 9px;
+}
+
+.handheld-app .handheld-provider-hero > div:first-child > div:last-child svg {
+  width: 15px;
+  height: 15px;
+}
+
+.handheld-app .handheld-provider-status {
+  display: none;
+}
+
+.handheld-app .handheld-reception-panel {
+  padding: 6px !important;
+}
+
+.handheld-app .handheld-reception-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 9px;
+  background: #f7faf8;
+  padding: 5px 9px;
+}
+
+.handheld-app .handheld-reception-fields {
+  grid-template-columns: minmax(0, 1fr) 108px !important;
+  gap: 6px !important;
+  padding: 7px 2px 2px;
+}
+
+.handheld-app .handheld-reception-fields > div:first-child,
+.handheld-app .handheld-reception-fields > div:nth-child(3),
+.handheld-app .handheld-start-capture {
+  grid-column: 1 / -1;
+}
+
+.handheld-app .handheld-reception-fields > div:nth-child(3) {
+  display: none;
+}
+
+.handheld-app .handheld-reception-fields .app-input {
+  min-height: 40px;
+}
+
+.handheld-app .handheld-reception-fields > div:first-child .app-input {
+  padding-left: 38px;
+}
+
+.handheld-app .handheld-reception-fields > div:first-child svg {
+  width: 17px;
+  height: 17px;
+}
+
+.handheld-app .handheld-reception-fields > div:first-child > div:last-child {
+  max-height: 180px;
+  margin-top: 3px;
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.handheld-app .handheld-reception-fields > div:first-child > div:last-child button {
+  min-height: 34px;
+  margin: 0;
+  border-radius: 7px;
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.handheld-app .handheld-start-capture {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 9px;
+  background: #76b900;
+  padding: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #101807;
+}
+
+.handheld-app .handheld-start-capture svg {
+  width: 16px;
+  height: 16px;
+}
+
+.handheld-app .handheld-accounting-panel {
+  padding: 7px !important;
+}
+
+.handheld-app .handheld-accounting-panel > div:first-child > div:first-child > div:last-child,
+.handheld-app .handheld-accounting-panel > div:first-child > div:last-child {
+  display: none;
+}
+
+.handheld-app .handheld-accounting-panel > div:nth-child(2) {
+  margin-top: 5px;
+  gap: 5px;
+}
+
+.handheld-app .handheld-provider-products {
+  padding: 7px !important;
+}
+
+.handheld-app .handheld-provider-products > div:first-child {
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+
+.handheld-app .handheld-provider-products > div:first-child > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.handheld-app .handheld-provider-products > div:first-child .text-lg {
+  font-size: 15px;
+}
+
+.handheld-app .handheld-provider-products > div:first-child .text-xs {
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handheld-app .handheld-capture-mode {
+  min-height: 36px;
+  gap: 4px;
+  border-radius: 9px;
+  padding: 5px 9px;
+  font-size: 10px;
+}
+
+.handheld-app .handheld-capture-mode svg {
+  width: 15px;
+  height: 15px;
+}
+
+.handheld-app .handheld-scan-workspace {
+  margin-top: 6px;
+  border-radius: 11px;
+  background: #101807;
+  padding: 6px;
+}
+
+.handheld-app .handheld-scan-form {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 48px;
+  align-items: center;
+  overflow: hidden;
+  border: 2px solid #76b900;
+  border-radius: 10px;
+  background: white;
+}
+
+.handheld-app .handheld-scan-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4d7c0f;
+}
+
+.handheld-app .handheld-scan-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.handheld-app .handheld-scan-input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  border: 0;
+  outline: 0;
+  background: white;
+  padding: 5px 4px;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 16px;
+  font-weight: 900;
+  color: #101807;
+}
+
+.handheld-app .handheld-scan-confirm {
+  height: 36px;
+  margin-right: 3px;
+  border-radius: 7px;
+  background: #76b900;
+  font-size: 9px;
+  font-weight: 900;
+  color: #101807;
+}
+
+.handheld-app .handheld-scanned-product {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 5px;
+  margin-top: 5px;
+  border-radius: 9px;
+  background: white;
+  padding: 6px;
+}
+
+.handheld-app .handheld-scanned-product-name {
+  grid-column: 1 / -1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.handheld-app .handheld-scanned-product-name span {
+  flex: none;
+  border-radius: 6px;
+  background: #ecfccb;
+  padding: 3px 5px;
+  font-family: var(--font-jetbrains-mono), monospace;
+  font-size: 8px;
+  font-weight: 900;
+  color: #4d7c0f;
+}
+
+.handheld-app .handheld-scanned-product-name strong {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handheld-app .handheld-scan-quantity {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #a3e635;
+  border-radius: 8px;
+  padding: 5px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.handheld-app .handheld-add-scanned {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 8px;
+  background: #76b900;
+  font-size: 10px;
+  font-weight: 900;
+  color: #101807;
+}
+
+.handheld-app .handheld-add-scanned svg {
+  width: 15px;
+  height: 15px;
+}
+
+.handheld-app .handheld-scan-error {
+  padding: 5px 3px 1px;
+  font-size: 9px;
+  font-weight: 800;
+  color: #fda4af;
+}
+
+.handheld-app .handheld-provider-products > div[ref] .app-input,
+.handheld-app .handheld-provider-products > .relative.mt-3 .app-input {
+  min-height: 42px !important;
+  padding-left: 34px;
+  font-size: 12px;
+}
+
+.handheld-app .handheld-provider-products > .relative.mt-3 > div:last-child {
+  max-height: 190px;
+  margin-top: 3px;
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.handheld-app .handheld-provider-products > .relative.mt-3 > div:last-child button {
+  min-height: 36px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 5px;
+  margin: 0;
+  border-radius: 7px;
+  padding: 4px 5px;
+}
+
+.handheld-app .handheld-provider-products > .relative.mt-3 > div:last-child button > span:last-child {
+  display: none;
+}
+
+.handheld-app .handheld-provider-items {
+  margin-top: 6px;
+  border-radius: 9px;
+}
+
+.handheld-app .handheld-provider-items .provider-items-header {
+  display: none;
+}
+
+.handheld-app .handheld-provider-items .provider-items-list {
+  max-height: min(34dvh, 260px);
+}
+
+.handheld-app .handheld-provider-items .provider-item-row {
+  display: grid;
+  grid-template-columns: 52px 38px 70px minmax(64px, 1fr) 30px !important;
+  grid-template-rows: 29px 36px;
+  gap: 3px !important;
+  min-height: 70px;
+  padding: 3px 4px !important;
+}
+
+.handheld-app .provider-item-product {
+  grid-column: 1 / 5;
+  grid-row: 1;
+}
+
+.handheld-app .provider-item-product span:last-child {
+  font-size: 10px;
+}
+
+.handheld-app .provider-item-quantity {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.handheld-app .provider-item-bultos {
+  grid-column: 2;
+  grid-row: 2;
+  height: 36px;
+}
+
+.handheld-app .provider-item-price {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.handheld-app .provider-item-subtotal {
+  grid-column: 4 / 6;
+  grid-row: 2;
+  padding-right: 3px;
+  font-size: 10px;
+}
+
+.handheld-app .provider-item-delete {
+  grid-column: 5;
+  grid-row: 1;
+  width: 30px;
+  height: 29px;
+}
+
+.handheld-app .provider-item-quantity,
+.handheld-app .provider-item-price {
+  min-height: 36px !important;
+  height: 36px;
+  border-radius: 7px;
+  padding: 3px;
+  font-size: 10px;
+}
+
+.handheld-app .handheld-provider-actions {
+  bottom: calc(60px + env(safe-area-inset-bottom));
+  padding: 0 6px;
+}
+
+.handheld-app .handheld-provider-actions > div {
+  border-radius: 12px;
+  padding: 5px;
+}
+
+.handheld-app .handheld-provider-actions > div > div:first-child {
+  padding: 0 4px 3px;
+}
+
+.handheld-app .handheld-provider-actions > div > div:first-child .text-xl {
+  font-size: 15px;
+}
+
+.handheld-app .handheld-provider-actions > div > div:last-child {
+  gap: 4px;
+}
+
+.handheld-app .handheld-provider-actions button {
+  min-height: 38px;
+  border-radius: 9px;
+  padding: 4px;
+  font-size: 9px;
+}

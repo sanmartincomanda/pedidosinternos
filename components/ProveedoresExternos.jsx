@@ -4,6 +4,7 @@ import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from "rea
 import { createPortal } from "react-dom";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
+import { IS_HANDHELD } from "@/lib/deviceProfile";
 import ProviderPurchaseHistory from "./ProviderPurchaseHistory";
 import TouchNumericInput from "./TouchNumericInput";
 import {
@@ -90,10 +91,16 @@ const Icons = {
       <path d="M14 3v4h4M9 12h6M9 16h6" />
     </svg>
   ),
+  scan: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3" />
+      <path d="M7 9v6M10 8v8M14 8v8M17 9v6" />
+    </svg>
+  ),
 };
 
 const CATALOG_MAX_AGE_MS = 12 * 60 * 60 * 1000;
-const CATALOG_RESULT_LIMIT = 80;
+const CATALOG_RESULT_LIMIT = IS_HANDHELD ? 8 : 80;
 
 function normalizeCatalogSearch(value = "") {
   return `${value}`
@@ -303,6 +310,12 @@ export default function ProveedoresExternos({ user }) {
   const [paymentMethod, setPaymentMethod] = useState("");
   const [preview, setPreview] = useState(null);
   const [receipt, setReceipt] = useState(null);
+  const [handheldDetailsOpen, setHandheldDetailsOpen] = useState(true);
+  const [handheldCaptureMode, setHandheldCaptureMode] = useState("scan");
+  const [handheldScanCode, setHandheldScanCode] = useState("");
+  const [handheldScanProduct, setHandheldScanProduct] = useState(null);
+  const [handheldScanQuantity, setHandheldScanQuantity] = useState("1");
+  const [handheldScanError, setHandheldScanError] = useState("");
   const requestIdRef = useRef(globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`);
   const productSearchRef = useRef(null);
   const supplierPickerRef = useRef(null);
@@ -312,6 +325,8 @@ export default function ProveedoresExternos({ user }) {
   const invoiceNumberInputRef = useRef(null);
   const quantityRefs = useRef(new Map());
   const bultoInputRef = useRef(null);
+  const handheldScanInputRef = useRef(null);
+  const handheldScanQuantityRef = useRef(null);
 
   const refreshDrafts = async () => {
     const rows = await listProviderPurchaseDrafts();
@@ -583,7 +598,89 @@ export default function ProveedoresExternos({ user }) {
     }
   };
 
+  const focusHandheldScanner = () => {
+    requestAnimationFrame(() => {
+      handheldScanInputRef.current?.focus();
+    });
+  };
+
+  const selectHandheldProduct = (product) => {
+    setHandheldScanProduct(product);
+    setHandheldScanQuantity("1");
+    setHandheldScanError("");
+    setProductQuery("");
+    setProductOpen(false);
+    requestAnimationFrame(() => handheldScanQuantityRef.current?.focus());
+  };
+
+  const findHandheldScannedProduct = (rawCode) => {
+    const code = `${rawCode || ""}`.trim().replace(/\s+/g, "").toLowerCase();
+    if (!code) return null;
+
+    const exact = articleCatalog.find(
+      (article) => `${article.clave || ""}`.trim().replace(/\s+/g, "").toLowerCase() === code,
+    );
+    if (exact) return exact;
+
+    const numericCode = code.replace(/^0+/, "") || "0";
+    const numericMatches = articleCatalog.filter((article) => {
+      const articleCode = `${article.clave || ""}`.trim().replace(/\s+/g, "").toLowerCase();
+      return /^\d+$/.test(articleCode) && (articleCode.replace(/^0+/, "") || "0") === numericCode;
+    });
+    return numericMatches.length === 1 ? numericMatches[0] : null;
+  };
+
+  const handleHandheldScan = (event) => {
+    event?.preventDefault();
+    const product = findHandheldScannedProduct(handheldScanCode);
+    if (!product) {
+      setHandheldScanProduct(null);
+      setHandheldScanError(handheldScanCode.trim() ? `No se encontro la clave ${handheldScanCode.trim()}.` : "Escanea o escribe una clave.");
+      focusHandheldScanner();
+      return;
+    }
+    selectHandheldProduct(product);
+  };
+
+  const addHandheldScannedProduct = (quantityValue = handheldScanQuantity) => {
+    const quantity = parseBultoWeight(quantityValue);
+    if (!handheldScanProduct || quantity === null) {
+      setHandheldScanError("Ingresa una cantidad mayor que cero.");
+      requestAnimationFrame(() => handheldScanQuantityRef.current?.focus());
+      return;
+    }
+
+    setItems((current) => {
+      const existing = current.find((item) => Number(item.art_id) === Number(handheldScanProduct.art_id));
+      if (existing) {
+        const combinedQuantity = Number(existing.quantity || 0) + quantity;
+        return [
+          { ...existing, quantity: formatBultoWeight(combinedQuantity), bultos: [] },
+          ...current.filter((item) => Number(item.art_id) !== Number(handheldScanProduct.art_id)),
+        ];
+      }
+      return [
+        {
+          ...handheldScanProduct,
+          quantity: formatBultoWeight(quantity),
+          netUnitPrice: `${Number(handheldScanProduct.lastPurchaseNet ?? handheldScanProduct.precioCompra ?? 0).toFixed(2)}`,
+          bultos: [],
+        },
+        ...current,
+      ];
+    });
+    setHandheldScanCode("");
+    setHandheldScanProduct(null);
+    setHandheldScanQuantity("1");
+    setHandheldScanError("");
+    focusHandheldScanner();
+  };
+
   const addProduct = (product) => {
+    if (IS_HANDHELD) {
+      selectHandheldProduct(product);
+      return;
+    }
     setItems((current) => {
       const existing = current.find((item) => Number(item.art_id) === Number(product.art_id));
       if (existing) {
@@ -615,6 +712,7 @@ export default function ProveedoresExternos({ user }) {
   };
 
   const openProductSearch = () => {
+    if (IS_HANDHELD) setHandheldCaptureMode("search");
     setProductOpen(true);
     requestAnimationFrame(() => {
       productSearchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -710,6 +808,12 @@ export default function ProveedoresExternos({ user }) {
     setPaymentMethod("");
     setPreview(null);
     setEditingDraftId(null);
+    setHandheldDetailsOpen(!keepSupplier);
+    setHandheldCaptureMode("scan");
+    setHandheldScanCode("");
+    setHandheldScanProduct(null);
+    setHandheldScanQuantity("1");
+    setHandheldScanError("");
     if (invoiceSupportInputRef.current) invoiceSupportInputRef.current.value = "";
     if (invoiceCameraInputRef.current) invoiceCameraInputRef.current.value = "";
     requestIdRef.current = globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`;
@@ -719,6 +823,7 @@ export default function ProveedoresExternos({ user }) {
     const validationError = validate();
     if (validationError) {
       setMessage({ type: "error", text: validationError });
+      if (IS_HANDHELD && !supplier) setHandheldDetailsOpen(true);
       return;
     }
 
@@ -770,6 +875,8 @@ export default function ProveedoresExternos({ user }) {
     setRetentionMunicipalEdited(Boolean(draft.retentionMunicipalEnabled));
     setInvoiceSupport(draft.invoiceSupport || null);
     setEditingDraftId(draft.id);
+    setHandheldDetailsOpen(false);
+    setHandheldCaptureMode("scan");
     requestIdRef.current = draft.requestId || globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`;
     setMessage({ type: "success", text: "Recepcion local abierta. Puedes corregirla y enviarla a SICAR." });
     setView("form");
@@ -790,9 +897,14 @@ export default function ProveedoresExternos({ user }) {
     const validationError = validate({ requireInvoice: true });
     if (validationError) {
       setMessage({ type: "error", text: validationError });
+      if (IS_HANDHELD && (!supplier || !`${invoiceNumber || ""}`.trim())) {
+        setHandheldDetailsOpen(true);
+      }
       if (!`${invoiceNumber || ""}`.trim()) {
-        invoiceNumberInputRef.current?.focus();
-        invoiceNumberInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        requestAnimationFrame(() => {
+          invoiceNumberInputRef.current?.focus();
+          invoiceNumberInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
       }
       return;
     }
@@ -905,8 +1017,8 @@ export default function ProveedoresExternos({ user }) {
   const bultosTotal = bultosTemporal.reduce((sum, weight) => sum + weight, 0);
 
   return (
-    <div className="min-w-0 max-w-full space-y-4 overflow-x-clip pb-28">
-      <section className="min-w-0 max-w-full overflow-hidden rounded-[1.7rem] border border-[#3f6212] bg-[radial-gradient(circle_at_88%_8%,rgba(118,185,0,0.3),transparent_20rem),linear-gradient(135deg,#0b1408_0%,#17250e_58%,#223914_100%)] p-5 text-white shadow-[0_24px_60px_-38px_rgba(20,40,8,0.9)] sm:p-6">
+    <div className={`min-w-0 max-w-full space-y-4 overflow-x-clip pb-28 ${IS_HANDHELD ? "handheld-form handheld-provider-form" : ""}`}>
+      <section className="handheld-provider-hero min-w-0 max-w-full overflow-hidden rounded-[1.7rem] border border-[#3f6212] bg-[radial-gradient(circle_at_88%_8%,rgba(118,185,0,0.3),transparent_20rem),linear-gradient(135deg,#0b1408_0%,#17250e_58%,#223914_100%)] p-5 text-white shadow-[0_24px_60px_-38px_rgba(20,40,8,0.9)] sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-2xl bg-white px-3 shadow-lg sm:h-20 sm:w-36">
@@ -954,7 +1066,7 @@ export default function ProveedoresExternos({ user }) {
             </button>
           </div>
         ) : null}
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="handheld-provider-status mt-5 grid gap-3 sm:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-white/7 p-4">
             <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Sucursal</div>
             <div className="mt-1 font-black">{user}</div>
@@ -990,8 +1102,21 @@ export default function ProveedoresExternos({ user }) {
         </div>
       ) : null}
 
-      <section className={`app-panel relative min-w-0 max-w-full overflow-visible p-4 sm:p-5 ${supplierOpen ? "z-50" : "z-20"}`}>
-        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)]">
+      <section className={`handheld-reception-panel app-panel relative min-w-0 max-w-full overflow-visible p-4 sm:p-5 ${supplierOpen ? "z-50" : "z-20"}`}>
+        {IS_HANDHELD ? (
+          <button
+            type="button"
+            onClick={() => setHandheldDetailsOpen((open) => !open)}
+            className="handheld-reception-toggle"
+          >
+            <span className="min-w-0 text-left">
+              <span className="block text-[8px] font-black uppercase tracking-[0.14em] text-slate-400">Datos de recepcion</span>
+              <span className="block truncate text-xs font-black text-slate-900">{supplier?.nombre || "Selecciona proveedor"}</span>
+            </span>
+            <span className="shrink-0 text-[10px] font-black text-lime-700">{handheldDetailsOpen ? "Ocultar" : "Editar"}</span>
+          </button>
+        ) : null}
+        <div className={`${IS_HANDHELD && !handheldDetailsOpen ? "hidden" : ""} handheld-reception-fields grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)]`}>
           <div ref={supplierPickerRef} className="relative min-w-0">
             <label className="app-label">Proveedor</label>
             <div className="relative">
@@ -1059,10 +1184,30 @@ export default function ProveedoresExternos({ user }) {
               maxLength={180}
             />
           </div>
+          {IS_HANDHELD ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (!supplier) {
+                  setMessage({ type: "error", text: "Selecciona el proveedor antes de capturar productos." });
+                  return;
+                }
+                setMessage(null);
+                setHandheldDetailsOpen(false);
+                setHandheldCaptureMode("scan");
+                focusHandheldScanner();
+              }}
+              className="handheld-start-capture"
+            >
+              {Icons.scan}
+              Capturar productos
+            </button>
+          ) : null}
         </div>
       </section>
 
-      <section className="app-panel min-w-0 max-w-full border-lime-200 p-4 sm:p-5">
+      {!IS_HANDHELD || handheldDetailsOpen ? (
+      <section className="handheld-accounting-panel app-panel min-w-0 max-w-full border-lime-200 p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="text-base font-black text-slate-950">Datos contables <span className="text-xs text-slate-400">Opcional</span></div>
@@ -1173,24 +1318,98 @@ export default function ProveedoresExternos({ user }) {
           </div>
         ) : null}
       </section>
+      ) : null}
 
-      <section className={`app-panel relative min-w-0 max-w-full overflow-visible border-lime-200 p-3 sm:p-4 ${productOpen ? "z-40" : "z-10"}`}>
+      <section className={`handheld-provider-products app-panel relative min-w-0 max-w-full overflow-visible border-lime-200 p-3 sm:p-4 ${productOpen ? "z-40" : "z-10"}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-lg font-black text-slate-950">Productos <span className="text-[#5d9100]">{totals.lines}</span></div>
-            <div className="text-xs font-bold text-slate-400">Hasta 100 lineas</div>
+            <div className="text-lg font-black text-slate-950">{IS_HANDHELD ? "Captura" : "Productos"} <span className="text-[#5d9100]">{totals.lines}</span></div>
+            <div className="text-xs font-bold text-slate-400">{IS_HANDHELD ? "Escanea clave y agrega cantidad" : "Hasta 100 lineas"}</div>
           </div>
           <button
             type="button"
-            onClick={openProductSearch}
+            onClick={() => {
+              if (IS_HANDHELD) {
+                const nextMode = handheldCaptureMode === "scan" ? "search" : "scan";
+                setHandheldCaptureMode(nextMode);
+                setProductOpen(nextMode === "search");
+                requestAnimationFrame(() => {
+                  if (nextMode === "scan") handheldScanInputRef.current?.focus();
+                  else productSearchRef.current?.focus();
+                });
+                return;
+              }
+              openProductSearch();
+            }}
             disabled={articleCatalog.length === 0}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#76b900] px-4 text-sm font-black text-[#101807] shadow-[0_14px_28px_-18px_rgba(78,124,15,0.9)] disabled:opacity-40"
+            className="handheld-capture-mode inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#76b900] px-4 text-sm font-black text-[#101807] shadow-[0_14px_28px_-18px_rgba(78,124,15,0.9)] disabled:opacity-40"
           >
-            {Icons.plus}
-            Agregar producto
+            {IS_HANDHELD ? (handheldCaptureMode === "scan" ? Icons.search : Icons.scan) : Icons.plus}
+            {IS_HANDHELD ? (handheldCaptureMode === "scan" ? "Buscar" : "Escanear") : "Agregar producto"}
           </button>
         </div>
 
+        {IS_HANDHELD && handheldCaptureMode === "scan" ? (
+          <div className="handheld-scan-workspace">
+            <form onSubmit={handleHandheldScan} className="handheld-scan-form">
+              <span className="handheld-scan-icon">{Icons.scan}</span>
+              <input
+                ref={handheldScanInputRef}
+                value={handheldScanCode}
+                onChange={(event) => {
+                  setHandheldScanCode(event.target.value);
+                  setHandheldScanError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleHandheldScan(event);
+                }}
+                inputMode="none"
+                enterKeyHint="next"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                className="handheld-scan-input"
+                placeholder="Escanear clave"
+                disabled={articleCatalog.length === 0}
+              />
+              <button type="submit" className="handheld-scan-confirm">Leer</button>
+            </form>
+
+            {handheldScanProduct ? (
+              <div className="handheld-scanned-product">
+                <div className="handheld-scanned-product-name">
+                  <span>{handheldScanProduct.clave}</span>
+                  <strong>{handheldScanProduct.descripcion}</strong>
+                </div>
+                <TouchNumericInput
+                  ref={handheldScanQuantityRef}
+                  value={handheldScanQuantity}
+                  onValueChange={setHandheldScanQuantity}
+                  onConfirmValue={addHandheldScannedProduct}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addHandheldScannedProduct();
+                    }
+                  }}
+                  label={`Cantidad ${handheldScanProduct.descripcion}`}
+                  decimals={4}
+                  placeholder="Cant."
+                  enterKeyHint="done"
+                  className="handheld-scan-quantity"
+                />
+                <button type="button" onClick={() => addHandheldScannedProduct()} className="handheld-add-scanned">
+                  {Icons.plus}
+                  Agregar
+                </button>
+              </div>
+            ) : null}
+
+            {handheldScanError ? <div className="handheld-scan-error">{handheldScanError}</div> : null}
+          </div>
+        ) : null}
+
+        {!IS_HANDHELD || handheldCaptureMode === "search" ? (
         <div ref={productPickerRef} className="relative mt-3 min-w-0 max-w-full">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5d9100]">{Icons.search}</span>
           <input
@@ -1227,10 +1446,11 @@ export default function ProveedoresExternos({ user }) {
             </div>
           ) : null}
         </div>
+        ) : null}
 
         {items.length > 0 ? (
-          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="grid grid-cols-[minmax(56px,1fr)_48px_38px_64px_72px_32px] items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-1.5 py-2 text-[7px] font-black uppercase tracking-[0.08em] text-slate-400 sm:grid-cols-[minmax(160px,1fr)_76px_64px_104px_110px_36px] sm:gap-2 sm:px-3 sm:text-[9px]">
+          <div className="handheld-provider-items mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="provider-items-header grid grid-cols-[minmax(56px,1fr)_48px_38px_64px_72px_32px] items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-1.5 py-2 text-[7px] font-black uppercase tracking-[0.08em] text-slate-400 sm:grid-cols-[minmax(160px,1fr)_76px_64px_104px_110px_36px] sm:gap-2 sm:px-3 sm:text-[9px]">
               <span>Producto</span>
               <span className="text-center">Cant.</span>
               <span className="text-center">Bultos</span>
@@ -1238,10 +1458,10 @@ export default function ProveedoresExternos({ user }) {
               <span className="text-right">Subtotal</span>
               <span />
             </div>
-            <div className="max-h-[min(52vh,560px)] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+            <div className="provider-items-list max-h-[min(52vh,560px)] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
               {items.map((item) => (
-                <div key={item.art_id} className="grid min-h-12 grid-cols-[minmax(56px,1fr)_48px_38px_64px_72px_32px] items-center gap-0.5 px-1.5 py-1.5 sm:grid-cols-[minmax(160px,1fr)_76px_64px_104px_110px_36px] sm:gap-2 sm:px-3">
-                  <div className="flex min-w-0 items-center gap-2">
+                <div key={item.art_id} className="provider-item-row grid min-h-12 grid-cols-[minmax(56px,1fr)_48px_38px_64px_72px_32px] items-center gap-0.5 px-1.5 py-1.5 sm:grid-cols-[minmax(160px,1fr)_76px_64px_104px_110px_36px] sm:gap-2 sm:px-3">
+                  <div className="provider-item-product flex min-w-0 items-center gap-2">
                     <span className="hidden shrink-0 rounded-md bg-lime-100 px-2 py-1 font-mono text-[9px] font-black text-lime-800 md:inline">{item.clave}</span>
                     <span className="min-w-0 truncate text-xs font-black text-slate-900 sm:text-sm" title={item.descripcion}>{item.descripcion}</span>
                   </div>
@@ -1262,12 +1482,12 @@ export default function ProveedoresExternos({ user }) {
                     label={`Cantidad ${item.descripcion}`}
                     decimals={4}
                     placeholder="0"
-                    className="app-input h-10 !min-h-10 rounded-lg px-1 text-center text-xs font-black sm:px-2 sm:text-sm"
+                    className="provider-item-quantity app-input h-10 !min-h-10 rounded-lg px-1 text-center text-xs font-black sm:px-2 sm:text-sm"
                   />
                   <button
                     type="button"
                     onClick={() => openBultos(item.art_id)}
-                    className={`flex h-10 items-center justify-center gap-1 rounded-lg border px-1 text-[9px] font-black ${item.bultos?.length ? "border-lime-300 bg-lime-50 text-lime-800" : "border-slate-200 bg-white text-slate-500"}`}
+                    className={`provider-item-bultos flex h-10 items-center justify-center gap-1 rounded-lg border px-1 text-[9px] font-black ${item.bultos?.length ? "border-lime-300 bg-lime-50 text-lime-800" : "border-slate-200 bg-white text-slate-500"}`}
                     aria-label={`Suma de bultos de ${item.descripcion}`}
                   >
                     {Icons.scale}
@@ -1280,15 +1500,15 @@ export default function ProveedoresExternos({ user }) {
                     label={`Precio sin IVA ${item.descripcion}`}
                     decimals={2}
                     placeholder="0.00"
-                    className="app-input h-10 !min-h-10 rounded-lg px-1 text-center text-[11px] font-black text-[#4d7c0f] sm:px-2 sm:text-sm"
+                    className="provider-item-price app-input h-10 !min-h-10 rounded-lg px-1 text-center text-[11px] font-black text-[#4d7c0f] sm:px-2 sm:text-sm"
                   />
-                  <div className="truncate text-right text-[10px] font-black text-slate-900 sm:text-sm" title="Cantidad por precio sin IVA">
+                  <div className="provider-item-subtotal truncate text-right text-[10px] font-black text-slate-900 sm:text-sm" title="Cantidad por precio sin IVA">
                     {formatMoney(roundMoney(Number(item.quantity || 0) * Number(item.netUnitPrice || 0)))}
                   </div>
                   <button
                     type="button"
                     onClick={() => setItems((current) => current.filter((row) => row.art_id !== item.art_id))}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 sm:h-9 sm:w-9"
+                    className="provider-item-delete flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 sm:h-9 sm:w-9"
                     aria-label={`Quitar ${item.descripcion}`}
                   >
                     {Icons.trash}
@@ -1305,7 +1525,7 @@ export default function ProveedoresExternos({ user }) {
         )}
       </section>
 
-      <div className="fixed inset-x-0 bottom-[88px] z-40 px-3 lg:bottom-4 lg:left-auto lg:right-5 lg:w-[560px]">
+      <div className="handheld-provider-actions fixed inset-x-0 bottom-[88px] z-40 px-3 lg:bottom-4 lg:left-auto lg:right-5 lg:w-[560px]">
         <div className="rounded-[1.4rem] border border-slate-700 bg-slate-950 p-3 text-white shadow-[0_24px_60px_-28px_rgba(2,6,23,0.85)]">
           <div className="flex items-center justify-between gap-3 px-2 pb-2">
             <div>

@@ -6,6 +6,7 @@ import { db } from "../firebase";
 import { off, onValue, push, ref, runTransaction, update } from "firebase/database";
 import { syncPedidoToAccounting } from "@/lib/accountingTransferSync";
 import { getBranchDisplayName, getCanonicalBranchId } from "@/lib/branchUtils";
+import { INITIAL_PRODUCT_RESULT_LIMIT, IS_HANDHELD, PRODUCT_RESULT_LIMIT } from "@/lib/deviceProfile";
 import { printTransferRequisition } from "@/lib/historialPdf";
 import {
   buildOrderNumber,
@@ -580,7 +581,7 @@ export default function PedidoVacuna({
     const tokensBusqueda = splitCatalogTokens(busqueda);
 
     if (!texto) {
-      return catalogoProductos.slice(0, 8);
+      return catalogoProductos.slice(0, INITIAL_PRODUCT_RESULT_LIMIT);
     }
 
     return catalogoBusqueda
@@ -634,7 +635,7 @@ export default function PedidoVacuna({
           a.detalle - b.detalle ||
           a.producto.nombre.localeCompare(b.producto.nombre),
       )
-      .slice(0, 10)
+      .slice(0, PRODUCT_RESULT_LIMIT)
       .map((entry) => entry.producto);
   };
 
@@ -832,13 +833,13 @@ export default function PedidoVacuna({
   };
 
   return (
-    <div className="page-enter space-y-4">
+    <div className={`page-enter space-y-4 ${IS_HANDHELD ? "handheld-form handheld-transfer-form" : ""}`}>
       <section className="module-heading module-heading-traspaso">
         <div className="text-[11px] font-black uppercase tracking-[0.24em] text-emerald-700">Envio directo</div>
         <h1 className="app-title mt-1 text-3xl font-black text-slate-950 sm:text-4xl">MODULO TRASPASO</h1>
       </section>
 
-      <section className="app-panel p-4 sm:p-5">
+      <section className="handheld-meta-panel app-panel p-4 sm:p-5">
         <div className="flex flex-col gap-4">
           <div className="grid gap-3 md:grid-cols-3">
             <div>
@@ -869,7 +870,7 @@ export default function PedidoVacuna({
         </div>
       </section>
 
-      <section className="app-panel p-4 sm:p-5">
+      <section className="handheld-products-panel app-panel p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h3 className="app-title text-xl font-black text-slate-900">Productos</h3>
@@ -899,12 +900,12 @@ export default function PedidoVacuna({
             const productosFiltrados = filtrarProductos(item.producto);
 
             return (
-              <article key={idx} className="compact-order-line app-card grid grid-cols-[36px_minmax(0,1fr)_44px] items-start gap-2 p-2 lg:grid-cols-[42px_minmax(280px,1fr)_120px_150px_44px_44px] lg:items-center">
-                <span className="flex h-11 items-center justify-center rounded-xl bg-slate-100 text-xs font-black text-slate-600">
+              <article key={idx} className="compact-order-line handheld-order-line handheld-transfer-line app-card grid grid-cols-[36px_minmax(0,1fr)_44px] items-start gap-2 p-2 lg:grid-cols-[42px_minmax(280px,1fr)_120px_150px_44px_44px] lg:items-center">
+                <span className="order-line-index flex h-11 items-center justify-center rounded-xl bg-slate-100 text-xs font-black text-slate-600">
                   {String(idx + 1).padStart(2, "0")}
                 </span>
 
-                  <div className="relative" ref={(element) => (dropdownRefs.current[idx] = element)}>
+                  <div className="order-line-product relative" ref={(element) => (dropdownRefs.current[idx] = element)}>
                     <div className="relative">
                       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                         {Icons.search}
@@ -929,7 +930,7 @@ export default function PedidoVacuna({
                     </div>
 
                     {item.mostrarDropdown ? (
-                      <div className="app-scroll-y mt-2 max-h-64 rounded-[22px] border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)]">
+                      <div className={`app-scroll-y rounded-[22px] border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)] ${IS_HANDHELD ? "handheld-product-results absolute inset-x-0 top-full z-[85] mt-1 max-h-[190px]" : "mt-2 max-h-64"}`}>
                         {productosFiltrados.length === 0 ? (
                           <div className="rounded-[18px] px-4 py-5 text-center text-sm text-slate-400">
                             Sin coincidencias
@@ -940,7 +941,7 @@ export default function PedidoVacuna({
                               type="button"
                               key={`${producto.clave}-${producto.nombre}`}
                               onClick={() => seleccionarProducto(idx, producto)}
-                              className="mb-2 flex w-full items-start gap-3 rounded-[18px] border border-transparent bg-slate-50 px-4 py-3 text-left transition hover:border-emerald-300 hover:bg-emerald-50"
+                              className="handheld-product-result mb-2 flex w-full items-start gap-3 rounded-[18px] border border-transparent bg-slate-50 px-4 py-3 text-left transition hover:border-emerald-300 hover:bg-emerald-50"
                             >
                               <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-emerald-700">
                                 {producto.clave}
@@ -953,7 +954,7 @@ export default function PedidoVacuna({
                     ) : null}
                   </div>
 
-                  <div className="col-start-2 lg:col-auto">
+                  <div className="order-line-quantity col-start-2 lg:col-auto">
                     <TouchNumericInput
                       ref={(element) => (pesoInputRefs.current[idx] = element)}
                       value={item.pesoReal}
@@ -972,7 +973,7 @@ export default function PedidoVacuna({
                   <button
                     type="button"
                     onClick={() => abrirSumaBultos(idx)}
-                    className="app-button-ghost col-start-2 row-start-3 w-full justify-between px-3 text-sm lg:col-auto lg:row-auto"
+                    className="order-line-bultos app-button-ghost col-start-2 row-start-3 w-full justify-between px-3 text-sm lg:col-auto lg:row-auto"
                   >
                     <span className="flex items-center gap-2">
                       {Icons.scale}
@@ -986,7 +987,7 @@ export default function PedidoVacuna({
                   <button
                     type="button"
                     onClick={() => abrirNotaArticulo(idx)}
-                    className={`app-icon-button col-start-3 row-start-2 lg:col-auto lg:row-auto ${item.nota ? "border-amber-300 bg-amber-50 text-amber-700" : "text-slate-500"}`}
+                    className={`order-line-note app-icon-button col-start-3 row-start-2 lg:col-auto lg:row-auto ${item.nota ? "border-amber-300 bg-amber-50 text-amber-700" : "text-slate-500"}`}
                     aria-label="Nota del producto"
                     title={item.nota || "Agregar nota"}
                   >
@@ -996,14 +997,14 @@ export default function PedidoVacuna({
                   <button
                     type="button"
                     onClick={() => eliminarFila(idx)}
-                    className="app-icon-button col-start-3 row-start-1 text-rose-500 lg:col-auto lg:row-auto"
+                    className="order-line-delete app-icon-button col-start-3 row-start-1 text-rose-500 lg:col-auto lg:row-auto"
                     aria-label="Eliminar producto"
                   >
                     {Icons.trash}
                   </button>
 
                   {item.nota ? (
-                    <div className="col-start-2 col-end-4 truncate px-1 text-xs font-bold text-amber-700 lg:col-start-2 lg:col-end-6">
+                    <div className="order-line-note-preview col-start-2 col-end-4 truncate px-1 text-xs font-bold text-amber-700 lg:col-start-2 lg:col-end-6">
                       Nota: {item.nota}
                     </div>
                   ) : null}
@@ -1013,7 +1014,7 @@ export default function PedidoVacuna({
         </div>
       </section>
 
-      <section className="app-panel p-4 sm:p-5">
+      <section className="handheld-actions app-panel p-4 sm:p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <button type="button" onClick={abrirNotaGeneral} className="app-button-secondary">
             {Icons.note}

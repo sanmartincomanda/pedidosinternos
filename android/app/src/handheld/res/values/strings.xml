@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CSM Hand Held</string>
+    <string name="title_activity_main">CSM Hand Held</string>
+    <string name="package_name">com.pedidosinternos.handheld</string>
+    <string name="custom_url_scheme">com.pedidosinternos.handheld</string>
+</resources>

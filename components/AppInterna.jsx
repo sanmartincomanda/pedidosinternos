@@ -21,6 +21,7 @@ import {
   showMobileOperationalNotification,
   stopMobileNotificationListeners,
 } from "@/lib/mobileNotifications";
+import { IS_HANDHELD } from "@/lib/deviceProfile";
 import Cocina from "./Cocina";
 import Configuracion from "./Configuracion";
 import EstadoPedidos from "./EstadoPedidos";
@@ -348,7 +349,7 @@ function MobileNavButton({ item, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-[64px] flex-1 flex-col items-center justify-center gap-1 rounded-[18px] border px-2 text-[11px] font-black transition-all sm:text-xs"
+      className="mobile-nav-button flex min-h-[64px] flex-1 flex-col items-center justify-center gap-1 rounded-[18px] border px-2 text-[11px] font-black transition-all sm:text-xs"
       style={{
         borderColor: active ? `${item.accent}30` : "transparent",
         background: active ? `${item.accent}12` : "transparent",
@@ -413,6 +414,7 @@ export default function AppInterna() {
     });
     document.documentElement.classList.toggle("desktop-runtime", desktopMode);
     document.documentElement.classList.toggle("android-runtime", mobileMode);
+    document.documentElement.classList.toggle("handheld-runtime", IS_HANDHELD);
 
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -437,6 +439,7 @@ export default function AppInterna() {
     return () => {
       document.documentElement.classList.remove("desktop-runtime");
       document.documentElement.classList.remove("android-runtime");
+      document.documentElement.classList.remove("handheld-runtime");
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       if (typeof disposeNavigation === "function") disposeNavigation();
@@ -695,14 +698,14 @@ export default function AppInterna() {
 
   if (!user) {
     return (
-      <div className="login-shell flex items-center px-4 py-6">
+      <div className={`login-shell flex items-center px-4 py-6 ${IS_HANDHELD ? "handheld-app" : ""}`}>
         <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[1.05fr_0.95fr]">
           <section className="login-aside page-enter p-6 sm:p-8 lg:p-10">
             <div className="text-[10px] font-black uppercase tracking-[0.38em] text-[#9bdd3a]">
               Carnes San Martin
             </div>
             <h1 className="app-title mt-3 text-4xl font-black text-white sm:text-5xl">
-              CSM Operaciones
+              {IS_HANDHELD ? "CSM Hand Held" : "CSM Operaciones"}
             </h1>
             <div className="mt-3 text-sm font-semibold text-slate-300 sm:text-base">
               Traspasos y proveedores
@@ -818,7 +821,7 @@ export default function AppInterna() {
   }
 
   return (
-    <div className="desktop-app-frame min-h-screen">
+    <div className={`desktop-app-frame min-h-screen ${IS_HANDHELD ? "handheld-app" : ""}`}>
       <aside className="desktop-sidebar hidden xl:flex">
         <div className="desktop-brand-block">
           <div className="desktop-brand-mark">CSM</div>
@@ -900,7 +903,7 @@ export default function AppInterna() {
           <div className="flex min-w-0 items-center gap-3">
             <div className="desktop-module-icon">{navMeta.icon}</div>
             <div className="min-w-0">
-              <div className="desktop-topbar-kicker">Panel operativo</div>
+              <div className="desktop-topbar-kicker">{IS_HANDHELD ? "Hand Held" : "Panel operativo"}</div>
               <h1 className="desktop-topbar-title">{navMeta.title}</h1>
             </div>
           </div>
@@ -937,7 +940,7 @@ export default function AppInterna() {
         </header>
 
         <div className="px-3 pt-3 sm:px-6 xl:hidden">
-          <div className="grid grid-cols-2 gap-2 rounded-[1.35rem] border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur-xl">
+          <div className="mobile-business-switch grid grid-cols-2 gap-2 rounded-[1.35rem] border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur-xl">
             {BUSINESS_MODULES.map((item) => (
               <button
                 key={item.key}
@@ -973,7 +976,7 @@ export default function AppInterna() {
       </section>
 
       {businessModule === "internos" ? (
-        <nav className="fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-4 lg:hidden">
+        <nav className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-4 lg:hidden">
           <div className="mx-auto flex max-w-4xl gap-2 rounded-[24px] border border-slate-200 bg-white/94 p-2 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">
             {NAV_ITEMS.map((item) => (
               <MobileNavButton

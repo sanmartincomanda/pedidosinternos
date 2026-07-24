@@ -9,6 +9,7 @@ if (signingPropertiesFile.exists()) {
 android {
     namespace "com.pedidosinternos.app"
     compileSdk rootProject.ext.compileSdkVersion
+    flavorDimensions "device"
     defaultConfig {
         applicationId "com.pedidosinternos.app"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -20,6 +21,18 @@ android {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    productFlavors {
+        tablet {
+            dimension "device"
+            applicationId "com.pedidosinternos.app"
+        }
+        handheld {
+            dimension "device"
+            applicationId "com.pedidosinternos.handheld"
+            versionCode 10001
+            versionName "1.0.0"
         }
     }
     signingConfigs {

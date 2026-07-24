@@ -43,8 +43,18 @@ El proyecto Android usa Capacitor 7, Android API 35 y Firebase Cloud Messaging.
 npm run android:apk
 ```
 
-El APK firmado de produccion queda en `android/app/build/outputs/apk/release/app-release.apk`.
+El APK firmado de produccion para tablet queda en `android/app/build/outputs/apk/tablet/release/app-tablet-release.apk`.
 La firma privada se carga desde `android-signing/keystore.properties` y no se publica en GitHub.
+
+### Android Hand Held
+
+La edicion Hand Held es una aplicacion separada (`com.pedidosinternos.handheld`) y puede instalarse junto a la version de tablet. Usa una interfaz compacta y, en Proveedores SICAR, prioriza escanear clave, ingresar cantidad y continuar con el siguiente producto. La busqueda manual sigue disponible como respaldo.
+
+```powershell
+npm run android:handheld:apk
+```
+
+El APK queda en `android/app/build/outputs/apk/handheld/release/app-handheld-release.apk`.
 Las notificaciones en segundo plano dependen de la funcion `notificarCambioPedido`:
 
 ```powershell
