@@ -1423,18 +1423,18 @@ textarea {
 }
 
 .handheld-app .handheld-reception-fields {
-  grid-template-columns: minmax(0, 1fr) 108px !important;
+  grid-template-columns: minmax(0, 1fr) 130px !important;
   gap: 6px !important;
   padding: 7px 2px 2px;
 }
 
 .handheld-app .handheld-reception-fields > div:first-child,
-.handheld-app .handheld-reception-fields > div:nth-child(3),
+.handheld-app .handheld-reception-fields > div:nth-child(4),
 .handheld-app .handheld-start-capture {
   grid-column: 1 / -1;
 }
 
-.handheld-app .handheld-reception-fields > div:nth-child(3) {
+.handheld-app .handheld-reception-fields > div:nth-child(4) {
   display: none;
 }
 

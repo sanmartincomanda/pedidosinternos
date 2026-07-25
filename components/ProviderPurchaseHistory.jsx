@@ -80,6 +80,8 @@ function rowMatches(row, query) {
     row.supplierName,
     row.invoiceNumber,
     row.folio,
+    row.purchaseDate,
+    row.fecha,
     row.comment,
     ...(row.items || []).flatMap((item) => [item.clave, item.descripcion]),
   ].some((value) => `${value || ""}`.toLocaleLowerCase("es").includes(normalized));
@@ -101,7 +103,7 @@ function DetailDialog({ record, onClose }) {
               {isDraft ? "Recepcion en espera" : "Compra registrada en SICAR"}
             </div>
             <h3 className="mt-1 truncate text-xl font-black text-slate-950">{supplierName}</h3>
-            <p className="mt-1 text-xs font-bold text-slate-500">{invoiceNumber} · {dateTimeLabel(record.updatedAt || record.fecha)}</p>
+            <p className="mt-1 text-xs font-bold text-slate-500">{invoiceNumber} · {dateTimeLabel(record.purchaseDate || record.fecha || record.updatedAt)}</p>
           </div>
           <button type="button" onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500">
             {Icons.close}
@@ -221,7 +223,7 @@ export default function ProviderPurchaseHistory({
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">{Icons.clock}</span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-black text-slate-950">{draft.supplier?.nombre}</div>
-                    <div className="mt-0.5 truncate text-xs font-bold text-slate-500">{draft.invoiceNumber || "Sin factura"} · {dateTimeLabel(draft.updatedAt)}</div>
+                    <div className="mt-0.5 truncate text-xs font-bold text-slate-500">{draft.invoiceNumber || "Sin factura"} · {dateTimeLabel(draft.purchaseDate || draft.updatedAt)}</div>
                     <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-wide text-slate-500">
                       <span>{draft.items?.length || 0} productos</span>
                       <span>{money(draft.totals?.gross)}</span>

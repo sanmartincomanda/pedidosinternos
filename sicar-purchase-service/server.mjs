@@ -51,6 +51,26 @@ function addDays(dateText, days) {
   return date.toISOString().slice(0, 10);
 }
 
+function normalizePurchaseDate(value) {
+  const today = localDateTime().slice(0, 10);
+  const dateText = `${value || today}`.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+    throw new Error("La fecha de la factura no es valida.");
+  }
+
+  const [year, month, day] = dateText.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    throw new Error("La fecha de la factura no es valida.");
+  }
+  if (dateText > today) throw new Error("La fecha de la factura no puede ser futura.");
+  return dateText;
+}
+
 function roundMoney(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
@@ -539,7 +559,7 @@ async function getPurchaseContext(payload) {
       orden: Number(row.orden),
       tipoFactor: row.tipoFactor,
     }));
-  const purchaseDate = localDateTime().slice(0, 10);
+  const purchaseDate = normalizePurchaseDate(payload?.date);
   const creditDays = Math.max(0, Math.trunc(Number(supplierRows[0].diasCredito || 0)));
   return {
     requestId,
@@ -561,6 +581,7 @@ async function getPurchaseContext(payload) {
 
 function buildPurchaseSql(context) {
   const dateParts = localDateTime();
+  const purchaseDateTime = `${context.date} ${dateParts.slice(11)}`;
   const folio = context.invoiceNumber;
   const marker = `[CSM:${context.requestId}]`;
   const comment = `APP PROVEEDORES ${marker}${context.comment ? ` ${context.comment}` : ""}`.slice(0, 255);
@@ -570,7 +591,7 @@ function buildPurchaseSql(context) {
   const sql = [
     "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;",
     "START TRANSACTION;",
-    `INSERT INTO compra (folio, fecha, subtotal, total, decimales, monTipoCambio, comentario, descuento, peso, subtotal0, gasto, status, pro_id, caj_id, mon_id) VALUES (${sqlText(folio)}, ${sqlText(dateParts)}, ${sqlNumber(context.summary.subtotal, 2)}, ${sqlNumber(context.summary.total, 2)}, 2, 1.000000, ${sqlText(comment)}, 0.00, ${sqlNumber(context.items.reduce((sum, item) => sum + item.quantity, 0), 4)}, ${sqlNumber(context.summary.subtotal0, 2)}, 0, 1, ${context.supplier.pro_id}, ${cashRegisterId}, 1);`,
+    `INSERT INTO compra (folio, fecha, subtotal, total, decimales, monTipoCambio, comentario, descuento, peso, subtotal0, gasto, status, pro_id, caj_id, mon_id) VALUES (${sqlText(folio)}, ${sqlText(purchaseDateTime)}, ${sqlNumber(context.summary.subtotal, 2)}, ${sqlNumber(context.summary.total, 2)}, 2, 1.000000, ${sqlText(comment)}, 0.00, ${sqlNumber(context.items.reduce((sum, item) => sum + item.quantity, 0), 4)}, ${sqlNumber(context.summary.subtotal0, 2)}, 0, 1, ${context.supplier.pro_id}, ${cashRegisterId}, 1);`,
     "SET @purchase_id = LAST_INSERT_ID();",
   ];
 

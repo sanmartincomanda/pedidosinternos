@@ -194,6 +194,7 @@ async function serializeInvoiceSupport(support) {
 function buildPurchasePayload({
   supplier,
   invoiceNumber,
+  purchaseDate,
   comment,
   items,
   requestId,
@@ -206,7 +207,7 @@ function buildPurchasePayload({
     requestId,
     supplierId: Number(supplier.pro_id),
     invoiceNumber: `${invoiceNumber || ""}`.trim(),
-    date: localDate(),
+    date: purchaseDate,
     comment: `${comment || ""}`.trim(),
     paymentMethod,
     priceMode: "net",
@@ -295,6 +296,7 @@ export default function ProveedoresExternos({ user }) {
   const [bultoTemporal, setBultoTemporal] = useState("");
   const [bultoError, setBultoError] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(localDate);
   const [comment, setComment] = useState("");
   const [retentionIrEnabled, setRetentionIrEnabled] = useState(false);
   const [retentionMunicipalEnabled, setRetentionMunicipalEnabled] = useState(false);
@@ -781,6 +783,8 @@ export default function ProveedoresExternos({ user }) {
   const validate = ({ requireInvoice = false } = {}) => {
     if (!supplier) return "Selecciona el proveedor.";
     if (requireInvoice && !`${invoiceNumber || ""}`.trim()) return "Ingresa el numero de factura antes de recibir en SICAR.";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate)) return "Selecciona la fecha de la factura.";
+    if (purchaseDate > localDate()) return "La fecha de la factura no puede ser futura.";
     if (items.length === 0) return "Agrega al menos un producto.";
     if (items.some((item) => Number(item.quantity) <= 0)) return "Completa una cantidad mayor que cero en todos los productos.";
     if (items.some((item) => Number(item.netUnitPrice) < 0 || item.netUnitPrice === "")) return "Revisa el precio sin IVA de todos los productos.";
@@ -797,6 +801,7 @@ export default function ProveedoresExternos({ user }) {
     }
     setItems([]);
     setInvoiceNumber("");
+    setPurchaseDate(localDate());
     setComment("");
     setRetentionIrEnabled(false);
     setRetentionMunicipalEnabled(false);
@@ -840,6 +845,7 @@ export default function ProveedoresExternos({ user }) {
         updatedAt: now,
         supplier,
         invoiceNumber: `${invoiceNumber || ""}`.trim(),
+        purchaseDate,
         comment: `${comment || ""}`.trim(),
         items: items.map((item) => ({ ...item })),
         totals,
@@ -866,6 +872,7 @@ export default function ProveedoresExternos({ user }) {
     setSupplierQuery(draft.supplier?.nombre || "");
     setItems((draft.items || []).map((item) => ({ ...item })));
     setInvoiceNumber(draft.invoiceNumber || "");
+    setPurchaseDate(draft.purchaseDate || localDate());
     setComment(draft.comment || "");
     setRetentionIrEnabled(Boolean(draft.retentionIrEnabled));
     setRetentionMunicipalEnabled(Boolean(draft.retentionMunicipalEnabled));
@@ -924,6 +931,7 @@ export default function ProveedoresExternos({ user }) {
         buildPurchasePayload({
           supplier,
           invoiceNumber,
+          purchaseDate,
           comment,
           items,
           requestId: requestIdRef.current,
@@ -965,6 +973,7 @@ export default function ProveedoresExternos({ user }) {
         buildPurchasePayload({
           supplier,
           invoiceNumber,
+          purchaseDate,
           comment,
           items,
           requestId: requestIdRef.current,
@@ -1073,7 +1082,7 @@ export default function ProveedoresExternos({ user }) {
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/7 p-4">
             <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Fecha</div>
-            <div className="mt-1 font-black">{localDate()}</div>
+            <div className="mt-1 font-black">{purchaseDate}</div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/7 p-4">
             <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Conexion local</div>
@@ -1116,7 +1125,7 @@ export default function ProveedoresExternos({ user }) {
             <span className="shrink-0 text-[10px] font-black text-lime-700">{handheldDetailsOpen ? "Ocultar" : "Editar"}</span>
           </button>
         ) : null}
-        <div className={`${IS_HANDHELD && !handheldDetailsOpen ? "hidden" : ""} handheld-reception-fields grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,1fr)]`}>
+        <div className={`${IS_HANDHELD && !handheldDetailsOpen ? "hidden" : ""} handheld-reception-fields grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.75fr)_minmax(0,0.72fr)_minmax(0,1fr)]`}>
           <div ref={supplierPickerRef} className="relative min-w-0">
             <label className="app-label">Proveedor</label>
             <div className="relative">
@@ -1170,6 +1179,21 @@ export default function ProveedoresExternos({ user }) {
               className="app-input uppercase"
               placeholder="Obligatorio para SICAR"
               maxLength={19}
+              required
+              aria-required="true"
+            />
+          </div>
+          <div className="provider-purchase-date min-w-0">
+            <label className="app-label" htmlFor="provider-purchase-date">
+              Fecha de factura <span className="text-rose-600">*</span>
+            </label>
+            <input
+              id="provider-purchase-date"
+              type="date"
+              value={purchaseDate}
+              max={localDate()}
+              onChange={(event) => setPurchaseDate(event.target.value)}
+              className="app-input"
               required
               aria-required="true"
             />

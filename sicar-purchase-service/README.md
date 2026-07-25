@@ -7,6 +7,7 @@ Este servicio es independiente de los workers de traspasos. No lee Firebase y no
 - Lee proveedores, articulos, unidades, impuestos y ultimo precio de compra.
 - Previsualiza precios con IVA desde la configuracion vigente de SICAR.
 - Registra una compra de inventario en una sola transaccion.
+- Permite registrar la fecha real de la factura, incluyendo fechas anteriores; rechaza fechas futuras.
 - Actualiza existencia, ultimo costo, costo promedio, proveedor-articulo e historial.
 - Consulta el historial de compras creadas por la app con su detalle de productos.
 - Guarda retenciones y foto de factura en una cola local para el integrador contable.
