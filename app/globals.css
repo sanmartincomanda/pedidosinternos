@@ -1503,6 +1503,15 @@ textarea {
   padding: 7px !important;
 }
 
+.handheld-app .handheld-provider-products-search-open {
+  z-index: 110 !important;
+}
+
+.handheld-app .handheld-provider-product-dropdown {
+  z-index: 120 !important;
+  box-shadow: 0 24px 60px -16px rgb(15 23 42 / 55%);
+}
+
 .handheld-app .handheld-provider-products > div:first-child {
   flex-wrap: nowrap;
   gap: 5px;
@@ -1762,6 +1771,10 @@ textarea {
 .handheld-app .handheld-provider-actions {
   bottom: calc(60px + env(safe-area-inset-bottom));
   padding: 0 6px;
+}
+
+.handheld-app .handheld-provider-actions-search-open {
+  z-index: 20;
 }
 
 .handheld-app .handheld-provider-actions > div {

@@ -1344,7 +1344,7 @@ export default function ProveedoresExternos({ user }) {
       </section>
       ) : null}
 
-      <section className={`handheld-provider-products app-panel relative min-w-0 max-w-full overflow-visible border-lime-200 p-3 sm:p-4 ${productOpen ? "z-40" : "z-10"}`}>
+      <section className={`handheld-provider-products app-panel relative min-w-0 max-w-full overflow-visible border-lime-200 p-3 sm:p-4 ${productOpen ? (IS_HANDHELD ? "handheld-provider-products-search-open z-[110]" : "z-40") : "z-10"}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-lg font-black text-slate-950">{IS_HANDHELD ? "Captura" : "Productos"} <span className="text-[#5d9100]">{totals.lines}</span></div>
@@ -1449,7 +1449,7 @@ export default function ProveedoresExternos({ user }) {
             disabled={articleCatalog.length === 0}
           />
           {productOpen ? (
-            <div className="absolute inset-x-0 top-full z-[60] mt-2 max-h-[min(360px,55vh)] max-w-full overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-lime-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(30,50,12,0.45)]">
+            <div className="handheld-provider-product-dropdown absolute inset-x-0 top-full z-[120] mt-2 max-h-[min(360px,55vh)] max-w-full overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-lime-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(30,50,12,0.45)]">
               {products.map((product) => (
                 <button
                   key={product.art_id}
@@ -1549,7 +1549,7 @@ export default function ProveedoresExternos({ user }) {
         )}
       </section>
 
-      <div className="handheld-provider-actions fixed inset-x-0 bottom-[88px] z-40 px-3 lg:bottom-4 lg:left-auto lg:right-5 lg:w-[560px]">
+      <div className={`handheld-provider-actions fixed inset-x-0 bottom-[88px] z-40 px-3 lg:bottom-4 lg:left-auto lg:right-5 lg:w-[560px] ${IS_HANDHELD && productOpen ? "handheld-provider-actions-search-open" : ""}`}>
         <div className="rounded-[1.4rem] border border-slate-700 bg-slate-950 p-3 text-white shadow-[0_24px_60px_-28px_rgba(2,6,23,0.85)]">
           <div className="flex items-center justify-between gap-3 px-2 pb-2">
             <div>
