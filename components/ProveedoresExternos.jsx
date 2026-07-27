@@ -101,6 +101,7 @@ const Icons = {
 
 const CATALOG_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const CATALOG_RESULT_LIMIT = IS_HANDHELD ? 8 : 80;
+const HANDHELD_SCAN_BULTOS_ID = "__handheld_scan_bultos__";
 
 function normalizeCatalogSearch(value = "") {
   return `${value}`
@@ -316,7 +317,8 @@ export default function ProveedoresExternos({ user }) {
   const [handheldCaptureMode, setHandheldCaptureMode] = useState("scan");
   const [handheldScanCode, setHandheldScanCode] = useState("");
   const [handheldScanProduct, setHandheldScanProduct] = useState(null);
-  const [handheldScanQuantity, setHandheldScanQuantity] = useState("1");
+  const [handheldScanQuantity, setHandheldScanQuantity] = useState("");
+  const [handheldScanBultos, setHandheldScanBultos] = useState([]);
   const [handheldScanError, setHandheldScanError] = useState("");
   const requestIdRef = useRef(globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`);
   const productSearchRef = useRef(null);
@@ -608,7 +610,8 @@ export default function ProveedoresExternos({ user }) {
 
   const selectHandheldProduct = (product) => {
     setHandheldScanProduct(product);
-    setHandheldScanQuantity("1");
+    setHandheldScanQuantity("");
+    setHandheldScanBultos([]);
     setHandheldScanError("");
     setProductQuery("");
     setProductOpen(false);
@@ -632,12 +635,13 @@ export default function ProveedoresExternos({ user }) {
     return numericMatches.length === 1 ? numericMatches[0] : null;
   };
 
-  const handleHandheldScan = (event) => {
+  const handleHandheldScan = (event, rawCode = handheldScanCode) => {
     event?.preventDefault();
-    const product = findHandheldScannedProduct(handheldScanCode);
+    const code = `${rawCode || ""}`.trim();
+    const product = findHandheldScannedProduct(code);
     if (!product) {
       setHandheldScanProduct(null);
-      setHandheldScanError(handheldScanCode.trim() ? `No se encontro la clave ${handheldScanCode.trim()}.` : "Escanea o escribe una clave.");
+      setHandheldScanError(code ? `No se encontro la clave ${code}.` : "Escanea o escribe una clave.");
       focusHandheldScanner();
       return;
     }
@@ -656,8 +660,11 @@ export default function ProveedoresExternos({ user }) {
       const existing = current.find((item) => Number(item.art_id) === Number(handheldScanProduct.art_id));
       if (existing) {
         const combinedQuantity = Number(existing.quantity || 0) + quantity;
+        const combinedBultos = existing.bultos?.length && handheldScanBultos.length
+          ? [...existing.bultos, ...handheldScanBultos]
+          : [];
         return [
-          { ...existing, quantity: formatBultoWeight(combinedQuantity), bultos: [] },
+          { ...existing, quantity: formatBultoWeight(combinedQuantity), bultos: combinedBultos },
           ...current.filter((item) => Number(item.art_id) !== Number(handheldScanProduct.art_id)),
         ];
       }
@@ -666,16 +673,23 @@ export default function ProveedoresExternos({ user }) {
           ...handheldScanProduct,
           quantity: formatBultoWeight(quantity),
           netUnitPrice: `${Number(handheldScanProduct.lastPurchaseNet ?? handheldScanProduct.precioCompra ?? 0).toFixed(2)}`,
-          bultos: [],
+          bultos: handheldScanBultos,
         },
         ...current,
       ];
     });
     setHandheldScanCode("");
     setHandheldScanProduct(null);
-    setHandheldScanQuantity("1");
+    setHandheldScanQuantity("");
+    setHandheldScanBultos([]);
     setHandheldScanError("");
-    focusHandheldScanner();
+    if (handheldCaptureMode === "search") {
+      setProductQuery("");
+      setProductOpen(true);
+      requestAnimationFrame(() => productSearchRef.current?.focus());
+    } else {
+      focusHandheldScanner();
+    }
   };
 
   const addProduct = (product) => {
@@ -741,6 +755,22 @@ export default function ProveedoresExternos({ user }) {
     setTimeout(() => bultoInputRef.current?.focus(), 80);
   };
 
+  const openHandheldScanBultos = () => {
+    setBultosArticleId(HANDHELD_SCAN_BULTOS_ID);
+    setBultosTemporal(handheldScanBultos.map(parseBultoWeight).filter((weight) => weight !== null));
+    setBultoTemporal("");
+    setBultoError("");
+    setTimeout(() => bultoInputRef.current?.focus(), 80);
+  };
+
+  const closeBultosAndReturn = () => {
+    const returnToHandheldQuantity = bultosArticleId === HANDHELD_SCAN_BULTOS_ID;
+    closeBultos();
+    if (returnToHandheldQuantity) {
+      requestAnimationFrame(() => handheldScanQuantityRef.current?.focus());
+    }
+  };
+
   const addBulto = () => {
     const weight = parseBultoWeight(bultoTemporal);
     if (weight === null) {
@@ -771,6 +801,13 @@ export default function ProveedoresExternos({ user }) {
       return;
     }
     const total = finalWeights.reduce((sum, weight) => sum + weight, 0);
+    if (bultosArticleId === HANDHELD_SCAN_BULTOS_ID) {
+      setHandheldScanQuantity(formatBultoWeight(total));
+      setHandheldScanBultos(finalWeights);
+      closeBultos();
+      requestAnimationFrame(() => handheldScanQuantityRef.current?.focus());
+      return;
+    }
     setItems((current) => current.map((item) => (
       Number(item.art_id) === Number(bultosArticleId)
         ? { ...item, quantity: formatBultoWeight(total), bultos: finalWeights }
@@ -817,7 +854,8 @@ export default function ProveedoresExternos({ user }) {
     setHandheldCaptureMode("scan");
     setHandheldScanCode("");
     setHandheldScanProduct(null);
-    setHandheldScanQuantity("1");
+    setHandheldScanQuantity("");
+    setHandheldScanBultos([]);
     setHandheldScanError("");
     if (invoiceSupportInputRef.current) invoiceSupportInputRef.current.value = "";
     if (invoiceCameraInputRef.current) invoiceCameraInputRef.current.value = "";
@@ -1022,7 +1060,9 @@ export default function ProveedoresExternos({ user }) {
     );
   }
 
-  const activeBultoItem = items.find((item) => Number(item.art_id) === Number(bultosArticleId));
+  const activeBultoItem = bultosArticleId === HANDHELD_SCAN_BULTOS_ID
+    ? handheldScanProduct
+    : items.find((item) => Number(item.art_id) === Number(bultosArticleId));
   const bultosTotal = bultosTemporal.reduce((sum, weight) => sum + weight, 0);
 
   return (
@@ -1385,7 +1425,7 @@ export default function ProveedoresExternos({ user }) {
                   setHandheldScanError("");
                 }}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") handleHandheldScan(event);
+                  if (event.key === "Enter") handleHandheldScan(event, event.currentTarget.value);
                 }}
                 inputMode="none"
                 enterKeyHint="next"
@@ -1394,42 +1434,11 @@ export default function ProveedoresExternos({ user }) {
                 autoComplete="off"
                 className="handheld-scan-input"
                 placeholder="Escanear clave"
-                disabled={articleCatalog.length === 0}
+                disabled={articleCatalog.length === 0 || Boolean(handheldScanProduct)}
               />
               <button type="submit" className="handheld-scan-confirm">Leer</button>
             </form>
-
-            {handheldScanProduct ? (
-              <div className="handheld-scanned-product">
-                <div className="handheld-scanned-product-name">
-                  <span>{handheldScanProduct.clave}</span>
-                  <strong>{handheldScanProduct.descripcion}</strong>
-                </div>
-                <TouchNumericInput
-                  ref={handheldScanQuantityRef}
-                  value={handheldScanQuantity}
-                  onValueChange={setHandheldScanQuantity}
-                  onConfirmValue={addHandheldScannedProduct}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      addHandheldScannedProduct();
-                    }
-                  }}
-                  label={`Cantidad ${handheldScanProduct.descripcion}`}
-                  decimals={4}
-                  placeholder="Cant."
-                  enterKeyHint="done"
-                  className="handheld-scan-quantity"
-                />
-                <button type="button" onClick={() => addHandheldScannedProduct()} className="handheld-add-scanned">
-                  {Icons.plus}
-                  Agregar
-                </button>
-              </div>
-            ) : null}
-
-            {handheldScanError ? <div className="handheld-scan-error">{handheldScanError}</div> : null}
+            {handheldScanError && !handheldScanProduct ? <div className="handheld-scan-error">{handheldScanError}</div> : null}
           </div>
         ) : null}
 
@@ -1470,6 +1479,44 @@ export default function ProveedoresExternos({ user }) {
             </div>
           ) : null}
         </div>
+        ) : null}
+
+        {IS_HANDHELD && handheldScanProduct ? (
+          <div className="handheld-scan-workspace handheld-quantity-workspace">
+            <div className="handheld-scanned-product">
+              <div className="handheld-scanned-product-name">
+                <span>{handheldScanProduct.clave}</span>
+                <strong>{handheldScanProduct.descripcion}</strong>
+              </div>
+              <TouchNumericInput
+                ref={handheldScanQuantityRef}
+                value={handheldScanQuantity}
+                onValueChange={(value) => {
+                  setHandheldScanQuantity(value);
+                  setHandheldScanBultos([]);
+                }}
+                onConfirmValue={addHandheldScannedProduct}
+                onOpenBultos={openHandheldScanBultos}
+                bultosCount={handheldScanBultos.length}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addHandheldScannedProduct();
+                  }
+                }}
+                label={`Cantidad ${handheldScanProduct.descripcion}`}
+                decimals={4}
+                placeholder="Cant."
+                enterKeyHint="done"
+                className="handheld-scan-quantity"
+              />
+              <button type="button" onClick={() => addHandheldScannedProduct()} className="handheld-add-scanned">
+                {Icons.plus}
+                Agregar
+              </button>
+            </div>
+            {handheldScanError ? <div className="handheld-scan-error">{handheldScanError}</div> : null}
+          </div>
         ) : null}
 
         {items.length > 0 ? (
@@ -1598,7 +1645,7 @@ export default function ProveedoresExternos({ user }) {
             <div
               className="app-modal z-[120] items-end px-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:items-center sm:p-4"
               onClick={(event) => {
-                if (event.target === event.currentTarget) closeBultos();
+                if (event.target === event.currentTarget) closeBultosAndReturn();
               }}
             >
               <div className="w-full max-w-md rounded-[1.5rem] border border-lime-200 bg-white p-4 shadow-[0_30px_80px_-24px_rgba(30,50,12,0.55)] sm:p-5">
@@ -1607,7 +1654,7 @@ export default function ProveedoresExternos({ user }) {
                     <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#5d9100]">Suma de bultos</div>
                     <h3 className="mt-1 truncate text-lg font-black text-slate-950">{activeBultoItem?.descripcion}</h3>
                   </div>
-                  <button type="button" onClick={closeBultos} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500" aria-label="Cerrar">
+                  <button type="button" onClick={closeBultosAndReturn} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500" aria-label="Cerrar">
                     {Icons.close}
                   </button>
                 </div>
@@ -1672,7 +1719,7 @@ export default function ProveedoresExternos({ user }) {
                 ) : null}
 
                 <div className="mt-4 grid grid-cols-[0.8fr_1.2fr] gap-2">
-                  <button type="button" onClick={closeBultos} className="app-button app-button-secondary">Cancelar</button>
+                  <button type="button" onClick={closeBultosAndReturn} className="app-button app-button-secondary">Cancelar</button>
                   <button type="button" onClick={finishBultos} className="min-h-12 rounded-xl bg-[#76b900] text-sm font-black text-[#101807]">Finalizar</button>
                 </div>
               </div>

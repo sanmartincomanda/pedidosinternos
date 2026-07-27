@@ -15,7 +15,7 @@ function normalizeNumericValue(value, decimals) {
   return whole;
 }
 
-function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm }) {
+function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm, onOpenBultos, bultosCount }) {
   const [buffer, setBuffer] = useState(() => normalizeNumericValue(initialValue, decimals));
 
   useEffect(() => {
@@ -98,7 +98,7 @@ function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm }) {
           </button>
         </div>
 
-        <div className="mt-2 grid grid-cols-[1fr_1.5fr] gap-2">
+        <div className={`mt-2 grid gap-2 ${onOpenBultos ? "grid-cols-3" : "grid-cols-[1fr_1.5fr]"}`}>
           <button
             type="button"
             onClick={() => setBuffer((current) => current.slice(0, -1))}
@@ -106,6 +106,18 @@ function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm }) {
           >
             Borrar
           </button>
+          {onOpenBultos ? (
+            <button
+              type="button"
+              onClick={() => {
+                onCancel();
+                onOpenBultos();
+              }}
+              className="min-h-13 rounded-2xl border border-lime-300 bg-lime-50 px-1 text-[11px] font-black text-lime-800"
+            >
+              Bultos {bultosCount > 0 ? bultosCount : "+"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => onConfirm(buffer)}
@@ -132,6 +144,8 @@ const TouchNumericInput = forwardRef(function TouchNumericInput(
     onConfirmValue,
     enterKeyHint = "next",
     min = 0,
+    onOpenBultos,
+    bultosCount = 0,
   },
   ref,
 ) {
@@ -180,6 +194,8 @@ const TouchNumericInput = forwardRef(function TouchNumericInput(
           decimals={decimals}
           onCancel={() => setKeypadOpen(false)}
           onConfirm={confirm}
+          onOpenBultos={onOpenBultos}
+          bultosCount={bultosCount}
         />
       ) : null}
     </>
