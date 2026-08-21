@@ -1306,11 +1306,15 @@ async function verifyFirebaseIdentity(request) {
 async function authorizeRequest(request) {
   const mode = `${config.authMode || (config.firebaseAuth?.enabled ? "firebase-or-api-key" : "api-key")}`;
   if (mode === "api-key") return apiKeyAuthorized(request) ? { type: "api-key" } : null;
+  const authorization = `${request.headers.authorization || ""}`;
+  const hasBearerToken = authorization.startsWith("Bearer ") && Boolean(authorization.slice(7).trim());
   try {
     const identity = await verifyFirebaseIdentity(request);
     if (identity) return { type: "firebase", ...identity };
   } catch (error) {
-    if (mode === "firebase-only") throw error;
+    // A presented Firebase token must never fall through to API-key auth. This
+    // preserves branch/email 403 responses and prevents credential confusion.
+    if (mode === "firebase-only" || hasBearerToken) throw error;
   }
   return mode === "firebase-or-api-key" && apiKeyAuthorized(request) ? { type: "api-key" } : null;
 }
@@ -1319,15 +1323,40 @@ async function validateConfiguredCompany() {
   if (validatedCompany?.expiresAt > Date.now()) return validatedCompany.value;
   const company = config.company || {};
   if (!company.identifier || !company.branchId) throw new Error("Falta fijar company.identifier y company.branchId en el servicio.");
-  const rows = await query("SELECT sucId, alias FROM nubecfg LIMIT 1;");
+  const rows = await query(`
+    SELECT
+      (SELECT sucId FROM nubecfg LIMIT 1) AS sucId,
+      (SELECT alias FROM nubecfg LIMIT 1) AS alias,
+      (SELECT nombre FROM empresa LIMIT 1) AS companyName,
+      (SELECT ciudad FROM empresa LIMIT 1) AS companyCity;
+  `);
   const actualAlias = `${rows[0]?.alias || ""}`.trim();
-  const allowedAliases = [company.branchId, company.branchAlias, ...(company.sicarAliases || [])]
+  const companyName = `${rows[0]?.companyName || ""}`.trim();
+  const companyCity = `${rows[0]?.companyCity || ""}`.trim();
+  const allowedAliases = [company.identifier, company.branchId, company.branchAlias, ...(company.sicarAliases || [])]
     .filter(Boolean)
     .map(normalizeBranchToken);
-  if (!actualAlias || !allowedAliases.includes(normalizeBranchToken(actualAlias))) {
-    throw new Error(`El SICAR local (${actualAlias || "sin alias"}) no corresponde a ${company.branchId}.`);
+  let matchedIdentity = actualAlias;
+  let identitySource = "nubecfg.alias";
+  if (actualAlias) {
+    if (!allowedAliases.includes(normalizeBranchToken(actualAlias))) {
+      throw new Error(`El SICAR local (${actualAlias}) no corresponde a ${company.branchId}.`);
+    }
+  } else {
+    matchedIdentity = [companyName, companyCity]
+      .find((candidate) => candidate && allowedAliases.includes(normalizeBranchToken(candidate))) || "";
+    identitySource = matchedIdentity === companyName ? "empresa.nombre" : "empresa.ciudad";
+    if (!matchedIdentity) {
+      throw new Error(`El SICAR local (sin alias; ${companyName || companyCity || "empresa desconocida"}) no corresponde a ${company.branchId}.`);
+    }
   }
-  const value = { identifier: company.identifier, branchId: company.branchId, alias: actualAlias };
+  const value = {
+    identifier: company.identifier,
+    branchId: company.branchId,
+    alias: matchedIdentity,
+    nubecfgAlias: actualAlias,
+    identitySource,
+  };
   validatedCompany = { value, expiresAt: Date.now() + 60_000 };
   return value;
 }
@@ -1371,7 +1400,8 @@ const server = createServer(async (request, response) => {
         service: "csm-sicar-operaciones",
         database: rows[0]?.databaseName,
         serverTime: rows[0]?.serverTime,
-        branchAlias: rows[0]?.branchAlias || "",
+        branchAlias: company.alias,
+        nubecfgAlias: rows[0]?.branchAlias || "",
         company,
         authenticatedAs: identity.type,
         writeMode: config.allowInventoryAdjustments === true
