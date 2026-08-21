@@ -1,4 +1,5 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 import { getFirestore } from "firebase/firestore";
 
@@ -23,10 +24,25 @@ const accountingFirebaseConfig = {
   measurementId: "G-RSLY1FP9W2",
 };
 
+const inventoryFirebaseConfig = {
+  apiKey: "AIzaSyCNjoUvZdproZfv1HqAVeyHA94Nn7NYwBA",
+  authDomain: "inventario-sanmartin.firebaseapp.com",
+  projectId: "inventario-sanmartin",
+  storageBucket: "inventario-sanmartin.firebasestorage.app",
+  messagingSenderId: "135175270983",
+  appId: "1:135175270983:web:66add2c6cd34ba07333762",
+  measurementId: "G-DSTY4KY0T8",
+};
+
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const accountingApp =
   getApps().find((item) => item.name === "accounting") ||
   initializeApp(accountingFirebaseConfig, "accounting");
+const inventoryApp =
+  getApps().find((item) => item.name === "inventory") ||
+  initializeApp(inventoryFirebaseConfig, "inventory");
 
 export const db = getDatabase(app);
 export const accountingDb = getFirestore(accountingApp);
+export const inventoryDb = getFirestore(inventoryApp);
+export const inventoryAuth = getAuth(inventoryApp);

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createSign } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -19,6 +20,379 @@ const accountingQueueDirectory = config.accounting?.queueDirectory || "C:\\SICAR
 const maxInvoiceFileBytes = 8 * 1024 * 1024;
 const cache = new Map();
 let purchaseQueue = Promise.resolve();
+let inventoryQueue = Promise.resolve();
+let firebaseAccessToken = null;
+
+const INVENTORY_TRIGGER_EVENT = "inventory.adjustment.requested";
+const INVENTORY_SOURCE_APP = "inventario-sanmartin";
+const INVENTORY_TRIGGER_ACTION = "create_inventory_adjustment";
+const INVENTORY_LOCKED_STATUSES = new Set(["requested", "processing", "dry-run", "done", "duplicate"]);
+
+function base64Url(value) {
+  return Buffer.from(value)
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+
+function getInventoryFirebaseSettings() {
+  const settings = config.inventoryFirebase || {};
+  if (settings.enabled !== true) {
+    throw new Error("El puente de levantamientos Firebase esta deshabilitado.");
+  }
+  if (!settings.projectId || !settings.serviceAccountPath || !settings.branchDocumentId || !settings.payloadBranchAlias) {
+    throw new Error("Falta configurar inventario Firebase en el servicio local.");
+  }
+  return settings;
+}
+
+async function getFirebaseAccessToken() {
+  if (firebaseAccessToken?.token && firebaseAccessToken.expiresAt > Date.now() + 60_000) {
+    return firebaseAccessToken.token;
+  }
+
+  const settings = getInventoryFirebaseSettings();
+  const serviceAccount = JSON.parse((await readFile(settings.serviceAccountPath, "utf8")).replace(/^\uFEFF/, ""));
+  if (serviceAccount.project_id !== settings.projectId || !serviceAccount.client_email || !serviceAccount.private_key) {
+    throw new Error("La cuenta de servicio no corresponde al proyecto de inventario configurado.");
+  }
+
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const header = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claim = base64Url(JSON.stringify({
+    iss: serviceAccount.client_email,
+    scope: "https://www.googleapis.com/auth/datastore",
+    aud: serviceAccount.token_uri || "https://oauth2.googleapis.com/token",
+    iat: issuedAt,
+    exp: issuedAt + 3600,
+  }));
+  const unsignedToken = `${header}.${claim}`;
+  const signer = createSign("RSA-SHA256");
+  signer.update(unsignedToken);
+  signer.end();
+  const signature = signer.sign(serviceAccount.private_key)
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+  const assertion = `${unsignedToken}.${signature}`;
+  const tokenResponse = await fetch(serviceAccount.token_uri || "https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }),
+  });
+  const tokenBody = await tokenResponse.json();
+  if (!tokenResponse.ok || !tokenBody.access_token) {
+    throw new Error(tokenBody.error_description || "No se pudo autenticar el puente con Firebase.");
+  }
+  firebaseAccessToken = {
+    token: tokenBody.access_token,
+    expiresAt: Date.now() + Number(tokenBody.expires_in || 3600) * 1000,
+  };
+  return firebaseAccessToken.token;
+}
+
+function firestorePath(relativePath) {
+  return `${relativePath}`.split("/").map((segment) => encodeURIComponent(segment)).join("/");
+}
+
+function firestoreDocumentName(relativePath) {
+  const settings = getInventoryFirebaseSettings();
+  return `projects/${settings.projectId}/databases/(default)/documents/${relativePath}`;
+}
+
+function toFirestoreValue(value) {
+  if (value === null || value === undefined) return { nullValue: null };
+  if (value instanceof Date) return { timestampValue: value.toISOString() };
+  if (Array.isArray(value)) return { arrayValue: { values: value.map(toFirestoreValue) } };
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("Firestore recibio un numero invalido.");
+    return Number.isInteger(value) ? { integerValue: `${value}` } : { doubleValue: value };
+  }
+  if (typeof value === "object") {
+    return {
+      mapValue: {
+        fields: Object.fromEntries(
+          Object.entries(value)
+            .filter(([, entry]) => entry !== undefined)
+            .map(([key, entry]) => [key, toFirestoreValue(entry)]),
+        ),
+      },
+    };
+  }
+  return { stringValue: `${value}` };
+}
+
+function toFirestoreFields(value) {
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .map(([key, entry]) => [key, toFirestoreValue(entry)]),
+  );
+}
+
+function fromFirestoreValue(value) {
+  if (!value) return null;
+  if ("nullValue" in value) return null;
+  if ("stringValue" in value) return value.stringValue;
+  if ("timestampValue" in value) return value.timestampValue;
+  if ("booleanValue" in value) return Boolean(value.booleanValue);
+  if ("integerValue" in value) return Number(value.integerValue);
+  if ("doubleValue" in value) return Number(value.doubleValue);
+  if ("arrayValue" in value) return (value.arrayValue.values || []).map(fromFirestoreValue);
+  if ("mapValue" in value) return fromFirestoreFields(value.mapValue.fields || {});
+  return null;
+}
+
+function fromFirestoreFields(fields = {}) {
+  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, fromFirestoreValue(value)]));
+}
+
+async function firestoreRequest(relativeUrl, options = {}) {
+  const settings = getInventoryFirebaseSettings();
+  const token = await getFirebaseAccessToken();
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(settings.projectId)}/databases/(default)/documents${relativeUrl}`,
+    {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {}),
+      },
+    },
+  );
+  if (response.status === 404) return null;
+  const body = await response.json();
+  if (!response.ok) {
+    const error = new Error(body?.error?.message || `Firestore respondio con estado ${response.status}.`);
+    error.statusCode = response.status === 409 ? 409 : 502;
+    throw error;
+  }
+  return body;
+}
+
+async function getFirestoreDocument(relativePath) {
+  const document = await firestoreRequest(`/${firestorePath(relativePath)}`);
+  if (!document) return null;
+  return {
+    id: document.name.split("/").pop(),
+    createTime: document.createTime,
+    updateTime: document.updateTime,
+    ...fromFirestoreFields(document.fields || {}),
+  };
+}
+
+function normalizeInventorySessionId(value = "") {
+  const sessionId = `${value}`.trim();
+  if (!/^[A-Za-z0-9_-]{8,96}$/.test(sessionId)) throw new Error("Identificador de levantamiento invalido.");
+  return sessionId;
+}
+
+function normalizeInventoryFolio(value = "") {
+  const folio = `${value}`.trim().toUpperCase();
+  if (!/^[A-Z0-9_-]{5,40}$/.test(folio)) throw new Error("Folio de levantamiento invalido.");
+  return folio;
+}
+
+function buildInventoryFirestoreSession(payload) {
+  const settings = getInventoryFirebaseSettings();
+  const sessionId = normalizeInventorySessionId(payload?.sessionId);
+  const folio = normalizeInventoryFolio(payload?.folio);
+  const requestedBranch = `${payload?.branchId || ""}`.trim();
+  if (normalizeBranchToken(requestedBranch) !== normalizeBranchToken(settings.payloadBranchAlias)) {
+    throw new Error(`Este integrador solo admite la sucursal ${settings.payloadBranchAlias}.`);
+  }
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  if (items.length < 1 || items.length > 2000) {
+    throw new Error("El levantamiento debe contener entre 1 y 2000 productos.");
+  }
+
+  const seen = new Set();
+  const normalizedItems = items.map((item, index) => {
+    const sku = `${item?.sku || item?.clave || ""}`.trim();
+    const name = `${item?.nombre || item?.descripcion || ""}`.trim();
+    const unit = `${item?.unidad || "PZA"}`.trim().toUpperCase();
+    const counted = roundQuantity(item?.cantidadContada ?? item?.totalLb ?? item?.cajas);
+    if (!sku || !name) throw new Error(`Falta clave o nombre en la linea ${index + 1}.`);
+    if (!Number.isFinite(counted) || counted < 0) throw new Error(`Conteo invalido en ${sku}.`);
+    if (seen.has(sku)) throw new Error(`El producto ${sku} esta repetido.`);
+    seen.add(sku);
+    const weights = Array.isArray(item?.pesos)
+      ? item.pesos.map(Number).filter((weight) => Number.isFinite(weight) && weight >= 0).map(roundQuantity)
+      : [];
+    const isWeight = unit === "LB";
+    return {
+      sku,
+      nombre: name,
+      unidad: unit,
+      zona: `${item?.zona || payload?.zona || "General"}`.trim().slice(0, 80),
+      cajas: isWeight ? Math.max(0, Math.trunc(Number(item?.cajas ?? weights.length))) : counted,
+      totalLb: isWeight ? counted : null,
+      pesos: isWeight ? weights : [],
+    };
+  });
+
+  const now = new Date();
+  const performedBy = `${payload?.realizadoPor || payload?.operator || "CSM Operaciones"}`.trim().slice(0, 100);
+  const supervisedBy = `${payload?.supervisadoPor || performedBy}`.trim().slice(0, 100);
+  const zones = [...new Set(normalizedItems.map((item) => item.zona).filter(Boolean))];
+  const zoneSummaries = zones.map((zone) => {
+    const zoneItems = normalizedItems.filter((item) => item.zona === zone);
+    return {
+      zona: zone,
+      itemCount: zoneItems.length,
+      totalCajas: roundQuantity(zoneItems.reduce((sum, item) => sum + Number(item.cajas || 0), 0)),
+      totalPesoLb: roundQuantity(zoneItems.reduce((sum, item) => sum + Number(item.totalLb || 0), 0)),
+    };
+  });
+  const requestedBy = {
+    type: "firebase-user",
+    uid: `${payload?.requestedBy?.uid || `csm-operaciones-${normalizeBranchToken(settings.payloadBranchAlias)}`}`.slice(0, 128),
+    email: `${payload?.requestedBy?.email || settings.requestedByEmail || "operaciones@sanmartinsr.com"}`.slice(0, 180),
+    label: `${payload?.requestedBy?.label || performedBy}`.slice(0, 120),
+  };
+
+  return {
+    sessionId,
+    folio,
+    session: {
+      tipo: "levantamiento_inventario",
+      branchId: settings.branchDocumentId,
+      folio,
+      fecha: normalizeInventoryDate(payload?.fecha || payload?.date),
+      proveedor: `${payload?.proveedor || "Interno"}`.trim().slice(0, 100),
+      realizadoPor: performedBy,
+      firmaRealizadoPor: `${payload?.firmaRealizadoPor || ""}`.trim().slice(0, 120),
+      supervisadoPor: supervisedBy,
+      firmaSupervisadoPor: `${payload?.firmaSupervisadoPor || ""}`.trim().slice(0, 120),
+      observaciones: `${payload?.observaciones || payload?.notes || ""}`.trim().slice(0, 500),
+      status: "capturado",
+      catalogSource: "sicar",
+      sourceApp: "csm-operaciones",
+      itemCount: normalizedItems.length,
+      totalCajas: roundQuantity(normalizedItems.reduce((sum, item) => sum + Number(item.cajas || 0), 0)),
+      totalPesoLb: roundQuantity(normalizedItems.reduce((sum, item) => sum + Number(item.totalLb || 0), 0)),
+      zoneCount: zones.length,
+      zones,
+      zoneSummaries,
+      items: normalizedItems,
+      createdAt: now,
+      updatedAt: now,
+      finalizedAt: now,
+    },
+    trigger: {
+      triggerEvent: INVENTORY_TRIGGER_EVENT,
+      sourceApp: INVENTORY_SOURCE_APP,
+      action: INVENTORY_TRIGGER_ACTION,
+      branchId: settings.payloadBranchAlias,
+      sessionId,
+      folio,
+      requestedBy,
+      dryRun: false,
+      status: "requested",
+    },
+  };
+}
+
+async function submitInventoryFirestoreSession(payload) {
+  const settings = getInventoryFirebaseSettings();
+  const built = buildInventoryFirestoreSession(payload);
+  const branchRoot = `branches/${settings.branchDocumentId}`;
+  const sessionPath = `${branchRoot}/levantamientosInventario/${built.sessionId}`;
+  const triggerPath = `${branchRoot}/sicarAdjustmentRequests/${built.sessionId}`;
+  const existingTrigger = await getFirestoreDocument(triggerPath);
+  if (existingTrigger) {
+    return {
+      created: false,
+      alreadySubmitted: true,
+      requiresRetry: `${existingTrigger.status || ""}` === "error",
+      request: existingTrigger,
+    };
+  }
+
+  const body = {
+    writes: [
+      {
+        update: { name: firestoreDocumentName(sessionPath), fields: toFirestoreFields(built.session) },
+        currentDocument: { exists: false },
+      },
+      {
+        update: { name: firestoreDocumentName(triggerPath), fields: toFirestoreFields(built.trigger) },
+        updateTransforms: [{ fieldPath: "requestedAt", setToServerValue: "REQUEST_TIME" }],
+        currentDocument: { exists: false },
+      },
+    ],
+  };
+  await firestoreRequest(":commit", { method: "POST", body: JSON.stringify(body) });
+  return {
+    created: true,
+    alreadySubmitted: false,
+    requiresRetry: false,
+    request: { ...built.trigger, requestedAt: new Date().toISOString() },
+  };
+}
+
+async function retryInventoryFirestoreRequest(sessionId) {
+  const settings = getInventoryFirebaseSettings();
+  const normalizedId = normalizeInventorySessionId(sessionId);
+  const triggerPath = `branches/${settings.branchDocumentId}/sicarAdjustmentRequests/${normalizedId}`;
+  const existing = await getFirestoreDocument(triggerPath);
+  if (!existing) throw new Error("No existe la solicitud de levantamiento.");
+  if (`${existing.status}` !== "error") {
+    const error = new Error(`La solicitud esta en estado ${existing.status}; no se puede reenviar.`);
+    error.statusCode = 409;
+    throw error;
+  }
+  const body = {
+    writes: [{
+      update: {
+        name: firestoreDocumentName(triggerPath),
+        fields: toFirestoreFields({
+          status: "requested",
+          message: "Reintento solicitado desde CSM Operaciones",
+          lastError: null,
+          resultStatus: null,
+          duplicate: false,
+          alreadyProcessed: false,
+        }),
+      },
+      updateMask: {
+        fieldPaths: ["status", "message", "lastError", "resultStatus", "duplicate", "alreadyProcessed"],
+      },
+      updateTransforms: [{ fieldPath: "requestedAt", setToServerValue: "REQUEST_TIME" }],
+    }],
+  };
+  await firestoreRequest(":commit", { method: "POST", body: JSON.stringify(body) });
+  return { ...existing, status: "requested", message: "Reintento solicitado desde CSM Operaciones", lastError: null };
+}
+
+async function getInventoryFirestoreHistory(limitValue = 80) {
+  const settings = getInventoryFirebaseSettings();
+  const limit = Math.min(200, Math.max(1, Math.trunc(Number(limitValue) || 80)));
+  const parent = `/branches/${firestorePath(settings.branchDocumentId)}:runQuery`;
+  const query = {
+    structuredQuery: {
+      from: [{ collectionId: "sicarAdjustmentRequests" }],
+      orderBy: [{ field: { fieldPath: "requestedAt" }, direction: "DESCENDING" }],
+      limit,
+    },
+  };
+  const rows = await firestoreRequest(parent, { method: "POST", body: JSON.stringify(query) });
+  return (rows || [])
+    .filter((entry) => entry.document)
+    .map((entry) => ({
+      id: entry.document.name.split("/").pop(),
+      ...fromFirestoreFields(entry.document.fields || {}),
+      createTime: entry.document.createTime,
+      updateTime: entry.document.updateTime,
+    }));
+}
 
 function sqlText(value = "") {
   return `'${`${value}`
@@ -73,6 +447,20 @@ function normalizePurchaseDate(value) {
 
 function roundMoney(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function roundQuantity(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 10000) / 10000;
+}
+
+function normalizeBranchToken(value = "") {
+  const normalized = `${value}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (normalized.includes("nindiri")) return "nindiri";
+  if (normalized.includes("granada")) return "granada";
+  return normalized.replace(/[^a-z0-9]+/g, "").trim();
 }
 
 function safeFilePart(value, fallback = "archivo") {
@@ -415,6 +803,7 @@ async function getArticles(supplierId = 0) {
         a.precioCompra AS lastPurchaseNet,
         a.preCompraProm,
         u.nombre AS unidadCompra,
+        uv.nombre AS unidadVenta,
         COALESCE(t.taxPercent, 0) AS taxPercent,
         COALESCE(
           ${selectedPrice}
@@ -423,6 +812,7 @@ async function getArticles(supplierId = 0) {
         ) AS lastPurchaseGross
       FROM articulo a
       LEFT JOIN unidad u ON u.uni_id = a.unidadCompra
+      LEFT JOIN unidad uv ON uv.uni_id = a.unidadVenta
       LEFT JOIN (
         SELECT ai.art_id, SUM(CASE WHEN i.tras = 1 THEN i.impuesto ELSE 0 END) AS taxPercent
         FROM articuloimpuesto ai
@@ -445,6 +835,194 @@ async function getArticles(supplierId = 0) {
       lastPurchaseGross: Number(row.lastPurchaseGross),
     }));
   });
+}
+
+function normalizeInventoryRequestId(value) {
+  const requestId = `${value || ""}`.trim();
+  if (!/^[a-zA-Z0-9_-]{8,80}$/.test(requestId)) {
+    throw new Error("El identificador del levantamiento no es valido.");
+  }
+  return requestId;
+}
+
+function normalizeInventoryDate(value) {
+  const today = localDateTime().slice(0, 10);
+  const dateText = `${value || today}`.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
+    throw new Error("La fecha del levantamiento no es valida.");
+  }
+  const [year, month, day] = dateText.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+    || dateText > today
+  ) throw new Error("La fecha del levantamiento no es valida.");
+  return dateText;
+}
+
+async function getInventoryCatalog() {
+  const [branchRows, articles] = await Promise.all([
+    query("SELECT sucId, alias FROM nubecfg LIMIT 1;"),
+    getArticles(0),
+  ]);
+  const branch = branchRows[0] || {};
+  return {
+    branch: { sucId: Number(branch.sucId || 0), alias: branch.alias || "Sucursal SICAR" },
+    generatedAt: new Date().toISOString(),
+    articles: articles.map((article) => ({
+      art_id: Number(article.art_id),
+      clave: article.clave,
+      descripcion: article.descripcion,
+      existencia: Number(article.existencia || 0),
+      precioCompra: Number(article.precioCompra || 0),
+      preCompraProm: Number(article.preCompraProm || 0),
+      unidad: article.unidadVenta || article.unidadCompra || "PZA",
+    })),
+  };
+}
+
+async function getInventoryContext(payload, { requireBaseline = false } = {}) {
+  const requestId = normalizeInventoryRequestId(payload?.requestId);
+  const date = normalizeInventoryDate(payload?.date);
+  const notes = `${payload?.notes || ""}`.trim().slice(0, 180);
+  const operator = `${payload?.operator || ""}`.trim().slice(0, 80);
+  const requestedBranch = `${payload?.branch || ""}`.trim().slice(0, 100);
+  const rawItems = Array.isArray(payload?.items) ? payload.items : [];
+  if (rawItems.length < 1 || rawItems.length > 2000) {
+    throw new Error("El levantamiento debe contener entre 1 y 2000 productos.");
+  }
+
+  const itemsById = new Map();
+  for (const rawItem of rawItems) {
+    const articleId = Number(rawItem?.articleId);
+    const rawCounted = Number(rawItem?.countedExistence);
+    const counted = roundQuantity(rawCounted);
+    const expected = Number(rawItem?.expectedExistence);
+    if (!Number.isInteger(articleId) || articleId <= 0) throw new Error("Se recibio un articulo invalido.");
+    if (!Number.isFinite(rawCounted) || !Number.isFinite(counted) || counted < 0) throw new Error("El conteo fisico no es valido.");
+    if (requireBaseline && !Number.isFinite(expected)) throw new Error("Falta la existencia base de un articulo.");
+    if (itemsById.has(articleId)) throw new Error(`El articulo ${articleId} esta repetido en el levantamiento.`);
+    itemsById.set(articleId, { articleId, countedExistence: counted, expectedExistence: expected });
+  }
+
+  const articleIds = [...itemsById.keys()];
+  const [rows, branchRows] = await Promise.all([
+    query(`
+      SELECT
+        a.art_id,
+        a.clave,
+        a.descripcion,
+        a.existencia,
+        a.precioCompra,
+        a.preCompraProm,
+        a.precio1 AS precioVenta,
+        COALESCE(u.nombre, 'PZA') AS unidad
+      FROM articulo a
+      LEFT JOIN unidad u ON u.uni_id = a.unidadVenta
+      WHERE a.art_id IN (${articleIds.join(",")}) AND a.status = 1
+      ORDER BY a.descripcion;
+    `),
+    query("SELECT alias FROM nubecfg LIMIT 1;"),
+  ]);
+  const branchName = `${branchRows[0]?.alias || ""}`.trim();
+  if (!requestedBranch || !branchName || normalizeBranchToken(requestedBranch) !== normalizeBranchToken(branchName)) {
+    throw new Error(`La sucursal solicitada no corresponde a este servidor SICAR (${branchName || "sin alias"}).`);
+  }
+  if (rows.length !== articleIds.length) throw new Error("Uno o mas articulos ya no estan activos en SICAR.");
+
+  const lines = rows.map((row) => {
+    const input = itemsById.get(Number(row.art_id));
+    const currentExistence = roundQuantity(row.existencia);
+    const difference = roundQuantity(input.countedExistence - currentExistence);
+    if (requireBaseline && Math.abs(input.expectedExistence - currentExistence) > 0.0001) {
+      throw new Error(`La existencia de ${row.clave} cambio en SICAR. Actualiza la vista previa.`);
+    }
+    return {
+      articleId: Number(row.art_id),
+      clave: row.clave,
+      descripcion: row.descripcion,
+      unidad: row.unidad || "PZA",
+      currentExistence,
+      countedExistence: input.countedExistence,
+      difference,
+      precioCompra: Number(row.precioCompra || 0),
+      preCompraProm: Number(row.preCompraProm || 0),
+      precioVenta: Number(row.precioVenta || 0),
+      differenceCost: roundMoney(difference * Number(row.preCompraProm || 0)),
+    };
+  });
+  const changedLines = lines.filter((line) => Math.abs(line.difference) > 0.0001);
+  const summary = {
+    totalLines: lines.length,
+    changedLines: changedLines.length,
+    positiveLines: changedLines.filter((line) => line.difference > 0).length,
+    negativeLines: changedLines.filter((line) => line.difference < 0).length,
+    totalDifferenceUnits: roundQuantity(changedLines.reduce((sum, line) => sum + line.difference, 0)),
+    totalDifferenceCost: roundMoney(changedLines.reduce((sum, line) => sum + line.differenceCost, 0)),
+  };
+  return { requestId, date, notes, operator, branchName, lines, changedLines, summary };
+}
+
+function inventoryMarker(requestId) {
+  return `[CSM-INVENTARIO:${requestId}]`;
+}
+
+function buildInventoryAdjustmentSql(context) {
+  const historyUserId = Number(config.sicar?.historyUserId || 1);
+  const marker = inventoryMarker(context.requestId);
+  const comment = `APP INVENTARIO ${marker} ${context.branchName || "SUCURSAL"}${context.notes ? ` - ${context.notes}` : ""}`.slice(0, 255);
+  const sql = ["SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;", "START TRANSACTION;", "SET @stale_count := 0;"];
+
+  context.changedLines.forEach((line, index) => {
+    sql.push(`SELECT existencia INTO @exist_${index} FROM articulo WHERE art_id = ${line.articleId} FOR UPDATE;`);
+    sql.push(`SET @stale_count := @stale_count + IF(ABS(@exist_${index} - ${sqlNumber(line.currentExistence, 4)}) > 0.0001, 1, 0);`);
+  });
+
+  sql.push(`INSERT INTO ajusteinventario (fecha, comentario, tipo) SELECT ${sqlText(`${context.date} ${localDateTime().slice(11)}`)}, ${sqlText(comment)}, 0 FROM DUAL WHERE @stale_count = 0;`);
+  sql.push("SET @ain_id := IF(@stale_count = 0, LAST_INSERT_ID(), 0);");
+
+  context.changedLines.forEach((line, index) => {
+    sql.push(`INSERT INTO ajusteinventarioarticulo (ain_id, art_id, exisAnterior, exisActual, precioCompra, preCompraProm, diferencia, importeCom, importeProm, precioVenta, importeVenta) SELECT @ain_id, ${line.articleId}, @exist_${index}, ${sqlNumber(line.countedExistence, 4)}, ${sqlNumber(line.precioCompra, 3)}, ${sqlNumber(line.preCompraProm, 3)}, ROUND(${sqlNumber(line.countedExistence, 4)} - @exist_${index}, 4), ROUND((${sqlNumber(line.countedExistence, 4)} - @exist_${index}) * ${sqlNumber(line.precioCompra, 3)}, 2), ROUND((${sqlNumber(line.countedExistence, 4)} - @exist_${index}) * ${sqlNumber(line.preCompraProm, 3)}, 2), ${sqlNumber(line.precioVenta, 6)}, ROUND((${sqlNumber(line.countedExistence, 4)} - @exist_${index}) * ${sqlNumber(line.precioVenta, 6)}, 2) FROM DUAL WHERE @stale_count = 0;`);
+    sql.push(`UPDATE articulo SET existencia = ${sqlNumber(line.countedExistence, 4)} WHERE art_id = ${line.articleId} AND @stale_count = 0;`);
+    sql.push(`INSERT INTO historial (movimiento, fecha, tabla, id, usu_id) SELECT 1, NOW(), 'Articulo', ${line.articleId}, ${historyUserId} FROM DUAL WHERE @stale_count = 0;`);
+  });
+
+  sql.push(`INSERT INTO historial (movimiento, fecha, tabla, id, usu_id) SELECT 0, NOW(), 'AjusteInventario', @ain_id, ${historyUserId} FROM DUAL WHERE @stale_count = 0;`);
+  sql.push("COMMIT;");
+  sql.push(`SELECT @ain_id AS ain_id, @stale_count AS stale_count, ${context.changedLines.length} AS changed_lines, ${sqlNumber(context.summary.totalDifferenceCost, 2)} AS difference_cost;`);
+  return { sql: sql.join("\n"), marker, comment };
+}
+
+async function getInventoryHistory(limitValue = 100) {
+  const limit = Math.min(300, Math.max(1, Math.trunc(Number(limitValue) || 100)));
+  const rows = await query(`
+    SELECT
+      ai.ain_id,
+      ai.fecha,
+      ai.comentario,
+      COUNT(aia.art_id) AS lineas,
+      SUM(CASE WHEN aia.diferencia > 0 THEN 1 ELSE 0 END) AS positivas,
+      SUM(CASE WHEN aia.diferencia < 0 THEN 1 ELSE 0 END) AS negativas,
+      ROUND(SUM(aia.diferencia), 4) AS diferenciaUnidades,
+      ROUND(SUM(aia.importeProm), 2) AS diferenciaCosto
+    FROM ajusteinventario ai
+    INNER JOIN ajusteinventarioarticulo aia ON aia.ain_id = ai.ain_id
+    WHERE ai.comentario LIKE 'APP INVENTARIO [CSM-INVENTARIO:%'
+    GROUP BY ai.ain_id, ai.fecha, ai.comentario
+    ORDER BY ai.ain_id DESC
+    LIMIT ${limit};
+  `);
+  return rows.map((row) => ({
+    ...row,
+    ain_id: Number(row.ain_id),
+    lineas: Number(row.lineas || 0),
+    positivas: Number(row.positivas || 0),
+    negativas: Number(row.negativas || 0),
+    diferenciaUnidades: Number(row.diferenciaUnidades || 0),
+    diferenciaCosto: Number(row.diferenciaCosto || 0),
+  }));
 }
 
 async function getPurchaseContext(payload) {
@@ -664,6 +1242,12 @@ function enqueuePurchase(operation) {
   return result;
 }
 
+function enqueueInventory(operation) {
+  const result = inventoryQueue.then(operation, operation);
+  inventoryQueue = result.catch(() => undefined);
+  return result;
+}
+
 const server = createServer(async (request, response) => {
   setCors(response, request);
   if (request.method === "OPTIONS") {
@@ -679,8 +1263,21 @@ const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
     if (request.method === "GET" && url.pathname === "/health") {
-      const rows = await query("SELECT DATABASE() AS databaseName, NOW() AS serverTime;");
-      sendJson(response, 200, { ok: true, service: "csm-sicar-proveedores", database: rows[0]?.databaseName, serverTime: rows[0]?.serverTime, writeMode: "purchase-only" });
+      const rows = await query("SELECT DATABASE() AS databaseName, NOW() AS serverTime, (SELECT alias FROM nubecfg LIMIT 1) AS branchAlias;");
+      const inventoryTriggerEnabled = config.inventoryFirebase?.enabled === true;
+      sendJson(response, 200, {
+        ok: true,
+        service: "csm-sicar-operaciones",
+        database: rows[0]?.databaseName,
+        serverTime: rows[0]?.serverTime,
+        branchAlias: rows[0]?.branchAlias || "",
+        writeMode: inventoryTriggerEnabled ? "purchases-and-inventory-trigger" : "purchase-only",
+        writes: {
+          purchases: config.allowPurchases === true,
+          inventoryAdjustments: false,
+          inventoryTriggers: inventoryTriggerEnabled,
+        },
+      });
       return;
     }
     if (request.method === "GET" && url.pathname === "/catalogos/proveedores") {
@@ -705,6 +1302,60 @@ const server = createServer(async (request, response) => {
         suppliers,
         articles,
       });
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/inventarios/catalogo") {
+      const catalog = await getInventoryCatalog();
+      sendJson(response, 200, { ok: true, source: "sicar-mysql", ...catalog });
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/inventarios/solicitudes") {
+      const rows = await getInventoryFirestoreHistory(url.searchParams.get("limit"));
+      sendJson(response, 200, { ok: true, source: "inventario-sanmartin", rows });
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/inventarios/solicitud") {
+      const settings = getInventoryFirebaseSettings();
+      const sessionId = normalizeInventorySessionId(url.searchParams.get("sessionId"));
+      const relativePath = `branches/${settings.branchDocumentId}/sicarAdjustmentRequests/${sessionId}`;
+      const result = await getFirestoreDocument(relativePath);
+      if (!result) {
+        sendJson(response, 404, { ok: false, error: "No existe la solicitud de levantamiento." });
+        return;
+      }
+      sendJson(response, 200, { ok: true, source: "inventario-sanmartin", request: result });
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/inventarios/solicitar-ajuste") {
+      const body = await readBody(request, 2 * 1024 * 1024);
+      const result = await enqueueInventory(() => submitInventoryFirestoreSession(body));
+      sendJson(response, result.created ? 201 : 200, {
+        ok: true,
+        source: "inventario-sanmartin",
+        created: result.created,
+        alreadySubmitted: result.alreadySubmitted,
+        requiresRetry: result.requiresRetry,
+        request: result.request,
+      });
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/inventarios/reintentar-ajuste") {
+      const body = await readBody(request);
+      const result = await enqueueInventory(() => retryInventoryFirestoreRequest(body?.sessionId));
+      sendJson(response, 200, { ok: true, source: "inventario-sanmartin", request: result });
+      return;
+    }
+    if (request.method === "GET" && url.pathname === "/inventarios/historial") {
+      const rows = await getInventoryHistory(url.searchParams.get("limit"));
+      sendJson(response, 200, { ok: true, source: "sicar-mysql", rows });
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/inventarios/preview") {
+      sendJson(response, 410, { ok: false, error: "La vista previa directa fue reemplazada por el flujo Firestore del integrador." });
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/inventarios/aplicar") {
+      sendJson(response, 410, { ok: false, error: "La escritura directa en SICAR esta deshabilitada. Usa /inventarios/solicitar-ajuste." });
       return;
     }
     if (request.method === "GET" && url.pathname === "/compras/historial") {
@@ -745,7 +1396,7 @@ const server = createServer(async (request, response) => {
     sendJson(response, 404, { ok: false, error: "Endpoint no encontrado." });
   } catch (error) {
     console.error(new Date().toISOString(), error.message);
-    sendJson(response, 400, { ok: false, error: error.message || "No se pudo procesar la solicitud." });
+    sendJson(response, Number(error.statusCode) || 400, { ok: false, error: error.message || "No se pudo procesar la solicitud." });
   }
 });
 

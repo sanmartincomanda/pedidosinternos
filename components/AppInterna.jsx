@@ -25,8 +25,10 @@ import { IS_HANDHELD } from "@/lib/deviceProfile";
 import Cocina from "./Cocina";
 import Configuracion from "./Configuracion";
 import EstadoPedidos from "./EstadoPedidos";
+import ErpModulePanel from "./ErpModulePanel";
 import Formulario from "./Formulario";
 import Historial from "./Historial";
+import InventarioSucursal from "./InventarioSucursal";
 import PedidoVacuna from "./PedidoVacuna";
 import ProveedoresExternos from "./ProveedoresExternos";
 
@@ -142,6 +144,20 @@ const Icons = {
       <path d="M9 9h2v2H9zM14 9h2v2h-2zM9 14h2v2H9zM14 14h2v2h-2z" />
     </svg>
   ),
+  panel: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  ),
+  inventory: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M4 5h16v15H4z" />
+      <path d="M8 2h8v6H8zM8 12h8M8 16h5" />
+    </svg>
+  ),
 };
 
 const NAV_ITEMS = [
@@ -153,8 +169,10 @@ const NAV_ITEMS = [
 ];
 
 const BUSINESS_MODULES = [
+  { key: "panel", label: "Panel general", shortLabel: "Panel", icon: Icons.panel, accent: "#9ddd37" },
   { key: "internos", label: "Traspasos internos", shortLabel: "Internos", icon: Icons.internal, accent: "#16a36a" },
   { key: "proveedores", label: "Proveedores externos", shortLabel: "Proveedores", icon: Icons.external, accent: "#0ea5e9" },
+  { key: "inventario", label: "Inventario fisico", shortLabel: "Inventario", icon: Icons.inventory, accent: "#84cc16" },
 ];
 
 const INITIAL_CONFIG = {
@@ -365,7 +383,7 @@ function MobileNavButton({ item, active, onClick }) {
 export default function AppInterna() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState("formulario");
-  const [businessModule, setBusinessModule] = useState("internos");
+  const [businessModule, setBusinessModule] = useState("panel");
   const [pedidos, setPedidos] = useState([]);
   const [pedidoEditar, setPedidoEditar] = useState(null);
   const [config, setConfig] = useState(() => {
@@ -398,7 +416,7 @@ export default function AppInterna() {
     queueMicrotask(() => {
       if (!active) return;
       if (["Granada", "Nindiri"].includes(savedBranch)) setUser(savedBranch);
-      if (savedModule === "proveedores") setBusinessModule("proveedores");
+      if (BUSINESS_MODULES.some((item) => item.key === savedModule)) setBusinessModule(savedModule);
     });
     return () => {
       active = false;
@@ -579,7 +597,7 @@ export default function AppInterna() {
     setError("");
     setPassword("");
     setPedidoEditar(null);
-    setBusinessModule("internos");
+    setBusinessModule("panel");
     setView("formulario");
   };
 
@@ -593,13 +611,19 @@ export default function AppInterna() {
     setUser(null);
     setPassword("");
     setPedidoEditar(null);
-    setBusinessModule("internos");
+    setBusinessModule("panel");
     setView("formulario");
   };
 
   const navMeta = useMemo(() => {
+    if (businessModule === "panel") {
+      return { title: "Panel general", icon: Icons.panel };
+    }
     if (businessModule === "proveedores") {
       return { title: "Recibir de proveedor", icon: Icons.external };
+    }
+    if (businessModule === "inventario") {
+      return { title: "Inventario fisico", icon: Icons.inventory };
     }
 
     return NAV_ITEMS.find((item) => item.key === view) || {
@@ -635,8 +659,21 @@ export default function AppInterna() {
   };
 
   const renderCurrentView = () => {
+    if (businessModule === "panel") {
+      return (
+        <ErpModulePanel
+          user={user}
+          isOnline={isOnline}
+          summary={operationalSummary}
+          onOpen={setBusinessModule}
+        />
+      );
+    }
     if (businessModule === "proveedores") {
       return <ProveedoresExternos user={user} />;
+    }
+    if (businessModule === "inventario") {
+      return <InventarioSucursal user={user} />;
     }
 
     const commonPrinterSettings = config.impresion || INITIAL_CONFIG.impresion;
@@ -708,7 +745,7 @@ export default function AppInterna() {
               {IS_HANDHELD ? "CSM Hand Held" : "CSM Operaciones"}
             </h1>
             <div className="mt-3 text-sm font-semibold text-slate-300 sm:text-base">
-              Traspasos y proveedores
+              Traspasos, proveedores e inventario
             </div>
 
             <div className="mt-7 grid gap-3 sm:grid-cols-3">
@@ -843,7 +880,7 @@ export default function AppInterna() {
         </div>
 
         <div className="desktop-business-switch">
-          <div className="desktop-rail-caption">Operacion</div>
+          <div className="desktop-rail-caption">Modulos ERP</div>
           {BUSINESS_MODULES.map((item) => (
             <button
               key={item.key}
@@ -870,12 +907,28 @@ export default function AppInterna() {
               />
             ))}
           </nav>
-        ) : (
+        ) : businessModule === "proveedores" ? (
           <div className="desktop-external-note">
             <span>{Icons.external}</span>
             <div>
               <strong>Recepcion SICAR</strong>
               <small>Inventario y costo de compra</small>
+            </div>
+          </div>
+        ) : businessModule === "inventario" ? (
+          <div className="desktop-external-note">
+            <span>{Icons.inventory}</span>
+            <div>
+              <strong>Levantamiento fisico</strong>
+              <small>Conteo y ajuste controlado</small>
+            </div>
+          </div>
+        ) : (
+          <div className="desktop-external-note">
+            <span>{Icons.panel}</span>
+            <div>
+              <strong>Panel general</strong>
+              <small>Selecciona un modulo</small>
             </div>
           </div>
         )}
@@ -940,7 +993,7 @@ export default function AppInterna() {
         </header>
 
         <div className="px-3 pt-3 sm:px-6 xl:hidden">
-          <div className="mobile-business-switch grid grid-cols-2 gap-2 rounded-[1.35rem] border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur-xl">
+          <div className="mobile-business-switch grid grid-cols-2 gap-2 rounded-[1.35rem] border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur-xl sm:grid-cols-4">
             {BUSINESS_MODULES.map((item) => (
               <button
                 key={item.key}
@@ -971,7 +1024,7 @@ export default function AppInterna() {
         ) : null}
 
         <div className="app-shell">
-          <main className="app-route-shell page-enter" key={view}>{renderCurrentView()}</main>
+          <main className="app-route-shell page-enter" key={`${businessModule}:${view}`}>{renderCurrentView()}</main>
         </div>
       </section>
 

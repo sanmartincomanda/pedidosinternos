@@ -1,5 +1,7 @@
 # Servicio local SICAR - Proveedores externos
 
+La configuración del nuevo módulo de levantamiento físico está documentada en [INVENTARIOS-CSM.md](./INVENTARIOS-CSM.md).
+
 Este servicio es independiente de los workers de traspasos. No lee Firebase y no modifica sus tareas programadas.
 
 ## Alcance
@@ -16,6 +18,21 @@ Este servicio es independiente de los workers de traspasos. No lee Firebase y no
 - No guarda retenciones ni fotos dentro de SICAR.
 
 La escritura requiere `allowPurchases: true`. Mantener una `apiKey` privada para los equipos de la red local.
+
+## Levantamientos de inventario
+
+CSM Operaciones no aplica ajustes directamente en MySQL. El servicio guarda de forma atomica el levantamiento y su solicitud en el proyecto `inventario-sanmartin`:
+
+- `branches/CARNES SAN MARTIN GRANADA/levantamientosInventario/{sessionId}`
+- `branches/CARNES SAN MARTIN GRANADA/sicarAdjustmentRequests/{sessionId}`
+
+El documento de solicitud usa el mismo `sessionId`. El monitor existente procesa solamente `status = requested` y conserva su control anti-duplicado. Para activar el puente al actualizar el servidor:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Update-SicarPurchaseService.ps1 -EnableInventoryTriggers
+```
+
+La cuenta de servicio se copia al directorio protegido del servicio. No se entrega al navegador, APK ni instalador de escritorio. La ruta directa antigua `/inventarios/aplicar` no es utilizada por CSM Operaciones.
 
 ## Instalacion en Granada
 

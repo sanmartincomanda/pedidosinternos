@@ -2,7 +2,7 @@
 param(
     [string]$InstallDirectory = "C:\sicar-proveedores-api",
     [string]$MysqlExecutable = "C:\Program Files (x86)\SICAR-S-131AB\MySQL\MySQL Server 5.6\bin\mysql.exe",
-    [string]$MysqlHost = "127.0.0.1",
+    [string]$MysqlHost = "::1",
     [int]$MysqlPort = 3307,
     [string]$MysqlUser = "root",
     [string]$MysqlPassword = "",
@@ -10,7 +10,14 @@ param(
     [string]$ApiKey = "",
     [int]$CashRegisterId = 4,
     [int]$HistoryUserId = 1,
-    [switch]$EnablePurchases
+    [string]$InventoryFirebaseServiceAccount = "C:\Users\Microsoft Windows 11\Downloads\inventario-sanmartin-firebase-adminsdk-fbsvc-0eff49b1f7.json",
+    [string]$InventoryFirebaseProjectId = "inventario-sanmartin",
+    [string]$InventoryFirebaseBranchDocumentId = "CARNES SAN MARTIN GRANADA",
+    [string]$InventoryPayloadBranchAlias = "Granada",
+    [string]$InventoryRequestedByEmail = "operaciones@sanmartinsr.com",
+    [switch]$EnablePurchases,
+    [switch]$EnableInventoryAdjustments,
+    [switch]$EnableInventoryTriggers
 )
 
 $ErrorActionPreference = "Stop"
@@ -52,13 +59,26 @@ if ([string]::IsNullOrWhiteSpace($ApiKey)) {
 New-Item -ItemType Directory -Path $InstallDirectory -Force | Out-Null
 $installedServer = Join-Path $InstallDirectory "server.mjs"
 $installedConfig = Join-Path $InstallDirectory "config.local.json"
+$installedFirebaseAccount = Join-Path $InstallDirectory "inventory-firebase-service-account.json"
 Copy-Item -LiteralPath $sourceServer -Destination $installedServer -Force
+
+if ($EnableInventoryTriggers) {
+    if (-not (Test-Path -LiteralPath $InventoryFirebaseServiceAccount)) {
+        throw "No existe la cuenta de servicio Firebase: $InventoryFirebaseServiceAccount"
+    }
+    $firebaseAccount = Get-Content -LiteralPath $InventoryFirebaseServiceAccount -Raw | ConvertFrom-Json
+    if ([string]$firebaseAccount.project_id -ne $InventoryFirebaseProjectId) {
+        throw "La cuenta de servicio no corresponde al proyecto $InventoryFirebaseProjectId."
+    }
+    Copy-Item -LiteralPath $InventoryFirebaseServiceAccount -Destination $installedFirebaseAccount -Force
+}
 
 $settings = [ordered]@{
     host = "0.0.0.0"
     port = $Port
     apiKey = $ApiKey
     allowPurchases = [bool]$EnablePurchases
+    allowInventoryAdjustments = $false
     allowedOrigins = @("*")
     cacheSeconds = 60
     timeZone = "America/Managua"
@@ -74,6 +94,14 @@ $settings = [ordered]@{
         cashRegisterId = $CashRegisterId
         historyUserId = $HistoryUserId
     }
+    inventoryFirebase = [ordered]@{
+        enabled = [bool]$EnableInventoryTriggers
+        projectId = $InventoryFirebaseProjectId
+        serviceAccountPath = $installedFirebaseAccount
+        branchDocumentId = $InventoryFirebaseBranchDocumentId
+        payloadBranchAlias = $InventoryPayloadBranchAlias
+        requestedByEmail = $InventoryRequestedByEmail
+    }
 }
 $settings | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $installedConfig -Encoding UTF8
 
@@ -84,6 +112,9 @@ $administratorsSid = [System.Security.Principal.SecurityIdentifier]::new("S-1-5-
 $configAcl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($systemSid, [System.Security.AccessControl.FileSystemRights]::FullControl, [System.Security.AccessControl.AccessControlType]::Allow))
 $configAcl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($administratorsSid, [System.Security.AccessControl.FileSystemRights]::FullControl, [System.Security.AccessControl.AccessControlType]::Allow))
 Set-Acl -LiteralPath $installedConfig -AclObject $configAcl
+if ($EnableInventoryTriggers) {
+    Set-Acl -LiteralPath $installedFirebaseAccount -AclObject $configAcl
+}
 
 $action = New-ScheduledTaskAction `
     -Execute $nodeExecutable `
@@ -107,7 +138,7 @@ Register-ScheduledTask `
     -Trigger $trigger `
     -Principal $taskPrincipal `
     -Settings $taskSettings `
-    -Description "API local aislada para recibir compras de proveedores en SICAR." `
+    -Description "API local de CSM Operaciones para compras e inventarios SICAR." `
     -Force | Out-Null
 
 if (-not (Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction SilentlyContinue)) {
@@ -141,6 +172,8 @@ $localIps = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     TaskName = $taskName
     State = (Get-ScheduledTask -TaskName $taskName).State
     PurchasesEnabled = [bool]$EnablePurchases
+    InventoryAdjustmentsEnabled = $false
+    InventoryTriggersEnabled = [bool]$EnableInventoryTriggers
     LocalUrl = "http://127.0.0.1:$Port"
     TabletUrls = @($localIps | ForEach-Object { "http://$($_):$Port" }) -join ", "
     ApiKey = $ApiKey

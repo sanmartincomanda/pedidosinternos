@@ -2,6 +2,9 @@
 
 Aplicacion de escritorio y web para pedidos y traspasos internos entre Granada y Nindiri.
 
+La web productiva se publica en `https://traspasos.sanmartinsr.com`. El alias
+`https://traspaso.sanmartinsr.com` apunta al mismo sitio.
+
 ## Desarrollo web
 
 ```powershell
@@ -65,3 +68,12 @@ npm run firebase:deploy:notifications
 
 Firebase exige que el proyecto este en el plan Blaze para desplegar esta Cloud Function.
 Sin esa funcion, la app sigue operativa pero no puede garantizar avisos cuando esta completamente cerrada.
+
+## Inventario Granada
+
+El levantamiento de inventario se puede operar desde la web. El usuario inicia sesion con su cuenta de
+`inventario-sanmartin`; la app crea de forma atomica el levantamiento y el trigger Firestore usando el mismo
+`sessionId`. El monitor local de Granada sigue siendo el unico proceso que escribe el ajuste en SICAR.
+
+El catalogo se guarda en cache en cada dispositivo y solo se actualiza bajo demanda. La app no necesita el
+puerto HTTP local para enviar levantamientos, por lo que funciona desde el dominio HTTPS y fuera de la red local.

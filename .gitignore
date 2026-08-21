@@ -22,6 +22,7 @@
 /release/
 /android-apk/
 /android-signing/
+/catalog-backups/
 /android/local.properties
 /android/.gradle/
 /functions/node_modules/
@@ -46,6 +47,7 @@ yarn-error.log*
 
 # vercel
 .vercel
+.netlify
 
 # typescript
 *.tsbuildinfo

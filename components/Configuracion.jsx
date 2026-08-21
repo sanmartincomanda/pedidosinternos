@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
-import { off, onValue, ref, set } from "firebase/database";
+import { off, onValue, ref, update } from "firebase/database";
+import { getSicarOfflineCatalog } from "../lib/sicarPurchaseApi";
+import { saveProviderCatalog } from "../lib/providerCatalogStore";
 
 const Icons = {
   settings: (
@@ -145,6 +147,23 @@ function PersonCard({ name, accent, icon, onDelete }) {
   );
 }
 
+function normalizarProductosSicar(articulos = []) {
+  const productosPorClave = new Map();
+
+  articulos.forEach((articulo) => {
+    const clave = `${articulo?.clave || ""}`.trim().toUpperCase();
+    const nombre = `${articulo?.descripcion || articulo?.nombre || ""}`.trim().toUpperCase();
+    if (clave && nombre && !productosPorClave.has(clave)) {
+      productosPorClave.set(clave, { clave, nombre });
+    }
+  });
+
+  return [...productosPorClave.values()].sort(
+    (productoA, productoB) => productoA.nombre.localeCompare(productoB.nombre, "es", { sensitivity: "base" })
+      || productoA.clave.localeCompare(productoB.clave),
+  );
+}
+
 export default function Configuracion({ setConfig }) {
   const [activeTab, setActiveTab] = useState("cocina");
   const [nuevoNombre, setNuevoNombre] = useState("");
@@ -161,6 +180,8 @@ export default function Configuracion({ setConfig }) {
   const [mostrarPreview, setMostrarPreview] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [sincronizandoCatalogo, setSincronizandoCatalogo] = useState(false);
+  const [catalogoActualizadoEn, setCatalogoActualizadoEn] = useState("");
 
   const mostrarMensaje = (type, text, duration = 3200) => {
     setMensaje({ type, text });
@@ -180,6 +201,7 @@ export default function Configuracion({ setConfig }) {
           setCocinaLocal(data.personalCocina || []);
           setTransporteLocal(data.personalTransporte || []);
           setProductosCSV(data.productos || []);
+          setCatalogoActualizadoEn(data.catalogoActualizadoEn || data.ultimaActualizacion || "");
           setImpresionLocal({
             impresoraPredeterminada: data.impresion?.impresoraPredeterminada || "",
             impresionAutomaticaEnvio:
@@ -193,6 +215,7 @@ export default function Configuracion({ setConfig }) {
           setCocinaLocal([]);
           setTransporteLocal([]);
           setProductosCSV([]);
+          setCatalogoActualizadoEn("");
           setImpresionLocal({
             impresoraPredeterminada: "",
             impresionAutomaticaEnvio: true,
@@ -227,7 +250,7 @@ export default function Configuracion({ setConfig }) {
         ultimaActualizacion: new Date().toISOString(),
       };
 
-      await set(ref(db, "configuracion"), nuevaConfig);
+      await update(ref(db, "configuracion"), nuevaConfig);
       mostrarMensaje("success", "Configuracion guardada en Firebase.");
     } catch (error) {
       console.error("Error guardando:", error);
@@ -291,7 +314,7 @@ export default function Configuracion({ setConfig }) {
     reader.readAsText(file);
   };
 
-  const confirmarImportacion = () => {
+  const confirmarImportacion = async () => {
     const clavesExistentes = new Set(productosCSV.map((producto) => producto.clave));
     const nuevosProductos = previewCSV.filter((producto) => !clavesExistentes.has(producto.clave));
     const actualizados = previewCSV.filter((producto) => clavesExistentes.has(producto.clave));
@@ -301,18 +324,80 @@ export default function Configuracion({ setConfig }) {
       ...nuevosProductos,
     ].sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-    setProductosCSV(productosCombinados);
-    setMostrarPreview(false);
-    setPreviewCSV([]);
+    setGuardando(true);
 
-    if (nuevosProductos.length > 0 || actualizados.length > 0) {
+    try {
+      await update(ref(db, "configuracion"), {
+        productos: productosCombinados,
+        catalogoActualizadoEn: new Date().toISOString(),
+        ultimaActualizacion: new Date().toISOString(),
+      });
+      setProductosCSV(productosCombinados);
+      setMostrarPreview(false);
+      setPreviewCSV([]);
+
       mostrarMensaje(
         "success",
-        `Importacion completada: ${nuevosProductos.length} nuevos y ${actualizados.length} actualizados.`,
-        4000,
+        `Catalogo guardado en Firebase: ${nuevosProductos.length} nuevos y ${actualizados.length} actualizados.`,
+        5000,
       );
-    } else {
-      mostrarMensaje("info", "No hubo cambios porque todos los productos ya existian.", 4000);
+    } catch (error) {
+      console.error("Error importando catalogo:", error);
+      mostrarMensaje("error", `No se pudo guardar el catalogo: ${error.message}`, 5000);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const actualizarCatalogoDesdeSicar = async () => {
+    setSincronizandoCatalogo(true);
+
+    try {
+      const resultado = await getSicarOfflineCatalog();
+      const articulos = Array.isArray(resultado?.articles) ? resultado.articles : [];
+      const productosSicar = normalizarProductosSicar(articulos);
+
+      if (productosSicar.length === 0) {
+        throw new Error("SICAR no devolvio productos activos.");
+      }
+
+      const productosActuales = new Map(
+        productosCSV.map((producto) => [
+          `${producto?.clave || ""}`.trim().toUpperCase(),
+          `${producto?.nombre || ""}`.trim().toUpperCase(),
+        ]),
+      );
+      const productosNuevos = new Map(productosSicar.map((producto) => [producto.clave, producto.nombre]));
+      const agregados = [...productosNuevos.keys()].filter((clave) => !productosActuales.has(clave)).length;
+      const retirados = [...productosActuales.keys()].filter((clave) => clave && !productosNuevos.has(clave)).length;
+      const renombrados = [...productosNuevos.entries()].filter(
+        ([clave, nombre]) => productosActuales.has(clave) && productosActuales.get(clave) !== nombre,
+      ).length;
+      const actualizadoEn = resultado.generatedAt || new Date().toISOString();
+
+      await update(ref(db, "configuracion"), {
+        productos: productosSicar,
+        catalogoActualizadoEn: actualizadoEn,
+        ultimaActualizacion: new Date().toISOString(),
+      });
+      await saveProviderCatalog({
+        updatedAt: actualizadoEn,
+        suppliers: Array.isArray(resultado?.suppliers) ? resultado.suppliers : [],
+        articles: articulos,
+      });
+
+      setProductosCSV(productosSicar);
+      setCatalogoActualizadoEn(actualizadoEn);
+      mostrarMensaje(
+        "success",
+        `Catalogo actualizado desde SICAR: ${productosSicar.length} productos, ${agregados} nuevos, ${retirados} retirados y ${renombrados} renombrados.`,
+        6500,
+      );
+    } catch (error) {
+      console.error("Error actualizando catalogo desde SICAR:", error);
+      mostrarMensaje("error", `No se pudo actualizar desde SICAR: ${error.message}`, 6500);
+    } finally {
+      setSincronizandoCatalogo(false);
     }
   };
 
@@ -553,8 +638,24 @@ export default function Configuracion({ setConfig }) {
 
       {activeTab === "productos" ? (
         <section className="app-panel space-y-5 p-5 sm:p-6">
-          <div>
-            <h3 className="app-title text-2xl font-black text-slate-900">Catalogo</h3>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="app-title text-2xl font-black text-slate-900">Catalogo</h3>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                {catalogoActualizadoEn
+                  ? `Ultima actualizacion: ${new Date(catalogoActualizadoEn).toLocaleString("es-NI")}`
+                  : "Sin fecha de actualizacion."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={actualizarCatalogoDesdeSicar}
+              disabled={sincronizandoCatalogo || guardando}
+              className="app-button-primary sm:w-auto"
+            >
+              {Icons.sync}
+              {sincronizandoCatalogo ? "Actualizando..." : "Actualizar desde SICAR"}
+            </button>
           </div>
 
           {!mostrarPreview ? (
@@ -633,9 +734,9 @@ export default function Configuracion({ setConfig }) {
                 <button type="button" onClick={cancelarImportacion} className="app-button-ghost">
                   Cancelar
                 </button>
-                <button type="button" onClick={confirmarImportacion} className="app-button-primary">
-                  {Icons.save}
-                  Confirmar importacion
+                <button type="button" onClick={confirmarImportacion} disabled={guardando} className="app-button-primary">
+                  {guardando ? Icons.sync : Icons.save}
+                  {guardando ? "Guardando catalogo..." : "Confirmar y guardar"}
                 </button>
               </div>
             </div>

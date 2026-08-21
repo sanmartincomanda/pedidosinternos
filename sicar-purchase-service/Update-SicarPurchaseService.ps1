@@ -1,6 +1,13 @@
 [CmdletBinding()]
 param(
-    [string]$InstallDirectory = "C:\sicar-proveedores-api"
+    [string]$InstallDirectory = "C:\sicar-proveedores-api",
+    [switch]$EnableInventoryAdjustments,
+    [switch]$EnableInventoryTriggers,
+    [string]$InventoryFirebaseServiceAccount = "C:\Users\Microsoft Windows 11\Downloads\inventario-sanmartin-firebase-adminsdk-fbsvc-0eff49b1f7.json",
+    [string]$InventoryFirebaseProjectId = "inventario-sanmartin",
+    [string]$InventoryFirebaseBranchDocumentId = "CARNES SAN MARTIN GRANADA",
+    [string]$InventoryPayloadBranchAlias = "Granada",
+    [string]$InventoryRequestedByEmail = "operaciones@sanmartinsr.com"
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +22,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 $sourceServer = Join-Path $PSScriptRoot "server.mjs"
 $installedServer = Join-Path $InstallDirectory "server.mjs"
 $installedConfig = Join-Path $InstallDirectory "config.local.json"
+$installedFirebaseAccount = Join-Path $InstallDirectory "inventory-firebase-service-account.json"
 
 if (-not (Test-Path -LiteralPath $sourceServer)) {
     throw "No existe server.mjs junto al actualizador."
@@ -27,6 +35,45 @@ if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) 
 }
 
 $settings = Get-Content -LiteralPath $installedConfig -Raw | ConvertFrom-Json
+if (-not ($settings.PSObject.Properties.Name -contains "allowInventoryAdjustments")) {
+    $settings | Add-Member -NotePropertyName allowInventoryAdjustments -NotePropertyValue $false
+}
+if ($PSBoundParameters.ContainsKey("EnableInventoryAdjustments")) {
+    throw "La escritura directa fue retirada. Usa -EnableInventoryTriggers para reutilizar el integrador Firebase existente."
+}
+if (-not ($settings.PSObject.Properties.Name -contains "inventoryFirebase")) {
+    $settings | Add-Member -NotePropertyName inventoryFirebase -NotePropertyValue ([pscustomobject]@{
+        enabled = $false
+        projectId = $InventoryFirebaseProjectId
+        serviceAccountPath = $installedFirebaseAccount
+        branchDocumentId = $InventoryFirebaseBranchDocumentId
+        payloadBranchAlias = $InventoryPayloadBranchAlias
+        requestedByEmail = $InventoryRequestedByEmail
+    })
+}
+if ($EnableInventoryTriggers) {
+    if (-not (Test-Path -LiteralPath $InventoryFirebaseServiceAccount)) {
+        throw "No existe la cuenta de servicio Firebase: $InventoryFirebaseServiceAccount"
+    }
+    $firebaseAccount = Get-Content -LiteralPath $InventoryFirebaseServiceAccount -Raw | ConvertFrom-Json
+    if ([string]$firebaseAccount.project_id -ne $InventoryFirebaseProjectId) {
+        throw "La cuenta de servicio no corresponde al proyecto $InventoryFirebaseProjectId."
+    }
+    Copy-Item -LiteralPath $InventoryFirebaseServiceAccount -Destination $installedFirebaseAccount -Force
+    $settings.inventoryFirebase.enabled = $true
+    $settings.inventoryFirebase.projectId = $InventoryFirebaseProjectId
+    $settings.inventoryFirebase.serviceAccountPath = $installedFirebaseAccount
+    $settings.inventoryFirebase.branchDocumentId = $InventoryFirebaseBranchDocumentId
+    $settings.inventoryFirebase.payloadBranchAlias = $InventoryPayloadBranchAlias
+    $settings.inventoryFirebase.requestedByEmail = $InventoryRequestedByEmail
+    $settings.allowInventoryAdjustments = $false
+}
+$settings | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $installedConfig -Encoding UTF8
+
+if ($EnableInventoryTriggers) {
+    $configAcl = Get-Acl -LiteralPath $installedConfig
+    Set-Acl -LiteralPath $installedFirebaseAccount -AclObject $configAcl
+}
 Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 Copy-Item -LiteralPath $sourceServer -Destination $installedServer -Force
@@ -43,6 +90,8 @@ if (-not $health.ok) {
     TaskName = $taskName
     State = (Get-ScheduledTask -TaskName $taskName).State
     PurchasesEnabled = [bool]$settings.allowPurchases
+    InventoryAdjustmentsEnabled = [bool]$settings.allowInventoryAdjustments
+    InventoryTriggersEnabled = [bool]$settings.inventoryFirebase.enabled
     LocalUrl = "http://127.0.0.1:$($settings.port)"
     ApiKeyPreserved = $true
     MysqlCredentialsPreserved = $true

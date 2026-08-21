@@ -15,7 +15,7 @@ const jetBrainsMono = JetBrains_Mono({
 
 export const metadata = {
   title: "CSM Operaciones",
-  description: "Traspasos internos y recepcion de proveedores",
+  description: "Traspasos, proveedores e inventario de Carnes San Martin",
   applicationName: "CSM Operaciones",
 };
 
