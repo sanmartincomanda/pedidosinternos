@@ -75,7 +75,7 @@ function Icon({ name, className = "h-5 w-5" }) {
 }
 
 function InventoryAuthDialog({ currentUser, onClose, onLogin, onLogout }) {
-  const [email, setEmail] = useState(currentUser?.email || "");
+  const [login, setLogin] = useState(currentUser?.email || "granada");
   const [password, setPassword] = useState("");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
@@ -85,12 +85,12 @@ function InventoryAuthDialog({ currentUser, onClose, onLogin, onLogout }) {
     setWorking(true);
     setError("");
     try {
-      await onLogin(email, password);
+      await onLogin(login, password);
     } catch (loginError) {
       const code = `${loginError?.code || ""}`;
       setError(
         code.includes("invalid-credential") || code.includes("wrong-password")
-          ? "Correo o contraseña incorrectos."
+          ? "Usuario o contraseña incorrectos."
           : loginError?.message || "No fue posible iniciar sesión.",
       );
     } finally {
@@ -109,9 +109,9 @@ function InventoryAuthDialog({ currentUser, onClose, onLogin, onLogout }) {
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" className="app-button-secondary" onClick={onClose}>Cerrar</button><button type="button" className="app-button-primary bg-rose-600" onClick={onLogout}>Salir de inventario</button></div>
       </> : <>
-        <p className="mt-2 text-sm font-semibold text-slate-500">Usa el mismo correo y contraseña de la app de inventario.</p>
-        <label className="app-label mt-5">Correo</label>
-        <input className="app-input" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
+        <p className="mt-2 text-sm font-semibold text-slate-500">Acceso protegido para aplicar levantamientos en SICAR Granada.</p>
+        <label className="app-label mt-5">Usuario</label>
+        <input className="app-input" type="text" autoCapitalize="none" autoComplete="username" value={login} onChange={(event) => setLogin(event.target.value)} required />
         <label className="app-label mt-4">Contraseña</label>
         <input className="app-input" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
         {error ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</div> : null}
