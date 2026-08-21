@@ -7,6 +7,9 @@ param(
     [string]$MysqlUser = "root",
     [string]$MysqlPassword = "",
     [int]$Port = 43110,
+    [ValidateSet("127.0.0.1", "::1", "0.0.0.0")]
+    [string]$BindHost = "127.0.0.1",
+    [switch]$OpenFirewall,
     [string]$ApiKey = "",
     [int]$CashRegisterId = 4,
     [int]$HistoryUserId = 1,
@@ -85,7 +88,7 @@ if ($EnableInventoryTriggers) {
 }
 
 $settings = [ordered]@{
-    host = "0.0.0.0"
+    host = $BindHost
     port = $Port
     apiKey = $ApiKey
     authMode = "firebase-or-api-key"
@@ -166,7 +169,7 @@ Register-ScheduledTask `
     -Description "API local de CSM Operaciones para compras e inventarios SICAR." `
     -Force | Out-Null
 
-if (-not (Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction SilentlyContinue)) {
+if ($OpenFirewall -and -not (Get-NetFirewallRule -DisplayName $firewallRuleName -ErrorAction SilentlyContinue)) {
     New-NetFirewallRule `
         -DisplayName $firewallRuleName `
         -Direction Inbound `
@@ -200,7 +203,9 @@ $localIps = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     InventoryAdjustmentsEnabled = [bool]$EnableInventoryAdjustments
     InventoryTriggersEnabled = [bool]$EnableInventoryTriggers
     LocalUrl = "http://127.0.0.1:$Port"
-    TabletUrls = @($localIps | ForEach-Object { "http://$($_):$Port" }) -join ", "
+    TabletUrls = if ($OpenFirewall -and $BindHost -eq "0.0.0.0") { @($localIps | ForEach-Object { "http://$($_):$Port" }) -join ", " } else { "" }
+    BindHost = $BindHost
+    FirewallOpened = [bool]$OpenFirewall
     ApiKey = $ApiKey
     ExistingTransferWorkersChanged = $false
 } | Format-List
