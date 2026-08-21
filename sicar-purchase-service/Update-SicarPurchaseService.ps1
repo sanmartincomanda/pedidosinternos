@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$InstallDirectory = "C:\sicar-proveedores-api",
+    [switch]$EnablePurchases,
     [switch]$EnableInventoryAdjustments,
     [switch]$EnableInventoryTriggers,
     [string]$InventoryFirebaseServiceAccount = "C:\Users\Microsoft Windows 11\Downloads\inventario-sanmartin-firebase-adminsdk-fbsvc-0eff49b1f7.json",
@@ -42,6 +43,18 @@ if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) 
 }
 
 $settings = Get-Content -LiteralPath $installedConfig -Raw | ConvertFrom-Json
+$backupDirectory = Join-Path $InstallDirectory ("backups\" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
+Copy-Item -LiteralPath $installedConfig -Destination (Join-Path $backupDirectory "config.local.json") -Force
+if (Test-Path -LiteralPath $installedServer) {
+    Copy-Item -LiteralPath $installedServer -Destination (Join-Path $backupDirectory "server.mjs") -Force
+}
+if (-not ($settings.PSObject.Properties.Name -contains "allowPurchases")) {
+    $settings | Add-Member -NotePropertyName allowPurchases -NotePropertyValue $false
+}
+if ($PSBoundParameters.ContainsKey("EnablePurchases")) {
+    $settings.allowPurchases = [bool]$EnablePurchases
+}
 if (-not ($settings.PSObject.Properties.Name -contains "allowInventoryAdjustments")) {
     $settings | Add-Member -NotePropertyName allowInventoryAdjustments -NotePropertyValue $false
 }
@@ -71,6 +84,21 @@ if (-not ($settings.PSObject.Properties.Name -contains "firebaseAuth")) {
         allowedUids = @()
     })
 }
+else {
+    $settings.firebaseAuth.enabled = $true
+    $settings.firebaseAuth.projectId = $InventoryFirebaseProjectId
+    if (-not [string]::IsNullOrWhiteSpace($FirebaseWebApiKey)) {
+        $settings.firebaseAuth.webApiKey = $FirebaseWebApiKey
+    }
+    if (-not $settings.firebaseAuth.webApiKey) {
+        throw "Indica -FirebaseWebApiKey para habilitar autenticacion Firebase. No la guardes en Git."
+    }
+    $settings.firebaseAuth.allowedEmails = @($AllowedFirebaseEmails)
+    if (-not ($settings.firebaseAuth.PSObject.Properties.Name -contains "allowedUids")) {
+        $settings.firebaseAuth | Add-Member -NotePropertyName allowedUids -NotePropertyValue @()
+    }
+}
+$settings.authMode = "firebase-or-api-key"
 if ($PSBoundParameters.ContainsKey("AllowedOrigins")) {
     $settings.allowedOrigins = @($AllowedOrigins)
 }
@@ -125,6 +153,7 @@ if (-not $health.ok) {
     InventoryAdjustmentsEnabled = [bool]$settings.allowInventoryAdjustments
     InventoryTriggersEnabled = [bool]$settings.inventoryFirebase.enabled
     LocalUrl = "http://127.0.0.1:$($settings.port)"
+    BackupDirectory = $backupDirectory
     ApiKeyPreserved = $true
     MysqlCredentialsPreserved = $true
     ExistingTransferWorkersChanged = $false
