@@ -17,9 +17,26 @@ Este servicio es independiente de los workers de traspasos. No lee Firebase y no
 - No cambia impuestos ni precios de venta del articulo.
 - No guarda retenciones ni fotos dentro de SICAR.
 
-La escritura requiere `allowPurchases: true`. Mantener una `apiKey` privada para los equipos de la red local.
+La escritura de compras requiere `allowPurchases: true` y la de levantamientos
+requiere `allowInventoryAdjustments: true`. En la configuracion multiempresa la
+API valida el token Firebase, el identificador de empresa y el alias real de
+`nubecfg`; las credenciales MySQL nunca llegan al frontend.
+
+Cada servidor debe fijar `company.identifier`, `company.branchId`,
+`company.branchAlias` y `firebaseAuth.allowedEmails`. La URL elegida por el
+navegador no concede permisos ni puede cambiar la empresa del servicio.
 
 ## Levantamientos de inventario
+
+El flujo nuevo de API usa `GET /inventarios/catalogo`,
+`POST /inventarios/preview` y `POST /inventarios/aplicar`. La aplicacion envia
+la existencia observada en el preview y el servicio vuelve a bloquear y validar
+cada articulo antes de aplicar. El marcador `[CSM-INVENTARIO:{requestId}]`
+impide duplicar un ajuste.
+
+El puente Firestore siguiente se conserva para instalaciones anteriores y como
+ruta de migracion, pero no debe permanecer como segundo escritor del mismo
+levantamiento:
 
 CSM Operaciones no aplica ajustes directamente en MySQL. El servicio guarda de forma atomica el levantamiento y su solicitud en el proyecto `inventario-sanmartin`:
 

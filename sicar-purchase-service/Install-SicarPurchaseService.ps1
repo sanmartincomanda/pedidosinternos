@@ -10,6 +10,13 @@ param(
     [string]$ApiKey = "",
     [int]$CashRegisterId = 4,
     [int]$HistoryUserId = 1,
+    [string]$CompanyIdentifier = "granada",
+    [string]$CompanyBranchId = "CARNES SAN MARTIN GRANADA",
+    [string]$CompanyBranchAlias = "Granada",
+    [string[]]$CompanySicarAliases = @("CARNES SAN MARTIN GRANADA"),
+    [string[]]$AllowedFirebaseEmails = @("granada.inventory@sanmartinsr.com"),
+    [string]$FirebaseWebApiKey = "",
+    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com"),
     [string]$InventoryFirebaseServiceAccount = "C:\Users\Microsoft Windows 11\Downloads\inventario-sanmartin-firebase-adminsdk-fbsvc-0eff49b1f7.json",
     [string]$InventoryFirebaseProjectId = "inventario-sanmartin",
     [string]$InventoryFirebaseBranchDocumentId = "CARNES SAN MARTIN GRANADA",
@@ -56,6 +63,10 @@ if ([string]::IsNullOrWhiteSpace($ApiKey)) {
     $ApiKey = ([Guid]::NewGuid().ToString("N") + [Guid]::NewGuid().ToString("N"))
 }
 
+if ([string]::IsNullOrWhiteSpace($FirebaseWebApiKey)) {
+    throw "Indica -FirebaseWebApiKey con la clave web del proyecto Firebase inventario-sanmartin. No la guardes en Git."
+}
+
 New-Item -ItemType Directory -Path $InstallDirectory -Force | Out-Null
 $installedServer = Join-Path $InstallDirectory "server.mjs"
 $installedConfig = Join-Path $InstallDirectory "config.local.json"
@@ -77,9 +88,10 @@ $settings = [ordered]@{
     host = "0.0.0.0"
     port = $Port
     apiKey = $ApiKey
+    authMode = "firebase-or-api-key"
     allowPurchases = [bool]$EnablePurchases
-    allowInventoryAdjustments = $false
-    allowedOrigins = @("*")
+    allowInventoryAdjustments = [bool]$EnableInventoryAdjustments
+    allowedOrigins = @($AllowedOrigins)
     cacheSeconds = 60
     timeZone = "America/Managua"
     mysql = [ordered]@{
@@ -93,6 +105,19 @@ $settings = [ordered]@{
     sicar = [ordered]@{
         cashRegisterId = $CashRegisterId
         historyUserId = $HistoryUserId
+    }
+    company = [ordered]@{
+        identifier = $CompanyIdentifier
+        branchId = $CompanyBranchId
+        branchAlias = $CompanyBranchAlias
+        sicarAliases = @($CompanySicarAliases)
+    }
+    firebaseAuth = [ordered]@{
+        enabled = $true
+        projectId = $InventoryFirebaseProjectId
+        webApiKey = $FirebaseWebApiKey
+        allowedEmails = @($AllowedFirebaseEmails)
+        allowedUids = @()
     }
     inventoryFirebase = [ordered]@{
         enabled = [bool]$EnableInventoryTriggers
@@ -172,7 +197,7 @@ $localIps = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     TaskName = $taskName
     State = (Get-ScheduledTask -TaskName $taskName).State
     PurchasesEnabled = [bool]$EnablePurchases
-    InventoryAdjustmentsEnabled = $false
+    InventoryAdjustmentsEnabled = [bool]$EnableInventoryAdjustments
     InventoryTriggersEnabled = [bool]$EnableInventoryTriggers
     LocalUrl = "http://127.0.0.1:$Port"
     TabletUrls = @($localIps | ForEach-Object { "http://$($_):$Port" }) -join ", "

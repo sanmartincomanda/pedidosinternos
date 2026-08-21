@@ -7,7 +7,14 @@ param(
     [string]$InventoryFirebaseProjectId = "inventario-sanmartin",
     [string]$InventoryFirebaseBranchDocumentId = "CARNES SAN MARTIN GRANADA",
     [string]$InventoryPayloadBranchAlias = "Granada",
-    [string]$InventoryRequestedByEmail = "operaciones@sanmartinsr.com"
+    [string]$InventoryRequestedByEmail = "operaciones@sanmartinsr.com",
+    [string]$CompanyIdentifier = "granada",
+    [string]$CompanyBranchId = "CARNES SAN MARTIN GRANADA",
+    [string]$CompanyBranchAlias = "Granada",
+    [string[]]$CompanySicarAliases = @("CARNES SAN MARTIN GRANADA"),
+    [string[]]$AllowedFirebaseEmails = @("granada.inventory@sanmartinsr.com"),
+    [string]$FirebaseWebApiKey = "",
+    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com")
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,7 +46,33 @@ if (-not ($settings.PSObject.Properties.Name -contains "allowInventoryAdjustment
     $settings | Add-Member -NotePropertyName allowInventoryAdjustments -NotePropertyValue $false
 }
 if ($PSBoundParameters.ContainsKey("EnableInventoryAdjustments")) {
-    throw "La escritura directa fue retirada. Usa -EnableInventoryTriggers para reutilizar el integrador Firebase existente."
+    $settings.allowInventoryAdjustments = [bool]$EnableInventoryAdjustments
+}
+if (-not ($settings.PSObject.Properties.Name -contains "authMode")) {
+    $settings | Add-Member -NotePropertyName authMode -NotePropertyValue "firebase-or-api-key"
+}
+if (-not ($settings.PSObject.Properties.Name -contains "company")) {
+    $settings | Add-Member -NotePropertyName company -NotePropertyValue ([pscustomobject]@{
+        identifier = $CompanyIdentifier
+        branchId = $CompanyBranchId
+        branchAlias = $CompanyBranchAlias
+        sicarAliases = @($CompanySicarAliases)
+    })
+}
+if (-not ($settings.PSObject.Properties.Name -contains "firebaseAuth")) {
+    if ([string]::IsNullOrWhiteSpace($FirebaseWebApiKey)) {
+        throw "Indica -FirebaseWebApiKey para agregar autenticacion Firebase a esta instalacion. No la guardes en Git."
+    }
+    $settings | Add-Member -NotePropertyName firebaseAuth -NotePropertyValue ([pscustomobject]@{
+        enabled = $true
+        projectId = $InventoryFirebaseProjectId
+        webApiKey = $FirebaseWebApiKey
+        allowedEmails = @($AllowedFirebaseEmails)
+        allowedUids = @()
+    })
+}
+if ($PSBoundParameters.ContainsKey("AllowedOrigins")) {
+    $settings.allowedOrigins = @($AllowedOrigins)
 }
 if (-not ($settings.PSObject.Properties.Name -contains "inventoryFirebase")) {
     $settings | Add-Member -NotePropertyName inventoryFirebase -NotePropertyValue ([pscustomobject]@{
@@ -66,7 +99,6 @@ if ($EnableInventoryTriggers) {
     $settings.inventoryFirebase.branchDocumentId = $InventoryFirebaseBranchDocumentId
     $settings.inventoryFirebase.payloadBranchAlias = $InventoryPayloadBranchAlias
     $settings.inventoryFirebase.requestedByEmail = $InventoryRequestedByEmail
-    $settings.allowInventoryAdjustments = $false
 }
 $settings | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $installedConfig -Encoding UTF8
 

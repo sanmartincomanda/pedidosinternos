@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { createSign } from "node:crypto";
+import { createHash, createSign } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -22,6 +22,8 @@ const cache = new Map();
 let purchaseQueue = Promise.resolve();
 let inventoryQueue = Promise.resolve();
 let firebaseAccessToken = null;
+const firebaseIdentityCache = new Map();
+let validatedCompany = null;
 
 const INVENTORY_TRIGGER_EVENT = "inventory.adjustment.requested";
 const INVENTORY_SOURCE_APP = "inventario-sanmartin";
@@ -927,7 +929,17 @@ async function getInventoryContext(payload, { requireBaseline = false } = {}) {
     query("SELECT alias FROM nubecfg LIMIT 1;"),
   ]);
   const branchName = `${branchRows[0]?.alias || ""}`.trim();
-  if (!requestedBranch || !branchName || normalizeBranchToken(requestedBranch) !== normalizeBranchToken(branchName)) {
+  const configuredAliases = [
+    config.company?.branchId,
+    config.company?.branchAlias,
+    ...(config.company?.sicarAliases || []),
+  ].filter(Boolean).map(normalizeBranchToken);
+  if (
+    !requestedBranch
+    || !branchName
+    || !configuredAliases.includes(normalizeBranchToken(requestedBranch))
+    || !configuredAliases.includes(normalizeBranchToken(branchName))
+  ) {
     throw new Error(`La sucursal solicitada no corresponde a este servidor SICAR (${branchName || "sin alias"}).`);
   }
   if (rows.length !== articleIds.length) throw new Error("Uno o mas articulos ya no estan activos en SICAR.");
@@ -1209,12 +1221,21 @@ function buildPurchaseSql(context) {
 }
 
 function setCors(response, request) {
-  const origin = request.headers.origin || "*";
-  const allowedOrigins = Array.isArray(config.allowedOrigins) ? config.allowedOrigins : ["*"];
-  response.setHeader("Access-Control-Allow-Origin", allowedOrigins.includes("*") || allowedOrigins.includes(origin) ? origin : allowedOrigins[0]);
+  const origin = request.headers.origin || "";
+  const allowedOrigins = Array.isArray(config.allowedOrigins) ? config.allowedOrigins : [];
+  if (origin && (allowedOrigins.includes("*") || allowedOrigins.includes(origin))) {
+    response.setHeader("Access-Control-Allow-Origin", origin);
+  }
   response.setHeader("Vary", "Origin");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-CSM-API-Key");
+  response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-CSM-API-Key, X-CSM-Company");
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+}
+
+function originAllowed(request) {
+  const origin = `${request.headers.origin || ""}`.trim();
+  if (!origin) return true;
+  const allowedOrigins = Array.isArray(config.allowedOrigins) ? config.allowedOrigins : [];
+  return allowedOrigins.includes("*") || allowedOrigins.includes(origin);
 }
 
 function sendJson(response, status, payload) {
@@ -1231,9 +1252,83 @@ async function readBody(request, maximumLength = 262144) {
   return body ? JSON.parse(body) : {};
 }
 
-function authorized(request) {
+function apiKeyAuthorized(request) {
   const expected = `${config.apiKey || ""}`;
-  return !expected || request.headers["x-csm-api-key"] === expected;
+  return Boolean(expected) && request.headers["x-csm-api-key"] === expected;
+}
+
+function httpError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+async function verifyFirebaseIdentity(request) {
+  const settings = config.firebaseAuth || {};
+  if (settings.enabled !== true) return null;
+  const authorization = `${request.headers.authorization || ""}`;
+  const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
+  if (!token) throw httpError("Falta la sesion Firebase.", 401);
+
+  const cacheKey = createHash("sha256").update(token).digest("hex");
+  const cached = firebaseIdentityCache.get(cacheKey);
+  if (cached?.expiresAt > Date.now()) return cached.identity;
+  if (!settings.webApiKey || !settings.projectId) throw new Error("Firebase Auth no esta configurado en el servicio.");
+
+  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(settings.webApiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken: token }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  const firebaseUser = payload?.users?.[0];
+  if (!response.ok || !firebaseUser?.localId || !firebaseUser?.email) {
+    throw httpError("La sesion Firebase no es valida o ya vencio.", 401);
+  }
+  const email = `${firebaseUser.email}`.trim().toLowerCase();
+  const allowedEmails = (settings.allowedEmails || []).map((entry) => `${entry}`.trim().toLowerCase());
+  const allowedUids = (settings.allowedUids || []).map((entry) => `${entry}`.trim());
+  if ((allowedEmails.length && !allowedEmails.includes(email)) || (allowedUids.length && !allowedUids.includes(firebaseUser.localId))) {
+    throw httpError("El usuario no esta autorizado para este servidor SICAR.", 403);
+  }
+
+  const expectedCompany = `${config.company?.identifier || ""}`.trim().toLowerCase();
+  const requestedCompany = `${request.headers["x-csm-company"] || ""}`.trim().toLowerCase();
+  if (!expectedCompany || requestedCompany !== expectedCompany) {
+    throw httpError("La empresa solicitada no corresponde a este servidor.", 403);
+  }
+  const identity = { uid: firebaseUser.localId, email };
+  firebaseIdentityCache.set(cacheKey, { identity, expiresAt: Date.now() + 5 * 60 * 1000 });
+  return identity;
+}
+
+async function authorizeRequest(request) {
+  const mode = `${config.authMode || (config.firebaseAuth?.enabled ? "firebase-or-api-key" : "api-key")}`;
+  if (mode === "api-key") return apiKeyAuthorized(request) ? { type: "api-key" } : null;
+  try {
+    const identity = await verifyFirebaseIdentity(request);
+    if (identity) return { type: "firebase", ...identity };
+  } catch (error) {
+    if (mode === "firebase-only") throw error;
+  }
+  return mode === "firebase-or-api-key" && apiKeyAuthorized(request) ? { type: "api-key" } : null;
+}
+
+async function validateConfiguredCompany() {
+  if (validatedCompany?.expiresAt > Date.now()) return validatedCompany.value;
+  const company = config.company || {};
+  if (!company.identifier || !company.branchId) throw new Error("Falta fijar company.identifier y company.branchId en el servicio.");
+  const rows = await query("SELECT sucId, alias FROM nubecfg LIMIT 1;");
+  const actualAlias = `${rows[0]?.alias || ""}`.trim();
+  const allowedAliases = [company.branchId, company.branchAlias, ...(company.sicarAliases || [])]
+    .filter(Boolean)
+    .map(normalizeBranchToken);
+  if (!actualAlias || !allowedAliases.includes(normalizeBranchToken(actualAlias))) {
+    throw new Error(`El SICAR local (${actualAlias || "sin alias"}) no corresponde a ${company.branchId}.`);
+  }
+  const value = { identifier: company.identifier, branchId: company.branchId, alias: actualAlias };
+  validatedCompany = { value, expiresAt: Date.now() + 60_000 };
+  return value;
 }
 
 function enqueuePurchase(operation) {
@@ -1250,19 +1345,24 @@ function enqueueInventory(operation) {
 
 const server = createServer(async (request, response) => {
   setCors(response, request);
+  if (!originAllowed(request)) {
+    sendJson(response, 403, { ok: false, error: "Origen no autorizado." });
+    return;
+  }
   if (request.method === "OPTIONS") {
     response.writeHead(204);
     response.end();
     return;
   }
-  if (!authorized(request)) {
-    sendJson(response, 401, { ok: false, error: "Clave del servicio incorrecta." });
-    return;
-  }
-
   try {
+    const identity = await authorizeRequest(request);
+    if (!identity) {
+      sendJson(response, 401, { ok: false, error: "Sesion o clave del servicio incorrecta." });
+      return;
+    }
     const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
     if (request.method === "GET" && url.pathname === "/health") {
+      const company = await validateConfiguredCompany();
       const rows = await query("SELECT DATABASE() AS databaseName, NOW() AS serverTime, (SELECT alias FROM nubecfg LIMIT 1) AS branchAlias;");
       const inventoryTriggerEnabled = config.inventoryFirebase?.enabled === true;
       sendJson(response, 200, {
@@ -1271,22 +1371,30 @@ const server = createServer(async (request, response) => {
         database: rows[0]?.databaseName,
         serverTime: rows[0]?.serverTime,
         branchAlias: rows[0]?.branchAlias || "",
-        writeMode: inventoryTriggerEnabled ? "purchases-and-inventory-trigger" : "purchase-only",
+        company,
+        authenticatedAs: identity.type,
+        writeMode: config.allowInventoryAdjustments === true
+          ? "purchases-and-direct-inventory"
+          : inventoryTriggerEnabled
+            ? "purchases-and-inventory-trigger"
+            : "purchase-only",
         writes: {
           purchases: config.allowPurchases === true,
-          inventoryAdjustments: false,
+          inventoryAdjustments: config.allowInventoryAdjustments === true,
           inventoryTriggers: inventoryTriggerEnabled,
         },
       });
       return;
     }
     if (request.method === "GET" && url.pathname === "/catalogos/proveedores") {
+      await validateConfiguredCompany();
       const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 40)));
       const rows = filterRows(await getSuppliers(), url.searchParams.get("q") || "", limit, ["nombre", "alias", "rfc"]);
       sendJson(response, 200, { ok: true, source: "sicar-mysql", rows });
       return;
     }
     if (request.method === "GET" && url.pathname === "/catalogos/articulos") {
+      await validateConfiguredCompany();
       const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 40)));
       const supplierId = Math.max(0, Number(url.searchParams.get("pro_id") || 0));
       const rows = filterRows(await getArticles(supplierId), url.searchParams.get("q") || "", limit, ["clave", "descripcion"]);
@@ -1294,6 +1402,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (request.method === "GET" && url.pathname === "/catalogos/offline") {
+      await validateConfiguredCompany();
       const [suppliers, articles] = await Promise.all([getSuppliers(), getArticles(0)]);
       sendJson(response, 200, {
         ok: true,
@@ -1305,6 +1414,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (request.method === "GET" && url.pathname === "/inventarios/catalogo") {
+      await validateConfiguredCompany();
       const catalog = await getInventoryCatalog();
       sendJson(response, 200, { ok: true, source: "sicar-mysql", ...catalog });
       return;
@@ -1351,11 +1461,35 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (request.method === "POST" && url.pathname === "/inventarios/preview") {
-      sendJson(response, 410, { ok: false, error: "La vista previa directa fue reemplazada por el flujo Firestore del integrador." });
+      await validateConfiguredCompany();
+      const context = await getInventoryContext(await readBody(request), { requireBaseline: false });
+      sendJson(response, 200, { ok: true, source: "sicar-mysql", branch: context.branchName, lines: context.lines, summary: context.summary });
       return;
     }
     if (request.method === "POST" && url.pathname === "/inventarios/aplicar") {
-      sendJson(response, 410, { ok: false, error: "La escritura directa en SICAR esta deshabilitada. Usa /inventarios/solicitar-ajuste." });
+      await validateConfiguredCompany();
+      if (config.allowInventoryAdjustments !== true) throw new Error("La escritura de ajustes esta deshabilitada en la configuracion del servicio.");
+      const body = await readBody(request, 2 * 1024 * 1024);
+      const result = await enqueueInventory(async () => {
+        const context = await getInventoryContext(body, { requireBaseline: true });
+        const marker = inventoryMarker(context.requestId);
+        const duplicate = await query(`SELECT ain_id, fecha, comentario FROM ajusteinventario WHERE comentario LIKE ${sqlText(`%${marker}%`)} ORDER BY ain_id DESC LIMIT 1;`);
+        if (duplicate.length) {
+          return { duplicate: true, adjustment: { ain_id: Number(duplicate[0].ain_id), fecha: duplicate[0].fecha }, summary: context.summary };
+        }
+        if (!context.changedLines.length) {
+          return { duplicate: false, noChanges: true, adjustment: null, summary: context.summary };
+        }
+        const built = buildInventoryAdjustmentSql(context);
+        const rows = parseTsv(await runMysql(built.sql));
+        const applied = rows[rows.length - 1] || {};
+        if (Number(applied.stale_count || 0) !== 0 || Number(applied.ain_id || 0) <= 0) {
+          throw new Error("La existencia cambio durante la aplicacion. Actualiza y vuelve a revisar.");
+        }
+        cache.clear();
+        return { duplicate: false, noChanges: false, adjustment: { ain_id: Number(applied.ain_id) }, summary: context.summary };
+      });
+      sendJson(response, result.duplicate || result.noChanges ? 200 : 201, { ok: true, source: "sicar-mysql", ...result });
       return;
     }
     if (request.method === "GET" && url.pathname === "/compras/historial") {
@@ -1364,11 +1498,13 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (request.method === "POST" && url.pathname === "/compras/preview") {
+      await validateConfiguredCompany();
       const context = await getPurchaseContext(await readBody(request));
       sendJson(response, 200, { ok: true, supplier: context.supplier, items: context.items, summary: context.summary, payment: context.payment });
       return;
     }
     if (request.method === "POST" && url.pathname === "/compras/recibir") {
+      await validateConfiguredCompany();
       if (config.allowPurchases !== true) throw new Error("La escritura de compras esta deshabilitada en la configuracion del servicio.");
       const body = await readBody(request, 12 * 1024 * 1024);
       const result = await enqueuePurchase(async () => {

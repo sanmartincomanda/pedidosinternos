@@ -2,9 +2,10 @@
   "host": "0.0.0.0",
   "port": 43110,
   "apiKey": "CAMBIAR-POR-UNA-CLAVE-LARGA",
+  "authMode": "firebase-only",
   "allowPurchases": false,
   "allowInventoryAdjustments": false,
-  "allowedOrigins": ["*"],
+  "allowedOrigins": ["https://traspasos.sanmartinsr.com"],
   "cacheSeconds": 60,
   "timeZone": "America/Managua",
   "mysql": {
@@ -18,6 +19,19 @@
   "sicar": {
     "cashRegisterId": 4,
     "historyUserId": 1
+  },
+  "company": {
+    "identifier": "amparito",
+    "branchId": "CARNES AMPARITO",
+    "branchAlias": "Carnes Amparito",
+    "sicarAliases": ["CARNES AMPARITO"]
+  },
+  "firebaseAuth": {
+    "enabled": true,
+    "projectId": "inventario-sanmartin",
+    "webApiKey": "CONFIGURAR-LOCALMENTE",
+    "allowedEmails": ["carnesamparito@carnesamparito.com"],
+    "allowedUids": []
   },
   "inventoryFirebase": {
     "enabled": false,
