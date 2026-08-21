@@ -4,11 +4,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
 import { onValue, ref } from "firebase/database";
 import {
-  authenticateBranch,
   getBranchDisplayName,
   getSelectableBranches,
   isSameBranch,
 } from "@/lib/branchUtils";
+import { companyCanUseModule } from "@/lib/companyProfiles";
+import { loginOperations, logoutOperations, observeOperationsSession } from "@/lib/operationsAuth";
+import { setSicarApiCompanyContext } from "@/lib/sicarPurchaseApi";
+import { setProviderCatalogScope } from "@/lib/providerCatalogStore";
+import { setProviderDraftScope } from "@/lib/providerDraftStore";
 import {
   getPedidoCreationTimestamp,
   getPedidoItems,
@@ -381,7 +385,10 @@ function MobileNavButton({ item, active, onClick }) {
 }
 
 export default function AppInterna() {
-  const [user, setUser] = useState(null);
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const user = session?.company?.legacyBranchId || null;
+  const companyContext = session?.company || null;
   const [view, setView] = useState("formulario");
   const [businessModule, setBusinessModule] = useState("panel");
   const [pedidos, setPedidos] = useState([]);
@@ -410,18 +417,22 @@ export default function AppInterna() {
   const previousOrderStatusesRef = useRef(null);
 
   useEffect(() => {
-    const savedBranch = window.localStorage.getItem("csmDesktopBranch");
     const savedModule = window.localStorage.getItem("csmBusinessModule");
-    let active = true;
-    queueMicrotask(() => {
-      if (!active) return;
-      if (["Granada", "Nindiri"].includes(savedBranch)) setUser(savedBranch);
-      if (BUSINESS_MODULES.some((item) => item.key === savedModule)) setBusinessModule(savedModule);
+    if (BUSINESS_MODULES.some((item) => item.key === savedModule)) setBusinessModule(savedModule);
+    return observeOperationsSession(({ session: nextSession, error: sessionError }) => {
+      setSession(nextSession);
+      setAuthLoading(false);
+      if (sessionError) setError(sessionError.message || "No fue posible validar tu empresa.");
     });
-    return () => {
-      active = false;
-    };
   }, []);
+
+  useEffect(() => {
+    setSicarApiCompanyContext(companyContext);
+    setProviderCatalogScope(companyContext?.identificador);
+    setProviderDraftScope(companyContext?.identificador);
+    if (!companyContext) return;
+    if (businessModule !== "panel" && !companyCanUseModule(companyContext, businessModule)) setBusinessModule("panel");
+  }, [businessModule, companyContext]);
 
   useEffect(() => {
     const desktopMode = Boolean(window.desktopAPI?.isDesktop);
@@ -465,7 +476,7 @@ export default function AppInterna() {
   }, []);
 
   useEffect(() => {
-    if (!user || !isNativeAndroidApp()) return undefined;
+    if (!user || !companyContext?.internalTransfers || !isNativeAndroidApp()) return undefined;
 
     let disposed = false;
     let cleanup = stopMobileNotificationListeners;
@@ -497,7 +508,7 @@ export default function AppInterna() {
       disposed = true;
       cleanup();
     };
-  }, [user]);
+  }, [companyContext?.internalTransfers, user]);
 
   useEffect(() => {
     localStorage.setItem("appConfig", JSON.stringify(config));
@@ -508,6 +519,7 @@ export default function AppInterna() {
   }, [businessModule]);
 
   useEffect(() => {
+    if (!companyContext?.internalTransfers) return undefined;
     const configRef = ref(db, "configuracion");
 
     const unsubscribe = onValue(
@@ -542,10 +554,10 @@ export default function AppInterna() {
         unsubscribe();
       }
     };
-  }, []);
+  }, [companyContext?.internalTransfers]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !companyContext?.internalTransfers) return;
 
     const pedidosRef = ref(db, "pedidos_internos");
     const unsubscribe = onValue(pedidosRef, (snapshot) => {
@@ -578,37 +590,37 @@ export default function AppInterna() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [companyContext?.internalTransfers, user]);
 
-  const handleLogin = (event) => {
+  const handleLogin = async (event) => {
     event.preventDefault();
-
-    const found = authenticateBranch(username, password);
-
-    if (!found) {
-      setError("Usuario o contrasena incorrectos.");
-      return;
-    }
-
-    window.localStorage.setItem("csmDesktopBranch", found.id);
-    previousOrderStatusesRef.current = null;
-    setOperationalAlerts([]);
-    setUser(found.id);
+    setAuthLoading(true);
     setError("");
-    setPassword("");
-    setPedidoEditar(null);
-    setBusinessModule("panel");
-    setView("formulario");
+    try {
+      const nextSession = await loginOperations(username, password);
+      setSession(nextSession);
+      previousOrderStatusesRef.current = null;
+      setOperationalAlerts([]);
+      setPassword("");
+      setPedidoEditar(null);
+      setBusinessModule("panel");
+      setView("formulario");
+    } catch (loginError) {
+      const code = `${loginError?.code || ""}`;
+      setError(code.includes("invalid-credential") ? "Usuario o contrasena incorrectos." : loginError.message || "No fue posible iniciar sesion.");
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     deactivateMobileNotifications().catch((notificationError) => {
       console.error("No se pudo desactivar este telefono:", notificationError);
     });
-    window.localStorage.removeItem("csmDesktopBranch");
+    await logoutOperations().catch(() => undefined);
     previousOrderStatusesRef.current = null;
     setOperationalAlerts([]);
-    setUser(null);
+    setSession(null);
     setPassword("");
     setPedidoEditar(null);
     setBusinessModule("panel");
@@ -645,6 +657,11 @@ export default function AppInterna() {
     return { active, preparation, inTransit };
   }, [pedidos]);
 
+  const availableBusinessModules = useMemo(
+    () => BUSINESS_MODULES.filter((item) => item.key === "panel" || companyCanUseModule(companyContext, item.key)),
+    [companyContext],
+  );
+
   const activeOperationalAlert = operationalAlerts[0] || null;
   const closeOperationalAlert = () => {
     markAlertReviewed(user, activeOperationalAlert?.key);
@@ -663,17 +680,21 @@ export default function AppInterna() {
       return (
         <ErpModulePanel
           user={user}
+          companyContext={companyContext}
           isOnline={isOnline}
           summary={operationalSummary}
           onOpen={setBusinessModule}
         />
       );
     }
+    if (!companyCanUseModule(companyContext, businessModule)) {
+      return null;
+    }
     if (businessModule === "proveedores") {
-      return <ProveedoresExternos user={user} />;
+      return <ProveedoresExternos user={companyContext?.empresa || user} companyContext={companyContext} />;
     }
     if (businessModule === "inventario") {
-      return <InventarioSucursal user={user} />;
+      return <InventarioSucursal user={user} companyContext={companyContext} />;
     }
 
     const commonPrinterSettings = config.impresion || INITIAL_CONFIG.impresion;
@@ -733,6 +754,10 @@ export default function AppInterna() {
     }
   };
 
+  if (authLoading && !user) {
+    return <div className="login-shell grid min-h-screen place-items-center text-sm font-black text-white">Validando sesion...</div>;
+  }
+
   if (!user) {
     return (
       <div className={`login-shell flex items-center px-4 py-6 ${IS_HANDHELD ? "handheld-app" : ""}`}>
@@ -765,9 +790,9 @@ export default function AppInterna() {
 
             <div className="mt-7 grid gap-3">
               {[
-                "Serie A - Granada",
-                "Serie B - Nindiri",
-                "Costo total reflejado en historial y requisa",
+                "Carnes San Martin Granada",
+                "Carnes Amparito",
+                "Carnes San Martin Masaya",
               ].map((item) => (
                 <div
                   key={item}
@@ -787,13 +812,13 @@ export default function AppInterna() {
                 </div>
                 <div>
                   <div className="app-title text-3xl font-black text-slate-950">Acceso</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-500">Sucursal</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-500">Cuenta de empresa</div>
                 </div>
               </div>
 
               <form className="space-y-5" onSubmit={handleLogin}>
                 <div>
-                  <label className="app-label">Sucursal</label>
+                  <label className="app-label">Usuario</label>
                   <div className="relative">
                     <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                       {Icons.user}
@@ -802,7 +827,7 @@ export default function AppInterna() {
                       type="text"
                       value={username}
                       onChange={(event) => setUsername(event.target.value)}
-                      placeholder="Granada o Nindiri"
+                      placeholder="Usuario o correo"
                       className="app-input pl-12"
                     />
                   </div>
@@ -837,17 +862,17 @@ export default function AppInterna() {
                   </div>
                 ) : null}
 
-                <button type="submit" className="app-button-primary w-full text-base">
-                  Entrar
+                <button type="submit" className="app-button-primary w-full text-base" disabled={authLoading}>
+                  {authLoading ? "Validando..." : "Entrar"}
                 </button>
               </form>
 
               <div className="mt-6 grid gap-2 sm:grid-cols-2">
                 <div className="rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                  Granada / Serie A
+                  Granada
                 </div>
                 <div className="rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                  Nindiri / Serie B
+                  Amparito y Masaya
                 </div>
               </div>
             </div>
@@ -876,12 +901,12 @@ export default function AppInterna() {
             </div>
             <span className={`desktop-live-dot ${isOnline ? "is-online" : "is-offline"}`} />
           </div>
-          <div className="desktop-live-branch">{getBranchDisplayName(user)}</div>
+          <div className="desktop-live-branch">{companyContext?.empresa || getBranchDisplayName(user)}</div>
         </div>
 
         <div className="desktop-business-switch">
           <div className="desktop-rail-caption">Modulos ERP</div>
-          {BUSINESS_MODULES.map((item) => (
+          {availableBusinessModules.map((item) => (
             <button
               key={item.key}
               type="button"
@@ -967,7 +992,7 @@ export default function AppInterna() {
               {isOnline ? "Sincronizado" : "Sin conexion"}
             </div>
             <div className="app-chip hidden lg:inline-flex">{Icons.calendar}{fechaActual}</div>
-            <div className="app-chip hidden sm:inline-flex">{Icons.user}{getBranchDisplayName(user)}</div>
+            <div className="app-chip hidden sm:inline-flex">{Icons.user}{companyContext?.empresa || getBranchDisplayName(user)}</div>
             <button
               type="button"
               onClick={() => {
@@ -994,7 +1019,7 @@ export default function AppInterna() {
 
         <div className="px-3 pt-3 sm:px-6 xl:hidden">
           <div className="mobile-business-switch grid grid-cols-2 gap-2 rounded-[1.35rem] border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur-xl sm:grid-cols-4">
-            {BUSINESS_MODULES.map((item) => (
+            {availableBusinessModules.map((item) => (
               <button
                 key={item.key}
                 type="button"

@@ -3,20 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   checkSicarInventoryApi,
-  getInventoryAdjustmentRequest,
   getInventoryAdjustmentRequests,
-  getInventoryAuthUser,
   getSicarInventoryCatalog,
-  loginInventoryUser,
-  logoutInventoryUser,
-  observeInventoryAuth,
-  retryInventoryAdjustmentRequest,
+  previewInventoryAdjustmentRequest,
   submitInventoryAdjustmentRequest,
 } from "@/lib/sicarInventoryApi";
 
 const numberFormat = new Intl.NumberFormat("es-NI", { minimumFractionDigits: 0, maximumFractionDigits: 4 });
-const ACTIVE_STATUSES = new Set(["requested", "processing"]);
-const SUCCESS_STATUSES = new Set(["done", "duplicate"]);
 
 function normalizeText(value = "") {
   return `${value}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -24,6 +17,8 @@ function normalizeText(value = "") {
 
 function branchToken(value = "") {
   const normalized = normalizeText(value);
+  if (normalized.includes("amparito")) return "amparito";
+  if (normalized.includes("masaya")) return "masaya";
   if (normalized.includes("nindiri")) return "nindiri";
   if (normalized.includes("granada")) return "granada";
   return normalized;
@@ -74,53 +69,6 @@ function Icon({ name, className = "h-5 w-5" }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
-function InventoryAuthDialog({ currentUser, onClose, onLogin, onLogout }) {
-  const [login, setLogin] = useState(currentUser?.email || "granada");
-  const [password, setPassword] = useState("");
-  const [working, setWorking] = useState(false);
-  const [error, setError] = useState("");
-
-  async function submit(event) {
-    event.preventDefault();
-    setWorking(true);
-    setError("");
-    try {
-      await onLogin(login, password);
-    } catch (loginError) {
-      const code = `${loginError?.code || ""}`;
-      setError(
-        code.includes("invalid-credential") || code.includes("wrong-password")
-          ? "Usuario o contraseña incorrectos."
-          : loginError?.message || "No fue posible iniciar sesión.",
-      );
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  return <div className="app-modal z-[110] px-4" role="dialog" aria-modal="true">
-    <form className="app-modal-panel w-full max-w-lg p-5 sm:p-6" onSubmit={submit}>
-      <div className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-600">Inventario protegido</div>
-      <h2 className="mt-2 text-2xl font-black text-slate-950">Acceso al integrador</h2>
-      {currentUser ? <>
-        <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
-          <div className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-600">Sesión activa</div>
-          <div className="mt-1 break-all text-sm font-black text-emerald-950">{currentUser.email}</div>
-        </div>
-        <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" className="app-button-secondary" onClick={onClose}>Cerrar</button><button type="button" className="app-button-primary bg-rose-600" onClick={onLogout}>Salir de inventario</button></div>
-      </> : <>
-        <p className="mt-2 text-sm font-semibold text-slate-500">Acceso protegido para aplicar levantamientos en SICAR Granada.</p>
-        <label className="app-label mt-5">Usuario</label>
-        <input className="app-input" type="text" autoCapitalize="none" autoComplete="username" value={login} onChange={(event) => setLogin(event.target.value)} required />
-        <label className="app-label mt-4">Contraseña</label>
-        <input className="app-input" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-        {error ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</div> : null}
-        <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" className="app-button-secondary" onClick={onClose}>Cancelar</button><button type="submit" className="app-button-primary" disabled={working}>{working ? "Validando..." : "Entrar"}</button></div>
-      </>}
-    </form>
-  </div>;
-}
-
 function WeightsDialog({ line, onClose, onSave }) {
   const [weights, setWeights] = useState(line.pesos || []);
   const [value, setValue] = useState("");
@@ -153,8 +101,8 @@ function statusMeta(status) {
   })[`${status || "requested"}`] || [`${status}`, "border-slate-200 bg-slate-50 text-slate-600"];
 }
 
-export default function InventarioSucursal({ user }) {
-  const draftKey = `csmInventoryFirestoreDraft:${branchToken(user) || "branch"}`;
+export default function InventarioSucursal({ user, companyContext }) {
+  const draftKey = `csmInventoryApiDraft:${companyContext?.identificador || branchToken(user) || "branch"}`;
   const initialDraft = useRef(null);
   if (initialDraft.current === null && typeof window !== "undefined") {
     try { initialDraft.current = JSON.parse(window.localStorage.getItem(draftKey) || "null"); } catch { initialDraft.current = null; }
@@ -179,22 +127,21 @@ export default function InventarioSucursal({ user }) {
   const [message, setMessage] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [weightsLineId, setWeightsLineId] = useState(null);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [authReady, setAuthReady] = useState(false);
-  const [inventoryUser, setInventoryUser] = useState(getInventoryAuthUser());
-  const [submittedRequest, setSubmittedRequest] = useState(null);
+  const [serverPreview, setServerPreview] = useState(null);
 
-  const connectionMismatch = branch?.alias && branchToken(branch.alias) !== branchToken(user);
-  const unsupportedBranch = branchToken(user) !== "granada";
-  const triggerEnabled = Boolean(inventoryUser) && health?.writes?.inventoryTriggers === true;
+  const connectionMismatch = Boolean(
+    health?.company?.identifier
+    && health.company.identifier !== companyContext?.identificador,
+  );
+  const writeEnabled = health?.writes?.inventoryAdjustments === true;
 
-  async function loadData(forceCatalog = false, authenticated = Boolean(getInventoryAuthUser())) {
+  async function loadData() {
     setLoading(true);
     setMessage(null);
     const [healthResult, catalogResult, historyResult] = await Promise.allSettled([
       checkSicarInventoryApi(),
-      getSicarInventoryCatalog({ force: forceCatalog }),
-      authenticated ? getInventoryAdjustmentRequests(100) : Promise.resolve({ rows: [] }),
+      getSicarInventoryCatalog(),
+      getInventoryAdjustmentRequests(100),
     ]);
     if (healthResult.status === "fulfilled") setHealth(healthResult.value);
     if (catalogResult.status === "fulfilled") { setBranch(catalogResult.value.branch); setCatalog(catalogResult.value.articles || []); }
@@ -204,11 +151,7 @@ export default function InventarioSucursal({ user }) {
     setLoading(false);
   }
 
-  useEffect(() => observeInventoryAuth((nextUser) => {
-    setInventoryUser(nextUser);
-    setAuthReady(true);
-    loadData(false, Boolean(nextUser));
-  }), []);
+  useEffect(() => { loadData(); }, []);
   useEffect(() => {
     const close = (event) => { if (!searchRoot.current?.contains(event.target)) setShowResults(false); };
     document.addEventListener("pointerdown", close);
@@ -217,20 +160,6 @@ export default function InventarioSucursal({ user }) {
   useEffect(() => {
     window.localStorage.setItem(draftKey, JSON.stringify({ identity: identity.current, date, zone, performedBy, supervisedBy, notes, lines, updatedAt: new Date().toISOString() }));
   }, [date, draftKey, lines, notes, performedBy, supervisedBy, zone]);
-  useEffect(() => {
-    if (!submittedRequest?.sessionId || !ACTIVE_STATUSES.has(`${submittedRequest.status}`)) return undefined;
-    let disposed = false;
-    const timer = window.setInterval(async () => {
-      try {
-        const result = await getInventoryAdjustmentRequest(submittedRequest.sessionId);
-        if (disposed) return;
-        setSubmittedRequest(result.request);
-        setHistory((current) => [result.request, ...current.filter((item) => item.sessionId !== result.request.sessionId)]);
-        if (SUCCESS_STATUSES.has(`${result.request.status}`)) setMessage({ type: "success", text: result.request.message || "Ajuste aplicado en SICAR." });
-      } catch (error) { if (!disposed) setMessage({ type: "error", text: error.message }); }
-    }, 10000);
-    return () => { disposed = true; window.clearInterval(timer); };
-  }, [submittedRequest?.sessionId, submittedRequest?.status]);
 
   const selectedKeys = useMemo(() => new Set(lines.map((line) => `${line.clave}`)), [lines]);
   const results = useMemo(() => !query.trim() ? [] : catalog.map((article) => ({ article, score: scoreArticle(article, query) })).filter((entry) => entry.score !== null && !selectedKeys.has(`${entry.article.clave}`)).sort((left, right) => left.score - right.score || left.article.descripcion.localeCompare(right.article.descripcion)).slice(0, 30).map((entry) => entry.article), [catalog, query, selectedKeys]);
@@ -254,40 +183,68 @@ export default function InventarioSucursal({ user }) {
     if (!force && lines.length > 0 && !window.confirm("¿Descartar el levantamiento actual?")) return;
     identity.current = newIdentity(); setLines([]); setDate(localDate()); setZone("Bodega principal"); setPerformedBy(""); setSupervisedBy(""); setNotes(""); setPreviewOpen(false); window.localStorage.removeItem(draftKey);
   }
+  function buildAdjustmentPayload() {
+    return {
+      sessionId: identity.current.sessionId,
+      folio: identity.current.folio,
+      branchId: companyContext?.branchId,
+      branchAlias: companyContext?.branchAlias,
+      fecha: date,
+      zona: zone,
+      realizadoPor: performedBy,
+      supervisadoPor: supervisedBy,
+      observaciones: notes,
+      items: lines
+        .filter((line) => line.countedExistence !== "" && Number.isFinite(Number(line.countedExistence)))
+        .map((line) => ({
+          articleId: line.articleId,
+          sku: line.clave,
+          nombre: line.descripcion,
+          unidad: line.unidad,
+          cantidadContada: Number(line.countedExistence),
+          expectedExistence: Number(line.currentExistence),
+        })),
+    };
+  }
+  async function preparePreview() {
+    if (connectionMismatch || !writeEnabled) return;
+    if (!performedBy.trim() || !supervisedBy.trim()) {
+      setMessage({ type: "error", text: "Indica quién realizó y quién supervisó el levantamiento." });
+      return;
+    }
+    setWorking(true);
+    setMessage(null);
+    try {
+      const preview = await previewInventoryAdjustmentRequest(buildAdjustmentPayload());
+      setServerPreview(preview);
+      setPreviewOpen(true);
+    } catch (error) {
+      setMessage({ type: "error", text: error.message });
+    } finally {
+      setWorking(false);
+    }
+  }
   async function submitAdjustment() {
-    if (unsupportedBranch || connectionMismatch || !triggerEnabled) return;
+    if (connectionMismatch || !writeEnabled || !serverPreview) return;
     if (!performedBy.trim() || !supervisedBy.trim()) { setMessage({ type: "error", text: "Indica quién realizó y quién supervisó el levantamiento." }); setPreviewOpen(false); return; }
     setWorking(true); setMessage(null);
     try {
-      const result = await submitInventoryAdjustmentRequest({
-        sessionId: identity.current.sessionId, folio: identity.current.folio, branchId: user, fecha: date, zona: zone,
-        proveedor: "Interno", realizadoPor: performedBy, supervisadoPor: supervisedBy,
-        firmaRealizadoPor: performedBy.slice(0, 1).toUpperCase(), firmaSupervisadoPor: supervisedBy.slice(0, 1).toUpperCase(), observaciones: notes,
-        requestedBy: { uid: inventoryUser?.uid || "", email: inventoryUser?.email || "", label: performedBy },
-        items: lines.filter((line) => line.countedExistence !== "" && Number.isFinite(Number(line.countedExistence))).map((line) => ({ sku: line.clave, nombre: line.descripcion, unidad: line.unidad, cantidadContada: Number(line.countedExistence), cajas: line.pesos.length || line.cajas || 0, pesos: line.pesos, zona: line.zona || zone })),
-      });
-      setSubmittedRequest(result.request);
+      const result = await submitInventoryAdjustmentRequest(buildAdjustmentPayload(), serverPreview);
       setHistory((current) => [result.request, ...current.filter((item) => item.sessionId !== result.request.sessionId)]);
       setPreviewOpen(false);
       setMessage(result.requiresRetry
         ? { type: "error", text: "Este levantamiento ya existe con error. Usa Reintentar desde el historial." }
-        : { type: "success", text: result.alreadySubmitted ? "Este levantamiento ya estaba enviado; no se duplicó." : "Levantamiento enviado. El integrador aplicará el ajuste en SICAR." });
+        : { type: "success", text: result.request.message });
       newDraft(true); setTab("history");
     } catch (error) { setMessage({ type: "error", text: error.message }); setPreviewOpen(false); } finally { setWorking(false); }
-  }
-  async function retryRequest(sessionId) {
-    setWorking(true); setMessage(null);
-    try { const result = await retryInventoryAdjustmentRequest(sessionId); setHistory((current) => [result.request, ...current.filter((item) => item.sessionId !== sessionId)]); setSubmittedRequest(result.request); setMessage({ type: "success", text: "Reintento enviado al integrador." }); }
-    catch (error) { setMessage({ type: "error", text: error.message }); } finally { setWorking(false); }
   }
 
   const activeWeightsLine = lines.find((line) => line.articleId === weightsLineId) || null;
   return <div className="inventory-module min-w-0 space-y-4 pb-24 lg:pb-6">
     <section className="overflow-hidden rounded-[1.75rem] border border-emerald-950/10 bg-[linear-gradient(135deg,#0b1d18_0%,#102a20_58%,#173b28_100%)] text-white shadow-[0_24px_65px_-38px_rgba(5,46,22,0.7)]">
-      <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end"><div><div className="text-[10px] font-black uppercase tracking-[0.28em] text-lime-300">Módulo Inventario</div><h2 className="mt-2 text-2xl font-black sm:text-3xl">Levantamiento físico</h2><p className="mt-2 text-sm font-semibold text-emerald-50/70">Conteo guardado en Firebase y aplicado por el integrador local de SICAR.</p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-3 py-2 text-xs font-black ${triggerEnabled ? "border-lime-300/25 bg-lime-300/10 text-lime-200" : "border-amber-300/25 bg-amber-300/10 text-amber-100"}`}>{triggerEnabled ? `Inventario conectado · ${inventoryUser?.email || ""}` : authReady ? "Inicia sesión de inventario" : "Validando sesión"}</span><button type="button" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/8" onClick={() => setAuthOpen(true)} aria-label="Acceso de inventario"><Icon name="settings" /></button></div></div>
-      {unsupportedBranch ? <div className="border-t border-amber-300/20 bg-amber-300/10 px-5 py-3 text-sm font-black text-amber-100">Granada es la única sucursal habilitada por este integrador.</div> : null}
+      <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end"><div><div className="text-[10px] font-black uppercase tracking-[0.28em] text-lime-300">Módulo Inventario</div><h2 className="mt-2 text-2xl font-black sm:text-3xl">Levantamiento físico</h2><p className="mt-2 text-sm font-semibold text-emerald-50/70">Conteo validado y aplicado mediante la API local de SICAR.</p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-3 py-2 text-xs font-black ${writeEnabled ? "border-lime-300/25 bg-lime-300/10 text-lime-200" : "border-amber-300/25 bg-amber-300/10 text-amber-100"}`}>{writeEnabled ? `API conectada · ${companyContext?.empresa || user}` : "API sin escritura"}</span></div></div>
       {connectionMismatch ? <div className="border-t border-rose-300/20 bg-rose-400/15 px-5 py-3 text-sm font-black text-rose-100">Bloqueado: sesión {user}, servidor {branch?.alias}.</div> : null}
-      {!triggerEnabled && authReady ? <button type="button" className="w-full border-t border-amber-300/20 bg-amber-300/10 px-5 py-3 text-left text-sm font-black text-amber-100" onClick={() => setAuthOpen(true)}>Conecta tu usuario de inventario para enviar ajustes a SICAR.</button> : null}
+      {!writeEnabled ? <div className="border-t border-amber-300/20 bg-amber-300/10 px-5 py-3 text-sm font-black text-amber-100">La API local todavía no permite aplicar ajustes.</div> : null}
     </section>
     <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><button type="button" onClick={() => setTab("count")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-black ${tab === "count" ? "bg-slate-950 text-white" : "text-slate-500"}`}><Icon name="inventory" />Levantamiento</button><button type="button" onClick={() => setTab("history")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-black ${tab === "history" ? "bg-slate-950 text-white" : "text-slate-500"}`}><Icon name="history" />Historial</button></div>
     {message ? <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${message.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"}`}>{message.text}</div> : null}
@@ -300,16 +257,15 @@ export default function InventarioSucursal({ user }) {
           {showResults && query.trim() ? <div className="absolute inset-x-0 top-full z-[80] mt-2 max-h-72 overflow-y-auto rounded-2xl border border-emerald-200 bg-white p-2 shadow-2xl">{results.length ? results.map((article) => <button key={article.art_id} type="button" onClick={() => addArticle(article)} className="grid w-full grid-cols-[82px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-emerald-50"><span className="font-mono text-xs font-black text-emerald-700">{article.clave}</span><span className="truncate text-sm font-black text-slate-800">{article.descripcion}</span><span className="text-xs font-bold text-slate-400">{article.existencia === null ? "SICAR valida" : numberFormat.format(article.existencia)} {article.unidad}</span></button>) : <div className="px-4 py-6 text-center text-sm font-bold text-slate-400">Sin coincidencias</div>}</div> : null}
         </div>
       </section>
-      <section className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5"><div><h3 className="text-lg font-black text-slate-950">Productos contados</h3><p className="text-xs font-bold text-slate-400">{lines.length} agregados · {summary.ready} listos · {summary.changed} diferencias</p></div><button type="button" onClick={() => loadData(true)} className="app-icon-button" aria-label="Actualizar catálogo"><Icon name="refresh" /></button></div>
+      <section className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5"><div><h3 className="text-lg font-black text-slate-950">Productos contados</h3><p className="text-xs font-bold text-slate-400">{lines.length} agregados · {summary.ready} listos · {summary.changed} diferencias</p></div><button type="button" onClick={() => loadData()} className="app-icon-button" aria-label="Actualizar catálogo"><Icon name="refresh" /></button></div>
         {lines.length ? <div className="divide-y divide-slate-100">{lines.map((line, index) => { const difference = line.countedExistence === "" || line.currentExistence === null ? null : roundQuantity(Number(line.countedExistence) - Number(line.currentExistence)); return <div key={line.articleId} className="grid gap-2 px-4 py-3 sm:grid-cols-[34px_minmax(180px,1fr)_100px_128px_48px] sm:items-center"><span className="hidden text-xs font-black text-slate-300 sm:block">{`${index + 1}`.padStart(2, "0")}</span><div className="min-w-0"><div className="flex items-center gap-2"><span className="rounded-md bg-emerald-50 px-2 py-1 font-mono text-[10px] font-black text-emerald-700">{line.clave}</span><strong className="truncate text-sm text-slate-800">{line.descripcion}</strong></div><div className="mt-1 text-[10px] font-black uppercase text-slate-400">{line.currentExistence === null ? "Existencia actual validada al aplicar en SICAR" : `SICAR ${numberFormat.format(line.currentExistence)} ${line.unidad}${difference !== null ? ` · Diferencia ${difference > 0 ? "+" : ""}${numberFormat.format(difference)}` : ""}`}</div></div><button type="button" className="flex h-10 items-center justify-center gap-1 rounded-xl border border-slate-200 text-xs font-black text-slate-600" onClick={() => setWeightsLineId(line.articleId)}><Icon name="scale" className="h-4 w-4" />Bultos</button><input data-count-id={line.articleId} inputMode="decimal" className="h-10 w-full rounded-xl border border-slate-200 px-3 text-right text-base font-black outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" value={line.countedExistence} onChange={(event) => updateLine(line.articleId, { countedExistence: event.target.value, pesos: [] })} placeholder={`Conteo ${line.unidad}`} /><button type="button" className="app-icon-button text-rose-500" onClick={() => setLines((current) => current.filter((item) => item.articleId !== line.articleId))}><Icon name="trash" /></button></div>; })}</div> : <div className="px-5 py-16 text-center"><Icon name="inventory" className="mx-auto h-9 w-9 text-slate-300" /><div className="mt-3 text-sm font-black text-slate-500">Busca y agrega los productos contados</div></div>}
-        <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_auto] sm:items-center"><div className="grid grid-cols-3 gap-2 text-center"><div><div className="text-[9px] font-black uppercase text-slate-400">Diferencias</div><strong>{summary.changed}</strong></div><div><div className="text-[9px] font-black uppercase text-emerald-600">Positivas</div><strong className="text-emerald-700">{summary.positive}</strong></div><div><div className="text-[9px] font-black uppercase text-rose-600">Negativas</div><strong className="text-rose-700">{summary.negative}</strong></div></div><button type="button" className="app-button-primary min-w-56" disabled={loading || working || summary.ready < 1 || summary.changed < 1 || unsupportedBranch || connectionMismatch || !triggerEnabled} onClick={() => setPreviewOpen(true)}><Icon name="cloud" />Revisar y enviar</button></div>
+        <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_auto] sm:items-center"><div className="grid grid-cols-3 gap-2 text-center"><div><div className="text-[9px] font-black uppercase text-slate-400">Diferencias</div><strong>{summary.changed}</strong></div><div><div className="text-[9px] font-black uppercase text-emerald-600">Positivas</div><strong className="text-emerald-700">{summary.positive}</strong></div><div><div className="text-[9px] font-black uppercase text-rose-600">Negativas</div><strong className="text-rose-700">{summary.negative}</strong></div></div><button type="button" className="app-button-primary min-w-56" disabled={loading || working || summary.ready < 1 || summary.changed < 1 || connectionMismatch || !writeEnabled} onClick={preparePreview}><Icon name="cloud" />{working ? "Validando..." : "Revisar y aplicar"}</button></div>
       </section>
-    </> : <section className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h3 className="text-lg font-black text-slate-950">Levantamientos enviados</h3><p className="text-xs font-bold text-slate-400">Estado informado por el integrador de Granada</p></div><button type="button" className="app-icon-button" onClick={() => loadData(false)}><Icon name="refresh" /></button></div>
-      {history.length ? <div className="divide-y divide-slate-100">{history.map((item) => { const [label, statusClass] = statusMeta(item.status); return <div key={item.sessionId || item.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[150px_130px_minmax(0,1fr)_auto] sm:items-center"><div><div className="font-mono text-base font-black text-slate-900">{item.folio || "Sin folio"}</div><div className="mt-1 truncate font-mono text-[10px] text-slate-400">{item.sessionId}</div></div><div><span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${statusClass}`}>{label}</span>{item.ainId ? <div className="mt-1 text-xs font-bold text-slate-500">SICAR #{item.ainId}</div> : null}</div><div className="min-w-0"><div className="truncate text-sm font-bold text-slate-700">{item.message || item.lastError || "Solicitud registrada"}</div>{item.warningSummary ? <div className="mt-1 truncate text-xs font-bold text-amber-600">{item.warningSummary}</div> : null}</div>{item.status === "error" ? <button type="button" className="app-button-secondary min-h-10 px-4" disabled={working} onClick={() => retryRequest(item.sessionId)}>Reintentar</button> : <span />}</div>; })}</div> : <div className="px-5 py-16 text-center text-sm font-bold text-slate-400">Todavía no hay solicitudes de ajuste.</div>}
+    </> : <section className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h3 className="text-lg font-black text-slate-950">Levantamientos aplicados</h3><p className="text-xs font-bold text-slate-400">Historial del SICAR local</p></div><button type="button" className="app-icon-button" onClick={() => loadData()}><Icon name="refresh" /></button></div>
+      {history.length ? <div className="divide-y divide-slate-100">{history.map((item) => { const [label, statusClass] = statusMeta(item.status); return <div key={item.sessionId || item.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[150px_130px_minmax(0,1fr)] sm:items-center"><div><div className="font-mono text-base font-black text-slate-900">{item.folio || "Sin folio"}</div><div className="mt-1 truncate font-mono text-[10px] text-slate-400">{item.sessionId}</div></div><div><span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${statusClass}`}>{label}</span>{item.ainId ? <div className="mt-1 text-xs font-bold text-slate-500">SICAR #{item.ainId}</div> : null}</div><div className="min-w-0"><div className="truncate text-sm font-bold text-slate-700">{item.message || "Ajuste aplicado"}</div></div></div>; })}</div> : <div className="px-5 py-16 text-center text-sm font-bold text-slate-400">Todavía no hay ajustes creados por la app.</div>}
     </section>}
 
-    {previewOpen ? <div className="app-modal z-[100] px-4" role="dialog" aria-modal="true"><div className="app-modal-panel w-full max-w-xl overflow-hidden p-0"><div className="bg-slate-950 p-5 text-white"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-300">Confirmar levantamiento</div><h2 className="mt-2 text-2xl font-black">Enviar {identity.current.folio}</h2><p className="mt-2 text-sm font-semibold text-slate-300">El integrador comparará estos conteos y aplicará las diferencias en SICAR.</p></div><div className="grid grid-cols-3 gap-3 p-5"><div className="rounded-xl bg-slate-50 p-3 text-center"><div className="text-[9px] font-black uppercase text-slate-400">Productos</div><strong className="text-xl">{summary.ready}</strong></div><div className="rounded-xl bg-emerald-50 p-3 text-center"><div className="text-[9px] font-black uppercase text-emerald-600">Positivas</div><strong className="text-xl text-emerald-700">{summary.positive}</strong></div><div className="rounded-xl bg-rose-50 p-3 text-center"><div className="text-[9px] font-black uppercase text-rose-600">Negativas</div><strong className="text-xl text-rose-700">{summary.negative}</strong></div></div><div className="border-y border-slate-100 px-5 py-4 text-sm"><div className="flex justify-between py-1"><span className="font-bold text-slate-500">Sucursal</span><strong>Granada</strong></div><div className="flex justify-between py-1"><span className="font-bold text-slate-500">Realizado</span><strong>{performedBy || "Pendiente"}</strong></div><div className="flex justify-between py-1"><span className="font-bold text-slate-500">Supervisado</span><strong>{supervisedBy || "Pendiente"}</strong></div></div><div className="grid grid-cols-2 gap-3 p-5"><button type="button" className="app-button-secondary" onClick={() => setPreviewOpen(false)} disabled={working}>Volver</button><button type="button" className="app-button-primary" onClick={submitAdjustment} disabled={working}>{working ? "Enviando..." : "Enviar al integrador"}</button></div></div></div> : null}
+    {previewOpen ? <div className="app-modal z-[100] px-4" role="dialog" aria-modal="true"><div className="app-modal-panel w-full max-w-xl overflow-hidden p-0"><div className="bg-slate-950 p-5 text-white"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-300">Confirmar levantamiento</div><h2 className="mt-2 text-2xl font-black">Aplicar {identity.current.folio}</h2><p className="mt-2 text-sm font-semibold text-slate-300">La API volverá a validar existencias y aplicará el ajuste en una transacción.</p></div><div className="grid grid-cols-3 gap-3 p-5"><div className="rounded-xl bg-slate-50 p-3 text-center"><div className="text-[9px] font-black uppercase text-slate-400">Diferencias</div><strong className="text-xl">{serverPreview?.summary?.changedLines ?? summary.changed}</strong></div><div className="rounded-xl bg-emerald-50 p-3 text-center"><div className="text-[9px] font-black uppercase text-emerald-600">Positivas</div><strong className="text-xl text-emerald-700">{serverPreview?.summary?.positiveLines ?? summary.positive}</strong></div><div className="rounded-xl bg-rose-50 p-3 text-center"><div className="text-[9px] font-black uppercase text-rose-600">Negativas</div><strong className="text-xl text-rose-700">{serverPreview?.summary?.negativeLines ?? summary.negative}</strong></div></div><div className="border-y border-slate-100 px-5 py-4 text-sm"><div className="flex justify-between py-1"><span className="font-bold text-slate-500">Sucursal</span><strong>{companyContext?.empresa || user}</strong></div><div className="flex justify-between py-1"><span className="font-bold text-slate-500">Realizado</span><strong>{performedBy || "Pendiente"}</strong></div><div className="flex justify-between py-1"><span className="font-bold text-slate-500">Supervisado</span><strong>{supervisedBy || "Pendiente"}</strong></div></div><div className="grid grid-cols-2 gap-3 p-5"><button type="button" className="app-button-secondary" onClick={() => setPreviewOpen(false)} disabled={working}>Volver</button><button type="button" className="app-button-primary" onClick={submitAdjustment} disabled={working}>{working ? "Aplicando..." : "Aplicar en SICAR"}</button></div></div></div> : null}
     {activeWeightsLine ? <WeightsDialog line={activeWeightsLine} onClose={() => setWeightsLineId(null)} onSave={(weights, total) => { updateLine(activeWeightsLine.articleId, { pesos: weights, cajas: weights.length, countedExistence: `${total}` }); setWeightsLineId(null); }} /> : null}
-    {authOpen ? <InventoryAuthDialog currentUser={inventoryUser} onClose={() => setAuthOpen(false)} onLogin={async (email, password) => { await loginInventoryUser(email, password); setAuthOpen(false); }} onLogout={async () => { await logoutInventoryUser(); setAuthOpen(false); }} /> : null}
   </div>;
 }

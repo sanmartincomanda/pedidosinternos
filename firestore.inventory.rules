@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function sameBranch(branchId) {
+      return signedIn() && request.auth.token.branchId == branchId;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /branches/{branchId}/catalogs/{documentId} {
+      allow read: if sameBranch(branchId);
+      allow write: if false;
+    }
+
+    match /branches/{branchId}/levantamientosInventario/{sessionId} {
+      allow read: if sameBranch(branchId);
+      allow create: if sameBranch(branchId)
+        && request.resource.data.branchId == branchId;
+      allow update, delete: if false;
+    }
+
+    match /branches/{branchId}/sicarAdjustmentRequests/{sessionId} {
+      allow read: if sameBranch(branchId);
+      allow create: if sameBranch(branchId)
+        && request.resource.data.sessionId == sessionId
+        && request.resource.data.status == 'requested';
+      allow update, delete: if false;
+    }
+
+    match /branches/{branchId}/{document=**} {
+      allow read: if sameBranch(branchId);
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -87,7 +87,8 @@ const toneClasses = {
   },
 };
 
-export default function ErpModulePanel({ user, isOnline, summary, onOpen }) {
+export default function ErpModulePanel({ user, companyContext, isOnline, summary, onOpen }) {
+  const availableModules = MODULES.filter((module) => companyContext?.modules?.includes(module.key));
   return (
     <div className="min-w-0 space-y-5 pb-24 lg:pb-8">
       <section className="relative overflow-hidden rounded-[2rem] border border-emerald-950/10 bg-[linear-gradient(125deg,#09150f_0%,#10291d_54%,#1f4429_100%)] p-6 text-white shadow-[0_28px_75px_-42px_rgba(5,46,22,0.82)] sm:p-8">
@@ -104,7 +105,7 @@ export default function ErpModulePanel({ user, isOnline, summary, onOpen }) {
           <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-black/15 p-2 backdrop-blur-sm">
             <div className="min-w-32 rounded-xl bg-white/7 px-4 py-3">
               <div className="text-[9px] font-black uppercase tracking-[0.17em] text-emerald-100/50">Sucursal</div>
-              <div className="mt-1 truncate text-sm font-black text-white">{getBranchDisplayName(user)}</div>
+              <div className="mt-1 truncate text-sm font-black text-white">{companyContext?.empresa || getBranchDisplayName(user)}</div>
             </div>
             <div className="min-w-28 rounded-xl bg-white/7 px-4 py-3">
               <div className="text-[9px] font-black uppercase tracking-[0.17em] text-emerald-100/50">Estado</div>
@@ -123,10 +124,10 @@ export default function ErpModulePanel({ user, isOnline, summary, onOpen }) {
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">Módulos</div>
             <h3 className="mt-1 text-xl font-black tracking-[-0.025em] text-slate-950">¿Qué vas a realizar?</h3>
           </div>
-          <div className="hidden text-xs font-bold text-slate-400 sm:block">3 procesos disponibles</div>
+          <div className="hidden text-xs font-bold text-slate-400 sm:block">{availableModules.length} procesos disponibles</div>
         </div>
         <div className="grid gap-3 lg:grid-cols-3">
-          {MODULES.map((module) => {
+          {availableModules.map((module) => {
             const tone = toneClasses[module.tone];
             return (
               <button
@@ -151,7 +152,7 @@ export default function ErpModulePanel({ user, isOnline, summary, onOpen }) {
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-[1fr_1.45fr]">
+      {companyContext?.internalTransfers ? <section className="grid gap-3 md:grid-cols-[1fr_1.45fr]">
         <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-950 text-lime-300"><span className="h-5 w-5"><ModuleIcon name="chart" /></span></span>
@@ -169,7 +170,7 @@ export default function ErpModulePanel({ user, isOnline, summary, onOpen }) {
           <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">Inventario se incorpora sin alterar los flujos actuales. Ventas, compras ampliadas e inventario en tiempo real podrán agregarse como módulos independientes.</p>
           <div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">Ventas · Próximamente</span><span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">Existencias · Próximamente</span></div>
         </div>
-      </section>
+      </section> : null}
     </div>
   );
 }
