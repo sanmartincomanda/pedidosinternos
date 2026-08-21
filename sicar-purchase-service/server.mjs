@@ -1270,7 +1270,13 @@ async function verifyFirebaseIdentity(request) {
   const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
   if (!token) throw httpError("Falta la sesion Firebase.", 401);
 
-  const cacheKey = createHash("sha256").update(token).digest("hex");
+  const expectedCompany = `${config.company?.identifier || ""}`.trim().toLowerCase();
+  const requestedCompany = `${request.headers["x-csm-company"] || ""}`.trim().toLowerCase();
+  if (!expectedCompany || requestedCompany !== expectedCompany) {
+    throw httpError("La empresa solicitada no corresponde a este servidor.", 403);
+  }
+
+  const cacheKey = createHash("sha256").update(`${expectedCompany}\0${token}`).digest("hex");
   const cached = firebaseIdentityCache.get(cacheKey);
   if (cached?.expiresAt > Date.now()) return cached.identity;
   if (!settings.webApiKey || !settings.projectId) throw new Error("Firebase Auth no esta configurado en el servicio.");
@@ -1292,11 +1298,6 @@ async function verifyFirebaseIdentity(request) {
     throw httpError("El usuario no esta autorizado para este servidor SICAR.", 403);
   }
 
-  const expectedCompany = `${config.company?.identifier || ""}`.trim().toLowerCase();
-  const requestedCompany = `${request.headers["x-csm-company"] || ""}`.trim().toLowerCase();
-  if (!expectedCompany || requestedCompany !== expectedCompany) {
-    throw httpError("La empresa solicitada no corresponde a este servidor.", 403);
-  }
   const identity = { uid: firebaseUser.localId, email };
   firebaseIdentityCache.set(cacheKey, { identity, expiresAt: Date.now() + 5 * 60 * 1000 });
   return identity;
