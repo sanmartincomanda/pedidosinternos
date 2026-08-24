@@ -235,14 +235,14 @@ function ConnectionDialog({ initial, onClose, onSaved }) {
         <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Conexion local</div>
         <h2 className="mt-1 text-xl font-black text-slate-950">Servidor SICAR</h2>
         <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-          En la web usa la direccion HTTPS privada de Tailscale. En la app instalada tambien puedes usar la IP local del servidor.
+          Usa la conexion segura asignada a esta sucursal. En otros dispositivos, manten Tailscale conectado.
         </p>
         <label className="app-label mt-5">Direccion</label>
         <input
           value={url}
           onChange={(event) => setUrl(event.target.value)}
           className="app-input"
-          placeholder="https://servidor.tailnet.ts.net:8445"
+          placeholder="https://servidor-sucursal.tailnet.ts.net"
           autoCapitalize="none"
           autoCorrect="off"
         />
