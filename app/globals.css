@@ -1808,7 +1808,7 @@ textarea {
   --native-lime: #8bcf2f;
   --native-canvas: #f4f7f5;
   --native-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --native-bottom-nav-height: calc(86px + var(--native-safe-bottom));
+  --native-bottom-nav-height: var(--native-safe-bottom);
 }
 
 html {
@@ -2126,6 +2126,29 @@ textarea {
 
   .app-shell {
     padding: 10px 9px calc(94px + var(--native-safe-bottom));
+  }
+
+  .app-shell.no-mobile-bottom-nav {
+    padding-bottom: calc(20px + var(--native-safe-bottom));
+  }
+
+  .native-module-strip .mobile-business-switch {
+    gap: 3px;
+    border-radius: 14px;
+    padding: 3px;
+  }
+
+  .native-module-strip .mobile-business-switch button {
+    min-height: 40px;
+    gap: 5px;
+    border-radius: 11px;
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  .native-module-strip .mobile-business-switch button svg {
+    width: 17px;
+    height: 17px;
   }
 
   .app-panel,

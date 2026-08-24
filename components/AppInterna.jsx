@@ -506,10 +506,15 @@ export default function AppInterna() {
   }, []);
 
   useEffect(() => {
-    const navigation = mobileNavRef.current;
-    if (!user || !navigation) return undefined;
-
     const root = document.documentElement;
+    if (!user || businessModule !== "internos") {
+      root.style.removeProperty("--native-bottom-nav-height");
+      return undefined;
+    }
+
+    const navigation = mobileNavRef.current;
+    if (!navigation) return undefined;
+
     const updateNavigationHeight = () => {
       const height = Math.ceil(navigation.getBoundingClientRect().height);
       if (height > 0) root.style.setProperty("--native-bottom-nav-height", `${height}px`);
@@ -1086,7 +1091,7 @@ export default function AppInterna() {
           </div>
         </header>
 
-        <div className="native-module-strip hidden px-4 pt-3 md:block sm:px-6 xl:hidden">
+        <div className={`native-module-strip px-3 pt-2 sm:px-4 sm:pt-3 md:px-6 xl:hidden ${businessModule === "internos" ? "hidden md:block" : "block"}`}>
           <div className="mobile-business-switch flex gap-2 overflow-x-auto rounded-[1.15rem] border border-slate-200 bg-white/90 p-1.5 shadow-sm backdrop-blur-xl">
             {availableBusinessModules.map((item) => (
               <button
@@ -1117,26 +1122,25 @@ export default function AppInterna() {
           </nav>
         ) : null}
 
-        <div className="app-shell">
+        <div className={`app-shell ${businessModule === "internos" ? "has-mobile-bottom-nav" : "no-mobile-bottom-nav"}`}>
           <main className="app-route-shell page-enter">{renderCurrentView()}</main>
         </div>
       </section>
 
-      <nav ref={mobileNavRef} className="mobile-bottom-nav native-bottom-nav fixed inset-x-0 bottom-0 z-50 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-3 lg:hidden" aria-label={businessModule === "internos" ? "Traspasos internos" : "Modulos"}>
+      {businessModule === "internos" ? (
+        <nav ref={mobileNavRef} className="mobile-bottom-nav native-bottom-nav fixed inset-x-0 bottom-0 z-50 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-3 lg:hidden" aria-label="Traspasos internos">
           <div className="mx-auto flex max-w-4xl gap-1 rounded-[22px] border border-slate-200 bg-white/94 p-1.5 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">
-            {(businessModule === "internos" ? NAV_ITEMS : availableBusinessModules).map((item) => (
+            {NAV_ITEMS.map((item) => (
               <MobileNavButton
                 key={item.key}
                 item={item}
-                active={businessModule === "internos" ? view === item.key : businessModule === item.key}
-                onClick={() => {
-                  if (businessModule === "internos") setView(item.key);
-                  else setBusinessModule(item.key);
-                }}
+                active={view === item.key}
+                onClick={() => setView(item.key)}
               />
             ))}
           </div>
         </nav>
+      ) : null}
 
       {mobileMenuOpen ? (
         <div className="app-modal native-account-modal z-[100]" role="dialog" aria-modal="true" aria-labelledby="mobile-account-title" onClick={() => setMobileMenuOpen(false)}>
