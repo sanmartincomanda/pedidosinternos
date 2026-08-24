@@ -910,7 +910,7 @@ async function getInventoryContext(payload, { requireBaseline = false } = {}) {
   }
 
   const articleIds = [...itemsById.keys()];
-  const [rows, branchRows] = await Promise.all([
+  const [rows, company] = await Promise.all([
     query(`
       SELECT
         a.art_id,
@@ -926,10 +926,13 @@ async function getInventoryContext(payload, { requireBaseline = false } = {}) {
       WHERE a.art_id IN (${articleIds.join(",")}) AND a.status = 1
       ORDER BY a.descripcion;
     `),
-    query("SELECT alias FROM nubecfg LIMIT 1;"),
+    validateConfiguredCompany(),
   ]);
-  const branchName = `${branchRows[0]?.alias || ""}`.trim();
+  const branchName = `${company.alias || ""}`.trim();
   const configuredAliases = [
+    company.identifier,
+    company.branchId,
+    company.alias,
     config.company?.branchId,
     config.company?.branchAlias,
     ...(config.company?.sicarAliases || []),
