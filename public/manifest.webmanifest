@@ -1,0 +1,19 @@
+{
+  "name": "CSM Operaciones",
+  "short_name": "CSM",
+  "description": "Traspasos, proveedores e inventario de Carnes San Martin",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f7f5",
+  "theme_color": "#f4f7f5",
+  "icons": [
+    {
+      "src": "/csm-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
