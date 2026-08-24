@@ -54,7 +54,7 @@ powershell -ExecutionPolicy Bypass -File .\Install-SicarPurchaseService.ps1 `
   -CompanySicarAliases @("<ALIAS_REAL_NUBECFG>","CARNES AMPARITO") `
   -AllowedFirebaseEmails @("carnesamparito@carnesamparito.com") `
   -FirebaseWebApiKey "<CLAVE_WEB_FIREBASE_ENTREGADA_POR_ADMINISTRADOR>" `
-  -AllowedOrigins @("https://traspasos.sanmartinsr.com")
+  -AllowedOrigins @("https://traspasos.sanmartinsr.com", "http://localhost", "capacitor://localhost")
 ```
 
 La contrasena MySQL debe pedirse en consola. No la pongas en este prompt.

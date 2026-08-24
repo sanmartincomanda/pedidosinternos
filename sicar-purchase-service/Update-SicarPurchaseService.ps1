@@ -15,7 +15,7 @@ param(
     [string[]]$CompanySicarAliases = @("CARNES SAN MARTIN GRANADA"),
     [string[]]$AllowedFirebaseEmails = @("granada.inventory@sanmartinsr.com"),
     [string]$FirebaseWebApiKey = "",
-    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com")
+    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com", "http://localhost", "capacitor://localhost")
 )
 
 $ErrorActionPreference = "Stop"

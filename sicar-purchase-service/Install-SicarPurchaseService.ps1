@@ -19,7 +19,7 @@ param(
     [string[]]$CompanySicarAliases = @("CARNES SAN MARTIN GRANADA"),
     [string[]]$AllowedFirebaseEmails = @("granada.inventory@sanmartinsr.com"),
     [string]$FirebaseWebApiKey = "",
-    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com"),
+    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com", "http://localhost", "capacitor://localhost"),
     [string]$InventoryFirebaseServiceAccount = "C:\Users\Microsoft Windows 11\Downloads\inventario-sanmartin-firebase-adminsdk-fbsvc-0eff49b1f7.json",
     [string]$InventoryFirebaseProjectId = "inventario-sanmartin",
     [string]$InventoryFirebaseBranchDocumentId = "CARNES SAN MARTIN GRANADA",
