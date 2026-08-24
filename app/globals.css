@@ -33,10 +33,12 @@
   box-sizing: border-box;
 }
 
+/* Keep one vertical scroller; a nested body scroller can swallow wheel/touch input. */
 html {
   min-height: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
+  overflow-y: auto;
   background: var(--background);
   color-scheme: light;
 }
@@ -44,7 +46,8 @@ html {
 body {
   min-height: 100vh;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
   margin: 0;
   color: var(--foreground);
   font-family: var(--font-ibm-plex-sans), "Segoe UI", sans-serif;
@@ -1814,12 +1817,16 @@ textarea {
 html {
   min-height: 100dvh;
   overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
+  touch-action: auto;
+  -webkit-overflow-scrolling: touch;
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
   min-height: 100dvh;
-  overscroll-behavior-y: none;
+  overscroll-behavior-y: auto;
+  touch-action: auto;
 }
 
 button,
