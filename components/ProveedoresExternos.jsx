@@ -228,6 +228,8 @@ function buildPurchasePayload({
 function ConnectionDialog({ initial, onClose, onSaved }) {
   const [url, setUrl] = useState(initial.url);
   const [token, setToken] = useState(initial.token);
+  const [validationError, setValidationError] = useState("");
+  const nativeConnection = Capacitor.isNativePlatform();
 
   return (
     <div className="app-modal z-[110] px-4" role="dialog" aria-modal="true">
@@ -235,17 +237,20 @@ function ConnectionDialog({ initial, onClose, onSaved }) {
         <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Conexion local</div>
         <h2 className="mt-1 text-xl font-black text-slate-950">Servidor SICAR</h2>
         <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-          Usa la conexion segura asignada a esta sucursal. En otros dispositivos, manten Tailscale conectado.
+          {nativeConnection
+            ? "En la misma red puedes usar la IP local. Fuera de la sucursal, usa la direccion HTTPS de Tailscale."
+            : "La web requiere una direccion HTTPS. Para usar una IP local HTTP, abre la aplicacion Android instalada."}
         </p>
         <label className="app-label mt-5">Direccion</label>
         <input
           value={url}
           onChange={(event) => setUrl(event.target.value)}
           className="app-input"
-          placeholder="https://servidor-sucursal.tailnet.ts.net"
+          placeholder={nativeConnection ? "http://192.168.1.137:43110" : "https://servidor-sucursal.tailnet.ts.net"}
           autoCapitalize="none"
           autoCorrect="off"
         />
+        {validationError ? <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">{validationError}</div> : null}
         <label className="app-label mt-4">Clave del servicio</label>
         <input
           type="password"
@@ -259,6 +264,12 @@ function ConnectionDialog({ initial, onClose, onSaved }) {
           <button
             type="button"
             onClick={() => {
+              const normalizedUrl = `${url || ""}`.trim();
+              if (!nativeConnection && normalizedUrl.toLowerCase().startsWith("http://")) {
+                setValidationError("El navegador bloquea conexiones HTTP locales. Usa la URL HTTPS de Tailscale o la app Android instalada.");
+                return;
+              }
+              setValidationError("");
               saveSicarApiConnection({ url, token });
               onSaved();
             }}
