@@ -1066,8 +1066,52 @@ export default function ProveedoresExternos({ user }) {
   const bultosTotal = bultosTemporal.reduce((sum, weight) => sum + weight, 0);
 
   return (
-    <div className={`provider-form-shell min-w-0 max-w-full space-y-4 overflow-x-clip ${IS_HANDHELD ? "handheld-form handheld-provider-form" : ""}`}>
-      <section className="handheld-provider-hero min-w-0 max-w-full overflow-hidden rounded-[1.7rem] border border-[#3f6212] bg-[radial-gradient(circle_at_88%_8%,rgba(118,185,0,0.3),transparent_20rem),linear-gradient(135deg,#0b1408_0%,#17250e_58%,#223914_100%)] p-5 text-white shadow-[0_24px_60px_-38px_rgba(20,40,8,0.9)] sm:p-6">
+    <div className={`provider-form-shell min-w-0 max-w-full space-y-3 overflow-x-clip sm:space-y-4 ${IS_HANDHELD ? "handheld-form handheld-provider-form" : ""}`}>
+      <section className="provider-mobile-toolbar min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:hidden">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-[1.05rem] font-black leading-tight text-slate-950">Recibir mercaderia</h2>
+            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.04em] text-slate-500">
+              <span className="truncate">{user}</span>
+              <span aria-hidden="true" className="text-slate-300">&bull;</span>
+              <span className="shrink-0">{purchaseDate}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setView("history")}
+            className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700"
+            aria-label="Abrir historial de recepciones"
+            title="Historial"
+          >
+            {Icons.invoice}
+            {drafts.length > 0 ? <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-amber-300 px-1 text-center text-[9px] font-black leading-4 text-amber-950">{drafts.length}</span> : null}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConnectionDialog(true)}
+            className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-950 text-white"
+            aria-label="Ver conexion y configuracion de SICAR"
+            title="SICAR"
+          >
+            {Icons.settings}
+            <span
+              aria-hidden="true"
+              className={`absolute right-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ring-slate-950 ${connection === "online" ? "bg-lime-400" : connection === "checking" ? "bg-amber-300" : "bg-rose-400"}`}
+            />
+          </button>
+        </div>
+        {editingDraftId ? (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <span className="truncate text-xs font-black text-amber-900">Editando recepcion en espera</span>
+            <button type="button" onClick={() => resetForm()} className="shrink-0 text-[10px] font-black uppercase text-amber-800">
+              Cancelar
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="handheld-provider-hero hidden min-w-0 max-w-full overflow-hidden rounded-[1.7rem] border border-[#3f6212] bg-[radial-gradient(circle_at_88%_8%,rgba(118,185,0,0.3),transparent_20rem),linear-gradient(135deg,#0b1408_0%,#17250e_58%,#223914_100%)] p-5 text-white shadow-[0_24px_60px_-38px_rgba(20,40,8,0.9)] sm:block sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-2xl bg-white px-3 shadow-lg sm:h-20 sm:w-36">
