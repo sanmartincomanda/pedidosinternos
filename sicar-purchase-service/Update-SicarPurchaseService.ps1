@@ -76,6 +76,9 @@ if (-not ($settings.PSObject.Properties.Name -contains "firebaseAuth")) {
     if ([string]::IsNullOrWhiteSpace($FirebaseWebApiKey)) {
         throw "Indica -FirebaseWebApiKey para agregar autenticacion Firebase a esta instalacion. No la guardes en Git."
     }
+    if (-not $PSBoundParameters.ContainsKey("AllowedFirebaseEmails") -or @($AllowedFirebaseEmails).Count -eq 0) {
+        throw "Indica -AllowedFirebaseEmails al agregar autenticacion Firebase a esta instalacion."
+    }
     $settings | Add-Member -NotePropertyName firebaseAuth -NotePropertyValue ([pscustomobject]@{
         enabled = $true
         projectId = $InventoryFirebaseProjectId
@@ -93,7 +96,12 @@ else {
     if (-not $settings.firebaseAuth.webApiKey) {
         throw "Indica -FirebaseWebApiKey para habilitar autenticacion Firebase. No la guardes en Git."
     }
-    $settings.firebaseAuth.allowedEmails = @($AllowedFirebaseEmails)
+    if ($PSBoundParameters.ContainsKey("AllowedFirebaseEmails")) {
+        $settings.firebaseAuth.allowedEmails = @($AllowedFirebaseEmails)
+    }
+    elseif (-not ($settings.firebaseAuth.PSObject.Properties.Name -contains "allowedEmails") -or @($settings.firebaseAuth.allowedEmails).Count -eq 0) {
+        throw "La instalacion no tiene correos Firebase autorizados; indica -AllowedFirebaseEmails."
+    }
     if (-not ($settings.firebaseAuth.PSObject.Properties.Name -contains "allowedUids")) {
         $settings.firebaseAuth | Add-Member -NotePropertyName allowedUids -NotePropertyValue @()
     }
