@@ -446,6 +446,7 @@ export default function AppInterna() {
   const [operationalAlerts, setOperationalAlerts] = useState([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const previousOrderStatusesRef = useRef(null);
+  const mobileNavRef = useRef(null);
 
   useEffect(() => {
     return observeOperationsSession(({ session: nextSession, error: sessionError }) => {
@@ -503,6 +504,28 @@ export default function AppInterna() {
       if (typeof disposeNavigation === "function") disposeNavigation();
     };
   }, []);
+
+  useEffect(() => {
+    const navigation = mobileNavRef.current;
+    if (!user || !navigation) return undefined;
+
+    const root = document.documentElement;
+    const updateNavigationHeight = () => {
+      const height = Math.ceil(navigation.getBoundingClientRect().height);
+      if (height > 0) root.style.setProperty("--native-bottom-nav-height", `${height}px`);
+    };
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(updateNavigationHeight) : null;
+
+    updateNavigationHeight();
+    observer?.observe(navigation);
+    window.addEventListener("resize", updateNavigationHeight);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateNavigationHeight);
+      root.style.removeProperty("--native-bottom-nav-height");
+    };
+  }, [businessModule, user]);
 
   useEffect(() => {
     if (!user || !companyContext?.internalTransfers || !isNativeAndroidApp()) return undefined;
@@ -1099,7 +1122,7 @@ export default function AppInterna() {
         </div>
       </section>
 
-      <nav className="mobile-bottom-nav native-bottom-nav fixed inset-x-0 bottom-0 z-50 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-3 lg:hidden" aria-label={businessModule === "internos" ? "Traspasos internos" : "Modulos"}>
+      <nav ref={mobileNavRef} className="mobile-bottom-nav native-bottom-nav fixed inset-x-0 bottom-0 z-50 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-3 lg:hidden" aria-label={businessModule === "internos" ? "Traspasos internos" : "Modulos"}>
           <div className="mx-auto flex max-w-4xl gap-1 rounded-[22px] border border-slate-200 bg-white/94 p-1.5 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">
             {(businessModule === "internos" ? NAV_ITEMS : availableBusinessModules).map((item) => (
               <MobileNavButton

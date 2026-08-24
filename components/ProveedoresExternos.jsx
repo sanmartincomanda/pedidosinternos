@@ -235,14 +235,14 @@ function ConnectionDialog({ initial, onClose, onSaved }) {
         <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Conexion local</div>
         <h2 className="mt-1 text-xl font-black text-slate-950">Servidor SICAR</h2>
         <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-          En el servidor Granada usa 127.0.0.1. En una tablet usa la IP local del servidor.
+          En la web usa la direccion HTTPS privada de Tailscale. En la app instalada tambien puedes usar la IP local del servidor.
         </p>
         <label className="app-label mt-5">Direccion</label>
         <input
           value={url}
           onChange={(event) => setUrl(event.target.value)}
           className="app-input"
-          placeholder="http://192.168.1.137:43110"
+          placeholder="https://servidor.tailnet.ts.net:8445"
           autoCapitalize="none"
           autoCorrect="off"
         />
@@ -1066,7 +1066,7 @@ export default function ProveedoresExternos({ user }) {
   const bultosTotal = bultosTemporal.reduce((sum, weight) => sum + weight, 0);
 
   return (
-    <div className={`min-w-0 max-w-full space-y-4 overflow-x-clip pb-28 ${IS_HANDHELD ? "handheld-form handheld-provider-form" : ""}`}>
+    <div className={`provider-form-shell min-w-0 max-w-full space-y-4 overflow-x-clip ${IS_HANDHELD ? "handheld-form handheld-provider-form" : ""}`}>
       <section className="handheld-provider-hero min-w-0 max-w-full overflow-hidden rounded-[1.7rem] border border-[#3f6212] bg-[radial-gradient(circle_at_88%_8%,rgba(118,185,0,0.3),transparent_20rem),linear-gradient(135deg,#0b1408_0%,#17250e_58%,#223914_100%)] p-5 text-white shadow-[0_24px_60px_-38px_rgba(20,40,8,0.9)] sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
@@ -1596,7 +1596,7 @@ export default function ProveedoresExternos({ user }) {
         )}
       </section>
 
-      <div className={`handheld-provider-actions fixed inset-x-0 bottom-[88px] z-40 px-3 lg:bottom-4 lg:left-auto lg:right-5 lg:w-[560px] ${IS_HANDHELD && productOpen ? "handheld-provider-actions-search-open" : ""}`}>
+      <div className={`handheld-provider-actions fixed inset-x-0 z-40 px-3 lg:bottom-4 lg:left-auto lg:right-5 lg:w-[560px] ${IS_HANDHELD && productOpen ? "handheld-provider-actions-search-open" : ""}`}>
         <div className="rounded-[1.4rem] border border-slate-700 bg-slate-950 p-3 text-white shadow-[0_24px_60px_-28px_rgba(2,6,23,0.85)]">
           <div className="flex items-center justify-between gap-3 px-2 pb-2">
             <div>

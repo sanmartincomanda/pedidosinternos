@@ -1344,7 +1344,7 @@ textarea {
 }
 
 .handheld-app .handheld-provider-form {
-  padding-bottom: 90px;
+  padding-bottom: calc(var(--native-bottom-nav-height) + 116px);
 }
 
 .handheld-app .handheld-provider-form > section:first-child {
@@ -1769,7 +1769,7 @@ textarea {
 }
 
 .handheld-app .handheld-provider-actions {
-  bottom: calc(60px + env(safe-area-inset-bottom));
+  bottom: calc(var(--native-bottom-nav-height) + 6px);
   padding: 0 6px;
 }
 
@@ -1808,6 +1808,7 @@ textarea {
   --native-lime: #8bcf2f;
   --native-canvas: #f4f7f5;
   --native-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --native-bottom-nav-height: calc(86px + var(--native-safe-bottom));
 }
 
 html {
@@ -1914,6 +1915,24 @@ textarea {
 .native-bottom-nav .mobile-nav-button svg {
   width: 21px;
   height: 21px;
+}
+
+.provider-form-shell {
+  padding-bottom: calc(var(--native-bottom-nav-height) + 142px);
+}
+
+.handheld-provider-actions {
+  bottom: calc(var(--native-bottom-nav-height) + 8px);
+}
+
+@media (min-width: 1024px) {
+  .provider-form-shell {
+    padding-bottom: 7rem;
+  }
+
+  .handheld-provider-actions {
+    bottom: 1rem;
+  }
 }
 
 .native-account-modal {
