@@ -37,4 +37,8 @@ if ([string]::IsNullOrWhiteSpace($firebaseWebApiKey)) {
     -CompanySicarAliases @("CARNES SAN MARTIN GRANADA", "Carnes San Martin Granada", "Granada") `
     -AllowedFirebaseEmails @("granada.inventory@sanmartinsr.com") `
     -FirebaseWebApiKey $firebaseWebApiKey `
-    -AllowedOrigins @("https://traspasos.sanmartinsr.com")
+    -AllowedOrigins @(
+        "https://traspasos.sanmartinsr.com",
+        "http://localhost",
+        "capacitor://localhost"
+    )

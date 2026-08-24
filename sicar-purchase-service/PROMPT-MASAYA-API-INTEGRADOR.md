@@ -53,7 +53,7 @@ powershell -ExecutionPolicy Bypass -File .\Install-SicarPurchaseService.ps1 `
   -CompanySicarAliases @("<ALIAS_REAL_NUBECFG>","CARNES SAN MARTIN MASAYA","Masaya") `
   -AllowedFirebaseEmails @("masaya@csmmasaya.com") `
   -FirebaseWebApiKey "<CLAVE_WEB_FIREBASE_ENTREGADA_POR_ADMINISTRADOR>" `
-  -AllowedOrigins @("https://traspasos.sanmartinsr.com")
+  -AllowedOrigins @("https://traspasos.sanmartinsr.com", "http://localhost", "capacitor://localhost")
 ```
 
 No pongas la contrasena MySQL en la linea de comandos; deja que el instalador la solicite.
