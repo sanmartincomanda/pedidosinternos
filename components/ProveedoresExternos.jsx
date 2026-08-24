@@ -100,7 +100,7 @@ const Icons = {
 };
 
 const CATALOG_MAX_AGE_MS = 12 * 60 * 60 * 1000;
-const CATALOG_RESULT_LIMIT = IS_HANDHELD ? 8 : 80;
+const CATALOG_RESULT_LIMIT = IS_HANDHELD ? 8 : 24;
 const HANDHELD_SCAN_BULTOS_ID = "__handheld_scan_bultos__";
 
 function normalizeCatalogSearch(value = "") {
@@ -1239,7 +1239,13 @@ export default function ProveedoresExternos({ user }) {
               />
             </div>
             {supplierOpen ? (
-              <div className="absolute inset-x-0 top-full z-[60] mt-2 max-h-[min(18rem,calc(100vh-10rem))] max-w-full overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.45)]">
+              <div className="absolute inset-x-0 top-full z-[60] mt-2 max-h-[min(18rem,calc(100vh-10rem))] max-w-full overflow-y-auto overflow-x-hidden overscroll-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.45)]">
+                <div className="sticky top-0 z-10 mb-1 flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white/95 px-3 py-2 backdrop-blur">
+                  <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">{suppliers.length} resultados</span>
+                  <button type="button" onClick={() => setSupplierOpen(false)} className="rounded-lg bg-slate-100 px-3 py-1.5 text-[10px] font-black text-slate-700">
+                    Cerrar
+                  </button>
+                </div>
                 {suppliers.map((row) => (
                   <button
                     key={row.pro_id}
@@ -1513,7 +1519,13 @@ export default function ProveedoresExternos({ user }) {
             disabled={articleCatalog.length === 0}
           />
           {productOpen ? (
-            <div className="handheld-provider-product-dropdown absolute inset-x-0 top-full z-[120] mt-2 max-h-[min(360px,55vh)] max-w-full overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-lime-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(30,50,12,0.45)]">
+            <div className="handheld-provider-product-dropdown absolute inset-x-0 top-full z-[120] mt-2 max-h-[min(360px,55vh)] max-w-full overflow-y-auto overflow-x-hidden overscroll-auto rounded-2xl border border-lime-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(30,50,12,0.45)]">
+              <div className="sticky top-0 z-10 mb-1 flex items-center justify-between gap-2 rounded-xl border border-lime-100 bg-white/95 px-3 py-2 backdrop-blur">
+                <span className="text-[10px] font-black uppercase tracking-wide text-lime-700">{products.length} resultados</span>
+                <button type="button" onClick={() => setProductOpen(false)} className="rounded-lg bg-lime-100 px-3 py-1.5 text-[10px] font-black text-lime-800">
+                  Cerrar
+                </button>
+              </div>
               {products.map((product) => (
                 <button
                   key={product.art_id}
@@ -1584,7 +1596,7 @@ export default function ProveedoresExternos({ user }) {
               <span className="text-right">Subtotal</span>
               <span />
             </div>
-            <div className="provider-items-list max-h-[min(52vh,560px)] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
+            <div className="provider-items-list max-h-[min(52vh,560px)] divide-y divide-slate-100 overflow-y-auto overscroll-auto">
               {items.map((item) => (
                 <div key={item.art_id} className="provider-item-row grid min-h-12 grid-cols-[minmax(56px,1fr)_48px_38px_64px_72px_32px] items-center gap-0.5 px-1.5 py-1.5 sm:grid-cols-[minmax(160px,1fr)_76px_64px_104px_110px_36px] sm:gap-2 sm:px-3">
                   <div className="provider-item-product flex min-w-0 items-center gap-2">
@@ -1651,7 +1663,7 @@ export default function ProveedoresExternos({ user }) {
         )}
       </section>
 
-      <div className={`handheld-provider-actions fixed inset-x-0 z-40 px-3 lg:bottom-4 lg:left-auto lg:right-5 lg:w-[560px] ${IS_HANDHELD && productOpen ? "handheld-provider-actions-search-open" : ""}`}>
+      <div className={`handheld-provider-actions relative z-30 px-0 lg:fixed lg:inset-x-auto lg:bottom-4 lg:right-5 lg:w-[560px] lg:px-3 ${IS_HANDHELD && productOpen ? "handheld-provider-actions-search-open" : ""}`}>
         <div className="rounded-[1.4rem] border border-slate-700 bg-slate-950 p-3 text-white shadow-[0_24px_60px_-28px_rgba(2,6,23,0.85)]">
           <div className="flex items-center justify-between gap-3 px-2 pb-2">
             <div>

@@ -1344,7 +1344,7 @@ textarea {
 }
 
 .handheld-app .handheld-provider-form {
-  padding-bottom: calc(var(--native-bottom-nav-height) + 116px);
+  padding-bottom: calc(var(--native-bottom-nav-height) + 12px);
 }
 
 .handheld-app .handheld-provider-form > section:first-child {
@@ -1769,7 +1769,7 @@ textarea {
 }
 
 .handheld-app .handheld-provider-actions {
-  bottom: calc(var(--native-bottom-nav-height) + 6px);
+  bottom: auto;
   padding: 0 6px;
 }
 
@@ -1918,11 +1918,11 @@ textarea {
 }
 
 .provider-form-shell {
-  padding-bottom: calc(var(--native-bottom-nav-height) + 142px);
+  padding-bottom: calc(var(--native-bottom-nav-height) + 12px);
 }
 
 .handheld-provider-actions {
-  bottom: calc(var(--native-bottom-nav-height) + 8px);
+  bottom: auto;
 }
 
 @media (min-width: 1024px) {
