@@ -14,8 +14,8 @@ android {
         applicationId "com.pedidosinternos.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 20
-        versionName "1.1.17"
+        versionCode 21
+        versionName "1.1.18"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -31,8 +31,8 @@ android {
         handheld {
             dimension "device"
             applicationId "com.pedidosinternos.handheld"
-            versionCode 10010
-            versionName "1.0.9"
+            versionCode 10011
+            versionName "1.0.10"
         }
     }
     signingConfigs {
