@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { db } from "../firebase";
 import { onValue, ref } from "firebase/database";
 import {
@@ -360,7 +361,7 @@ function SidebarNavButton({ item, active, onClick }) {
       style={{ "--nav-accent": item.accent }}
     >
       <span className="desktop-rail-icon">{item.icon}</span>
-      <span>{item.label}</span>
+      <span>{item.shortLabel || item.label}</span>
       <span className="desktop-rail-indicator" />
     </button>
   );
@@ -384,13 +385,42 @@ function MobileNavButton({ item, active, onClick }) {
   );
 }
 
+function AppBootSkeleton() {
+  return (
+    <div className="native-boot-shell" aria-label="Cargando CSM Operaciones" aria-busy="true">
+      <div className="native-boot-card">
+        <div className="flex items-center gap-3">
+          <span className="app-skeleton h-12 w-12 rounded-2xl" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <span className="app-skeleton block h-3 w-28 rounded-full" />
+            <span className="app-skeleton block h-6 w-48 max-w-full rounded-lg" />
+          </div>
+        </div>
+        <div className="mt-7 space-y-3">
+          <span className="app-skeleton block h-14 rounded-2xl" />
+          <span className="app-skeleton block h-14 rounded-2xl" />
+          <span className="app-skeleton block h-14 rounded-2xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AppInterna() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const user = session?.company?.legacyBranchId || null;
   const companyContext = session?.company || null;
-  const [view, setView] = useState("formulario");
-  const [businessModule, setBusinessModule] = useState("panel");
+  const [view, setView] = useState(() => {
+    if (typeof window === "undefined") return "formulario";
+    const savedView = window.localStorage.getItem("csmInternalView");
+    return NAV_ITEMS.some((item) => item.key === savedView) ? savedView : "formulario";
+  });
+  const [businessModule, setBusinessModule] = useState(() => {
+    if (typeof window === "undefined") return "panel";
+    const savedModule = window.localStorage.getItem("csmBusinessModule");
+    return BUSINESS_MODULES.some((item) => item.key === savedModule) ? savedModule : "panel";
+  });
   const [pedidos, setPedidos] = useState([]);
   const [pedidoEditar, setPedidoEditar] = useState(null);
   const [config, setConfig] = useState(() => {
@@ -414,11 +444,10 @@ export default function AppInterna() {
   const [isDesktop, setIsDesktop] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [operationalAlerts, setOperationalAlerts] = useState([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const previousOrderStatusesRef = useRef(null);
 
   useEffect(() => {
-    const savedModule = window.localStorage.getItem("csmBusinessModule");
-    if (BUSINESS_MODULES.some((item) => item.key === savedModule)) setBusinessModule(savedModule);
     return observeOperationsSession(({ session: nextSession, error: sessionError }) => {
       setSession(nextSession);
       setAuthLoading(false);
@@ -517,6 +546,10 @@ export default function AppInterna() {
   useEffect(() => {
     localStorage.setItem("csmBusinessModule", businessModule);
   }, [businessModule]);
+
+  useEffect(() => {
+    if (NAV_ITEMS.some((item) => item.key === view)) localStorage.setItem("csmInternalView", view);
+  }, [view]);
 
   useEffect(() => {
     if (!companyContext?.internalTransfers) return undefined;
@@ -755,12 +788,12 @@ export default function AppInterna() {
   };
 
   if (authLoading && !user) {
-    return <div className="login-shell grid min-h-screen place-items-center text-sm font-black text-white">Validando sesion...</div>;
+    return <AppBootSkeleton />;
   }
 
   if (!user) {
     return (
-      <div className={`login-shell flex items-center px-4 py-6 ${IS_HANDHELD ? "handheld-app" : ""}`}>
+      <div className={`login-shell native-login flex items-center px-4 py-6 ${IS_HANDHELD ? "handheld-app" : ""}`}>
         <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[1.05fr_0.95fr]">
           <section className="login-aside page-enter p-6 sm:p-8 lg:p-10">
             <div className="text-[10px] font-black uppercase tracking-[0.38em] text-[#9bdd3a]">
@@ -791,6 +824,7 @@ export default function AppInterna() {
             <div className="mt-7 grid gap-3">
               {[
                 "Carnes San Martin Granada",
+                "Carnes San Martin Nindiri",
                 "Carnes Amparito",
                 "Carnes San Martin Masaya",
               ].map((item) => (
@@ -807,8 +841,8 @@ export default function AppInterna() {
           <section className="login-panel page-enter p-6 sm:p-8">
             <div className="mx-auto max-w-md">
               <div className="mb-6 flex items-center gap-4">
-                <div className="flex h-15 w-15 items-center justify-center rounded-[1.35rem] bg-[linear-gradient(135deg,#9bdd3a_0%,#4f8f00_100%)] text-[#08110a] shadow-[0_18px_38px_-22px_rgba(118,185,0,0.62)]">
-                  {Icons.app}
+                <div className="native-login-logo flex h-15 w-15 items-center justify-center rounded-[1.35rem] bg-white text-[#08110a] shadow-[0_18px_38px_-22px_rgba(118,185,0,0.62)]">
+                  <Image src="/csm-logo.svg" alt="Carnes San Martin" width={56} height={56} priority />
                 </div>
                 <div>
                   <div className="app-title text-3xl font-black text-slate-950">Acceso</div>
@@ -869,7 +903,7 @@ export default function AppInterna() {
 
               <div className="mt-6 grid gap-2 sm:grid-cols-2">
                 <div className="rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                  Granada
+                  Granada y Nindiri
                 </div>
                 <div className="rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
                   Amparito y Masaya
@@ -883,7 +917,7 @@ export default function AppInterna() {
   }
 
   return (
-    <div className={`desktop-app-frame min-h-screen ${IS_HANDHELD ? "handheld-app" : ""}`}>
+    <div className={`desktop-app-frame native-app-frame min-h-screen ${IS_HANDHELD ? "handheld-app" : ""}`}>
       <aside className="desktop-sidebar hidden xl:flex">
         <div className="desktop-brand-block">
           <div className="desktop-brand-mark">CSM</div>
@@ -976,20 +1010,24 @@ export default function AppInterna() {
         </div>
       </aside>
 
-      <section className="desktop-content min-h-screen min-w-0">
-        <header className="desktop-topbar">
+      <section className="desktop-content native-content min-h-screen min-w-0">
+        <header className="desktop-topbar native-topbar">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="desktop-module-icon">{navMeta.icon}</div>
+            <div className="desktop-module-icon native-module-icon">
+              <span className="hidden sm:block">{navMeta.icon}</span>
+              <Image className="sm:hidden" src="/csm-logo.svg" alt="" width={40} height={40} />
+            </div>
             <div className="min-w-0">
               <div className="desktop-topbar-kicker">{IS_HANDHELD ? "Hand Held" : "Panel operativo"}</div>
               <h1 className="desktop-topbar-title">{navMeta.title}</h1>
+              <div className="native-mobile-branch sm:hidden">{companyContext?.branchAlias || getBranchDisplayName(user)}</div>
             </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            <div className={`desktop-connection-pill hidden md:flex ${isOnline ? "is-online" : "is-offline"}`}>
+            <div className={`desktop-connection-pill native-connection-pill ${isOnline ? "is-online" : "is-offline"}`}>
               <span />
-              {isOnline ? "Sincronizado" : "Sin conexion"}
+              <b className="hidden md:inline">{isOnline ? "Sincronizado" : "Sin conexion"}</b>
             </div>
             <div className="app-chip hidden lg:inline-flex">{Icons.calendar}{fechaActual}</div>
             <div className="app-chip hidden sm:inline-flex">{Icons.user}{companyContext?.empresa || getBranchDisplayName(user)}</div>
@@ -999,7 +1037,7 @@ export default function AppInterna() {
                 setBusinessModule("internos");
                 setView("configuracion");
               }}
-              className="app-icon-button desktop-topbar-action"
+              className="app-icon-button desktop-topbar-action hidden lg:inline-flex"
               aria-label="Configuracion"
               title="Configuracion"
             >
@@ -1008,23 +1046,31 @@ export default function AppInterna() {
             <button
               type="button"
               onClick={handleLogout}
-              className="app-icon-button desktop-topbar-action"
+              className="app-icon-button desktop-topbar-action hidden lg:inline-flex"
               aria-label="Salir"
               title="Salir"
             >
               {Icons.logout}
             </button>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="app-icon-button desktop-topbar-action lg:hidden"
+              aria-label="Abrir cuenta y opciones"
+            >
+              {Icons.user}
+            </button>
           </div>
         </header>
 
-        <div className="px-3 pt-3 sm:px-6 xl:hidden">
-          <div className="mobile-business-switch grid grid-cols-2 gap-2 rounded-[1.35rem] border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur-xl sm:grid-cols-4">
+        <div className="native-module-strip hidden px-4 pt-3 md:block sm:px-6 xl:hidden">
+          <div className="mobile-business-switch flex gap-2 overflow-x-auto rounded-[1.15rem] border border-slate-200 bg-white/90 p-1.5 shadow-sm backdrop-blur-xl">
             {availableBusinessModules.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setBusinessModule(item.key)}
-                className={`flex min-h-14 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-black transition ${
+                className={`flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition ${
                   businessModule === item.key ? "bg-slate-950 text-white shadow-lg" : "text-slate-500"
                 }`}
               >
@@ -1049,23 +1095,45 @@ export default function AppInterna() {
         ) : null}
 
         <div className="app-shell">
-          <main className="app-route-shell page-enter" key={`${businessModule}:${view}`}>{renderCurrentView()}</main>
+          <main className="app-route-shell page-enter">{renderCurrentView()}</main>
         </div>
       </section>
 
-      {businessModule === "internos" ? (
-        <nav className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-50 px-3 pb-[calc(12px+env(safe-area-inset-bottom))] pt-4 lg:hidden">
-          <div className="mx-auto flex max-w-4xl gap-2 rounded-[24px] border border-slate-200 bg-white/94 p-2 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">
-            {NAV_ITEMS.map((item) => (
+      <nav className="mobile-bottom-nav native-bottom-nav fixed inset-x-0 bottom-0 z-50 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-3 lg:hidden" aria-label={businessModule === "internos" ? "Traspasos internos" : "Modulos"}>
+          <div className="mx-auto flex max-w-4xl gap-1 rounded-[22px] border border-slate-200 bg-white/94 p-1.5 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">
+            {(businessModule === "internos" ? NAV_ITEMS : availableBusinessModules).map((item) => (
               <MobileNavButton
                 key={item.key}
                 item={item}
-                active={view === item.key}
-                onClick={() => setView(item.key)}
+                active={businessModule === "internos" ? view === item.key : businessModule === item.key}
+                onClick={() => {
+                  if (businessModule === "internos") setView(item.key);
+                  else setBusinessModule(item.key);
+                }}
               />
             ))}
           </div>
         </nav>
+
+      {mobileMenuOpen ? (
+        <div className="app-modal native-account-modal z-[100]" role="dialog" aria-modal="true" aria-labelledby="mobile-account-title" onClick={() => setMobileMenuOpen(false)}>
+          <div className="app-modal-panel native-account-sheet w-full max-w-lg p-0" onClick={(event) => event.stopPropagation()}>
+            <div className="native-account-header">
+              <div className="native-account-logo"><Image src="/csm-logo.svg" alt="" width={52} height={52} /></div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Cuenta activa</div>
+                <h2 id="mobile-account-title" className="truncate text-lg font-black text-slate-950">{companyContext?.empresa || getBranchDisplayName(user)}</h2>
+                <div className={`mt-1 flex items-center gap-2 text-xs font-bold ${isOnline ? "text-emerald-700" : "text-rose-600"}`}><span className={`h-2 w-2 rounded-full ${isOnline ? "bg-emerald-500" : "bg-rose-500"}`} />{isOnline ? "En linea" : "Sin conexion"}</div>
+              </div>
+            </div>
+            <div className="grid gap-2 p-4 pb-[calc(16px+env(safe-area-inset-bottom))]">
+              <button type="button" className="native-sheet-action" onClick={() => { setBusinessModule("panel"); setMobileMenuOpen(false); }}><span>{Icons.panel}</span><b>Ir al inicio</b></button>
+              {companyContext?.internalTransfers ? <button type="button" className="native-sheet-action" onClick={() => { setBusinessModule("internos"); setView("configuracion"); setMobileMenuOpen(false); }}><span>{Icons.settings}</span><b>Configuracion</b></button> : null}
+              <button type="button" className="native-sheet-action is-danger" onClick={() => { setMobileMenuOpen(false); handleLogout(); }}><span>{Icons.logout}</span><b>Cerrar sesion</b></button>
+              <button type="button" className="app-button-secondary mt-1" onClick={() => setMobileMenuOpen(false)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {activeOperationalAlert ? (

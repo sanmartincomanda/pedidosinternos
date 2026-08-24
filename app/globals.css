@@ -1800,3 +1800,521 @@ textarea {
   padding: 4px;
   font-size: 9px;
 }
+
+/* Mobile-first application shell shared by web, tablet and Android builds. */
+:root {
+  --native-green: #16734a;
+  --native-green-dark: #0b3d2b;
+  --native-lime: #8bcf2f;
+  --native-canvas: #f4f7f5;
+  --native-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html {
+  min-height: 100dvh;
+  overscroll-behavior-x: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+button,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+button:active:not(:disabled),
+[role="button"]:active {
+  transform: scale(0.975);
+}
+
+input,
+select,
+textarea {
+  scroll-margin-block: 112px;
+}
+
+.native-app-frame {
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 94% 0%, rgba(139, 207, 47, 0.1), transparent 22rem),
+    linear-gradient(180deg, #f8faf9 0%, var(--native-canvas) 100%);
+}
+
+.native-content {
+  min-height: 100dvh;
+}
+
+.native-topbar {
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+}
+
+.native-module-icon img,
+.native-login-logo img,
+.native-account-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.native-login-logo img {
+  padding: 7px;
+}
+
+.native-mobile-branch {
+  max-width: 52vw;
+  overflow: hidden;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 0.67rem;
+  font-weight: 750;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.native-connection-pill {
+  display: flex;
+  min-width: 32px;
+  min-height: 32px;
+  justify-content: center;
+  padding: 7px;
+}
+
+.native-module-strip > div {
+  scrollbar-width: none;
+}
+
+.native-module-strip > div::-webkit-scrollbar {
+  display: none;
+}
+
+.native-bottom-nav {
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(244, 247, 245, 0.92) 42%, rgba(244, 247, 245, 0.98) 100%);
+}
+
+.native-bottom-nav > div {
+  pointer-events: auto;
+  box-shadow: 0 18px 45px -22px rgba(15, 45, 31, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.72) inset;
+}
+
+.native-bottom-nav .mobile-nav-button {
+  min-width: 0;
+  min-height: 58px;
+  border-radius: 16px;
+  padding: 6px 3px;
+  transition: color 160ms ease, background 160ms ease, transform 120ms ease;
+}
+
+.native-bottom-nav .mobile-nav-button svg {
+  width: 21px;
+  height: 21px;
+}
+
+.native-account-modal {
+  padding: 0;
+}
+
+.native-account-sheet {
+  overflow: hidden;
+}
+
+.native-account-header {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 25px 18px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(145deg, #f8fbf8, #eef7ef);
+}
+
+.native-account-logo {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 5px;
+  border: 1px solid #dbe8db;
+  border-radius: 15px;
+  background: #ffffff;
+}
+
+.native-sheet-action {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 54px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  color: #1e293b;
+  border: 1px solid #e2e8f0;
+  border-radius: 15px;
+  background: #ffffff;
+  text-align: left;
+}
+
+.native-sheet-action > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  color: var(--native-green);
+  border-radius: 12px;
+  background: #eaf7ef;
+}
+
+.native-sheet-action.is-danger {
+  color: #9f1239;
+  border-color: #ffe4e6;
+  background: #fffafa;
+}
+
+.native-sheet-action.is-danger > span {
+  color: #e11d48;
+  background: #fff1f2;
+}
+
+.native-boot-shell {
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  padding: calc(20px + env(safe-area-inset-top, 0px)) 16px calc(20px + var(--native-safe-bottom));
+  background: linear-gradient(165deg, #07130d, #10281c 58%, #183722);
+}
+
+.native-boot-card {
+  width: min(100%, 430px);
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 30px 70px -38px rgba(0, 0, 0, 0.72);
+}
+
+.app-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #e7ece9;
+}
+
+.app-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.72), transparent);
+  animation: nativeShimmer 1.25s infinite;
+}
+
+@keyframes nativeShimmer {
+  100% { transform: translateX(100%); }
+}
+
+.app-modal-panel {
+  overscroll-behavior: contain;
+}
+
+.app-button-primary,
+.app-button-secondary,
+.app-button-danger,
+.app-button-ghost,
+.app-icon-button {
+  transition: transform 120ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.app-input,
+.app-select,
+textarea {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.native-module-card {
+  touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+  html {
+    font-size: 16px;
+  }
+
+  body {
+    background: var(--native-canvas);
+  }
+
+  body::before,
+  .app-route-shell::before {
+    display: none;
+  }
+
+  .native-login {
+    min-height: 100dvh;
+    align-items: center;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 12px calc(16px + var(--native-safe-bottom));
+  }
+
+  .native-login > div {
+    max-width: 430px;
+  }
+
+  .native-login .login-aside {
+    display: none;
+  }
+
+  .native-login .login-panel {
+    padding: 22px 18px !important;
+    border-radius: 25px;
+  }
+
+  .native-login .app-title {
+    font-size: 1.65rem;
+  }
+
+  .desktop-topbar.native-topbar {
+    min-height: calc(62px + env(safe-area-inset-top, 0px));
+    padding: calc(7px + env(safe-area-inset-top, 0px)) 10px 7px;
+    border-bottom-color: rgba(203, 213, 205, 0.78);
+    background: rgba(250, 252, 250, 0.95);
+  }
+
+  .native-module-icon {
+    width: 40px;
+    height: 40px;
+    padding: 4px;
+    border-radius: 12px;
+    background: #ffffff;
+  }
+
+  .desktop-topbar-title {
+    max-width: 52vw;
+    font-size: 1rem;
+    line-height: 1.05;
+  }
+
+  .desktop-topbar-kicker {
+    display: none;
+  }
+
+  .desktop-topbar-action {
+    width: 40px;
+    height: 40px;
+  }
+
+  .app-shell {
+    padding: 10px 9px calc(94px + var(--native-safe-bottom));
+  }
+
+  .app-panel,
+  .app-section,
+  .app-card,
+  .app-card-soft,
+  .app-empty {
+    border-radius: 18px;
+    box-shadow: 0 14px 36px -30px rgba(15, 45, 31, 0.42);
+  }
+
+  .module-heading {
+    border-radius: 19px;
+    padding: 16px;
+  }
+
+  .module-heading h1,
+  .module-heading h2 {
+    font-size: 1.45rem !important;
+    line-height: 1.05;
+  }
+
+  .app-input,
+  .app-select,
+  textarea {
+    min-height: 48px;
+    border-radius: 13px;
+    font-size: 16px;
+  }
+
+  .app-button-primary,
+  .app-button-secondary,
+  .app-button-danger,
+  .app-button-ghost {
+    min-height: 48px;
+    border-radius: 14px;
+  }
+
+  .app-icon-button {
+    min-width: 42px;
+    min-height: 42px;
+    border-radius: 13px;
+  }
+
+  .app-modal {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .app-modal-panel {
+    position: relative;
+    width: 100%;
+    max-width: none !important;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 14px);
+    padding-bottom: calc(18px + var(--native-safe-bottom));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 25px 25px 0 0;
+    animation: nativeSheetUp 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .app-modal-panel::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    z-index: 4;
+    width: 38px;
+    height: 4px;
+    transform: translateX(-50%);
+    border-radius: 99px;
+    background: rgba(100, 116, 139, 0.3);
+  }
+
+  .native-module-panel {
+    padding-bottom: 4px;
+  }
+
+  .native-module-hero {
+    border-radius: 21px;
+    padding: 18px !important;
+  }
+
+  .native-module-hero h2 {
+    margin-top: 6px;
+    font-size: 1.7rem;
+  }
+
+  .native-module-intro {
+    margin-top: 5px;
+    font-size: 0.8rem;
+  }
+
+  .native-module-hero .grid.grid-cols-2 {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.75fr);
+    border-radius: 15px;
+  }
+
+  .native-module-hero .grid.grid-cols-2 > div {
+    min-width: 0;
+    padding: 9px 10px;
+  }
+
+  .native-module-card {
+    display: grid;
+    min-height: 94px;
+    grid-template-columns: 48px minmax(0, 1fr) 26px;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 2px 12px;
+    padding: 13px !important;
+    border-radius: 18px;
+  }
+
+  .native-module-card > .absolute {
+    display: none;
+  }
+
+  .native-module-card-icon {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+
+  .native-module-card-title {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    margin-top: 0;
+    font-size: 1rem;
+  }
+
+  .native-module-card-copy {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 2px;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .native-module-card-action {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    margin-top: 0;
+    font-size: 0;
+  }
+
+  .native-module-card-action > svg,
+  .native-module-card-action > span {
+    width: 22px;
+    height: 22px;
+  }
+
+  .native-activity-card {
+    padding: 15px;
+    border-radius: 18px;
+  }
+
+  .native-activity-card .mt-5 {
+    margin-top: 12px;
+  }
+
+  .native-activity-card .grid-cols-3 > div {
+    padding: 10px;
+  }
+
+  .native-account-header {
+    padding-top: 28px;
+  }
+
+  .provider-items-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+}
+
+@keyframes nativeSheetUp {
+  from { transform: translateY(28px); opacity: 0.65; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  .native-bottom-nav {
+    display: none;
+  }
+
+  .app-shell {
+    padding-bottom: 42px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

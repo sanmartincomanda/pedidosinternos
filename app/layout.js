@@ -17,13 +17,22 @@ export const metadata = {
   title: "CSM Operaciones",
   description: "Traspasos, proveedores e inventario de Carnes San Martin",
   applicationName: "CSM Operaciones",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "CSM Operaciones",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#edf3f8",
+  themeColor: "#f4f7f5",
 };
 
 export default function RootLayout({ children }) {
