@@ -54,6 +54,40 @@ function roundQuantity(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 10000) / 10000;
 }
 
+function createInventoryLineId(articleId) {
+  const random = globalThis.crypto?.randomUUID?.().replaceAll("-", "") || `${Date.now()}${Math.random()}`.replace(/\D/g, "");
+  return `inventory-${articleId}-${random}`;
+}
+
+function hydrateDraftLines(lines = []) {
+  return lines.map((line, index) => ({
+    ...line,
+    lineId: line.lineId || `legacy-${line.articleId}-${normalizeText(line.zona || "Bodega principal")}-${index}`,
+    zona: `${line.zona || "Bodega principal"}`.trim() || "Bodega principal",
+  }));
+}
+
+function aggregateCountedLines(lines = []) {
+  const totals = new Map();
+  lines.forEach((line) => {
+    if (line.countedExistence === "" || !Number.isFinite(Number(line.countedExistence))) return;
+    const key = Number(line.articleId) || `${line.clave}`;
+    const current = totals.get(key) || {
+      articleId: Number(line.articleId),
+      clave: line.clave,
+      descripcion: line.descripcion,
+      unidad: line.unidad,
+      currentExistence: line.currentExistence === null ? null : Number(line.currentExistence),
+      countedExistence: 0,
+      zones: [],
+    };
+    current.countedExistence = roundQuantity(current.countedExistence + Number(line.countedExistence));
+    if (!current.zones.includes(line.zona)) current.zones.push(line.zona);
+    totals.set(key, current);
+  });
+  return [...totals.values()];
+}
+
 function Icon({ name, className = "h-5 w-5" }) {
   const paths = {
     search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
@@ -114,7 +148,7 @@ export default function InventarioSucursal({ user, companyContext }) {
   const [branch, setBranch] = useState(null);
   const [health, setHealth] = useState(null);
   const [history, setHistory] = useState([]);
-  const [lines, setLines] = useState(initialDraft.current?.lines || []);
+  const [lines, setLines] = useState(() => hydrateDraftLines(initialDraft.current?.lines || []));
   const [date, setDate] = useState(initialDraft.current?.date || localDate());
   const [zone, setZone] = useState(initialDraft.current?.zone || "Bodega principal");
   const [performedBy, setPerformedBy] = useState(initialDraft.current?.performedBy || "");
@@ -128,6 +162,8 @@ export default function InventarioSucursal({ user, companyContext }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [weightsLineId, setWeightsLineId] = useState(null);
   const [serverPreview, setServerPreview] = useState(null);
+  const [draftStatus, setDraftStatus] = useState(initialDraft.current?.status || "active");
+  const [draftSavedAt, setDraftSavedAt] = useState(initialDraft.current?.updatedAt || null);
 
   const connectionMismatch = Boolean(
     health?.company?.identifier
@@ -158,30 +194,59 @@ export default function InventarioSucursal({ user, companyContext }) {
     return () => document.removeEventListener("pointerdown", close);
   }, []);
   useEffect(() => {
-    window.localStorage.setItem(draftKey, JSON.stringify({ identity: identity.current, date, zone, performedBy, supervisedBy, notes, lines, updatedAt: new Date().toISOString() }));
-  }, [date, draftKey, lines, notes, performedBy, supervisedBy, zone]);
+    const hasContent = lines.length > 0 || performedBy.trim() || supervisedBy.trim() || notes.trim();
+    if (!hasContent) {
+      window.localStorage.removeItem(draftKey);
+      return;
+    }
+    const updatedAt = new Date().toISOString();
+    window.localStorage.setItem(draftKey, JSON.stringify({ identity: identity.current, date, zone, performedBy, supervisedBy, notes, lines, status: draftStatus, updatedAt }));
+  }, [date, draftKey, draftStatus, lines, notes, performedBy, supervisedBy, zone]);
 
-  const selectedKeys = useMemo(() => new Set(lines.map((line) => `${line.clave}`)), [lines]);
+  const currentZoneToken = normalizeText(zone || "Bodega principal");
+  const selectedKeys = useMemo(() => new Set(lines.filter((line) => normalizeText(line.zona) === currentZoneToken).map((line) => `${line.clave}`)), [currentZoneToken, lines]);
   const results = useMemo(() => !query.trim() ? [] : catalog.map((article) => ({ article, score: scoreArticle(article, query) })).filter((entry) => entry.score !== null && !selectedKeys.has(`${entry.article.clave}`)).sort((left, right) => left.score - right.score || left.article.descripcion.localeCompare(right.article.descripcion)).slice(0, 30).map((entry) => entry.article), [catalog, query, selectedKeys]);
+  const aggregatedLines = useMemo(() => aggregateCountedLines(lines), [lines]);
+  const totalsByArticle = useMemo(() => new Map(aggregatedLines.map((line) => [Number(line.articleId), line])), [aggregatedLines]);
+  const zoneCount = useMemo(() => new Set(lines.map((line) => normalizeText(line.zona)).filter(Boolean)).size, [lines]);
   const summary = useMemo(() => {
-    const ready = lines.filter((line) => line.countedExistence !== "" && Number.isFinite(Number(line.countedExistence)));
+    const ready = aggregatedLines;
     const changed = ready.filter((line) => line.currentExistence === null || Math.abs(Number(line.countedExistence) - Number(line.currentExistence)) > 0.0001);
     const comparable = changed.filter((line) => line.currentExistence !== null);
     return { ready: ready.length, changed: changed.length, positive: comparable.filter((line) => Number(line.countedExistence) > Number(line.currentExistence)).length, negative: comparable.filter((line) => Number(line.countedExistence) < Number(line.currentExistence)).length };
-  }, [lines]);
+  }, [aggregatedLines]);
 
   function addArticle(article) {
-    setLines((current) => [...current, { articleId: Number(article.art_id), clave: article.clave, descripcion: article.descripcion, unidad: `${article.unidad || "PZA"}`.toUpperCase(), currentExistence: article.existencia === null || article.existencia === undefined ? null : Number(article.existencia), countedExistence: "", pesos: [], cajas: 0, zona: zone }]);
+    const activeZone = zone.trim();
+    if (!activeZone) {
+      setMessage({ type: "error", text: "Indica la zona antes de agregar productos." });
+      return;
+    }
+    const lineId = createInventoryLineId(article.art_id);
+    setLines((current) => [...current, { lineId, articleId: Number(article.art_id), clave: article.clave, descripcion: article.descripcion, unidad: `${article.unidad || "PZA"}`.toUpperCase(), currentExistence: article.existencia === null || article.existencia === undefined ? null : Number(article.existencia), countedExistence: "", pesos: [], cajas: 0, zona: activeZone }]);
+    setDraftStatus("active");
     setQuery(""); setShowResults(false);
-    requestAnimationFrame(() => document.querySelector(`[data-count-id="${article.art_id}"]`)?.focus());
+    requestAnimationFrame(() => document.querySelector(`[data-count-id="${lineId}"]`)?.focus());
   }
-  function updateLine(articleId, patch) {
-    setLines((current) => current.map((line) => line.articleId === articleId ? { ...line, ...patch } : line));
+  function updateLine(lineId, patch) {
+    setLines((current) => current.map((line) => line.lineId === lineId ? { ...line, ...patch } : line));
+    setDraftStatus("active");
     setPreviewOpen(false);
   }
   function newDraft(force = false) {
     if (!force && lines.length > 0 && !window.confirm("¿Descartar el levantamiento actual?")) return;
-    identity.current = newIdentity(); setLines([]); setDate(localDate()); setZone("Bodega principal"); setPerformedBy(""); setSupervisedBy(""); setNotes(""); setPreviewOpen(false); window.localStorage.removeItem(draftKey);
+    identity.current = newIdentity(); setLines([]); setDate(localDate()); setZone("Bodega principal"); setPerformedBy(""); setSupervisedBy(""); setNotes(""); setPreviewOpen(false); setDraftStatus("active"); setDraftSavedAt(null); window.localStorage.removeItem(draftKey);
+  }
+  function holdDraft() {
+    if (lines.length < 1) {
+      setMessage({ type: "error", text: "Agrega al menos un producto antes de guardar el levantamiento en espera." });
+      return;
+    }
+    const updatedAt = new Date().toISOString();
+    window.localStorage.setItem(draftKey, JSON.stringify({ identity: identity.current, date, zone, performedBy, supervisedBy, notes, lines, status: "waiting", updatedAt }));
+    setDraftStatus("waiting");
+    setDraftSavedAt(updatedAt);
+    setMessage({ type: "success", text: "Levantamiento guardado en espera. Puedes cerrar la app y continuar después." });
   }
   function buildAdjustmentPayload() {
     return {
@@ -190,19 +255,18 @@ export default function InventarioSucursal({ user, companyContext }) {
       branchId: companyContext?.branchId,
       branchAlias: companyContext?.branchAlias,
       fecha: date,
-      zona: zone,
+      zona: aggregatedLines.length > 0 ? [...new Set(aggregatedLines.flatMap((line) => line.zones))].join(", ") : zone,
       realizadoPor: performedBy,
       supervisadoPor: supervisedBy,
       observaciones: notes,
-      items: lines
-        .filter((line) => line.countedExistence !== "" && Number.isFinite(Number(line.countedExistence)))
-        .map((line) => ({
+      items: aggregatedLines.map((line) => ({
           articleId: line.articleId,
           sku: line.clave,
           nombre: line.descripcion,
           unidad: line.unidad,
           cantidadContada: Number(line.countedExistence),
-          expectedExistence: Number(line.currentExistence),
+          expectedExistence: line.currentExistence === null ? null : Number(line.currentExistence),
+          zonas: line.zones,
         })),
     };
   }
@@ -239,7 +303,7 @@ export default function InventarioSucursal({ user, companyContext }) {
     } catch (error) { setMessage({ type: "error", text: error.message }); setPreviewOpen(false); } finally { setWorking(false); }
   }
 
-  const activeWeightsLine = lines.find((line) => line.articleId === weightsLineId) || null;
+  const activeWeightsLine = lines.find((line) => line.lineId === weightsLineId) || null;
   return <div className="inventory-module min-w-0 space-y-4 pb-24 lg:pb-6">
     <section className="overflow-hidden rounded-[1.75rem] border border-emerald-950/10 bg-[linear-gradient(135deg,#0b1d18_0%,#102a20_58%,#173b28_100%)] text-white shadow-[0_24px_65px_-38px_rgba(5,46,22,0.7)]">
       <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-end"><div><div className="text-[10px] font-black uppercase tracking-[0.28em] text-lime-300">Módulo Inventario</div><h2 className="mt-2 text-2xl font-black sm:text-3xl">Levantamiento físico</h2><p className="mt-2 text-sm font-semibold text-emerald-50/70">Conteo validado y aplicado mediante la API local de SICAR.</p></div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-3 py-2 text-xs font-black ${writeEnabled ? "border-lime-300/25 bg-lime-300/10 text-lime-200" : "border-amber-300/25 bg-amber-300/10 text-amber-100"}`}>{writeEnabled ? `API conectada · ${companyContext?.empresa || user}` : "API sin escritura"}</span></div></div>
@@ -248,24 +312,36 @@ export default function InventarioSucursal({ user, companyContext }) {
     </section>
     <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><button type="button" onClick={() => setTab("count")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-black ${tab === "count" ? "bg-slate-950 text-white" : "text-slate-500"}`}><Icon name="inventory" />Levantamiento</button><button type="button" onClick={() => setTab("history")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl text-sm font-black ${tab === "history" ? "bg-slate-950 text-white" : "text-slate-500"}`}><Icon name="history" />Historial</button></div>
     {message ? <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${message.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-700"}`}>{message.text}</div> : null}
+    {draftStatus === "waiting" && lines.length > 0 ? <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3"><div><div className="text-sm font-black text-amber-900">Levantamiento en espera</div><div className="text-xs font-bold text-amber-700">{lines.length} líneas · {zoneCount} zonas{draftSavedAt ? ` · Guardado ${new Date(draftSavedAt).toLocaleString("es-NI")}` : ""}</div></div><button type="button" className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-black text-white" onClick={() => { setDraftStatus("active"); setMessage({ type: "success", text: "Levantamiento reanudado." }); }}>Continuar</button></div> : null}
 
     {tab === "count" ? <>
       <section className="rounded-[1.6rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[150px_180px_1fr_1fr_auto]"><label><span className="app-label">Folio</span><input className="app-input bg-slate-50 font-mono text-xs" value={identity.current.folio} readOnly /></label><label><span className="app-label">Fecha</span><input type="date" className="app-input" max={localDate()} value={date} onChange={(event) => setDate(event.target.value)} /></label><label><span className="app-label">Realizado por</span><input className="app-input" value={performedBy} onChange={(event) => setPerformedBy(event.target.value)} placeholder="Nombre" /></label><label><span className="app-label">Supervisado por</span><input className="app-input" value={supervisedBy} onChange={(event) => setSupervisedBy(event.target.value)} placeholder="Nombre" /></label><button type="button" className="app-button-secondary self-end" onClick={() => newDraft(false)}>Nuevo</button></div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(180px,0.4fr)_1fr]"><label><span className="app-label">Zona</span><input className="app-input" value={zone} onChange={(event) => setZone(event.target.value)} placeholder="Bodega principal" /></label><label><span className="app-label">Observación</span><input className="app-input" maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Opcional" /></label></div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[150px_180px_1fr_1fr_auto]"><label><span className="app-label">Folio</span><input className="app-input bg-slate-50 font-mono text-xs" value={identity.current.folio} readOnly /></label><label><span className="app-label">Fecha</span><input type="date" className="app-input" max={localDate()} value={date} onChange={(event) => { setDate(event.target.value); setDraftStatus("active"); }} /></label><label><span className="app-label">Realizado por</span><input className="app-input" value={performedBy} onChange={(event) => { setPerformedBy(event.target.value); setDraftStatus("active"); }} placeholder="Nombre" /></label><label><span className="app-label">Supervisado por</span><input className="app-input" value={supervisedBy} onChange={(event) => { setSupervisedBy(event.target.value); setDraftStatus("active"); }} placeholder="Nombre" /></label><div className="grid gap-2 self-end"><button type="button" className="app-button-secondary" onClick={holdDraft}>Guardar en espera</button><button type="button" className="app-button-ghost" onClick={() => newDraft(false)}>Nuevo</button></div></div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(180px,0.4fr)_1fr]"><label><span className="app-label">Zona actual</span><input className="app-input" value={zone} onChange={(event) => { setZone(event.target.value); setDraftStatus("active"); }} placeholder="Bodega principal" /><span className="mt-1 block text-[10px] font-bold text-slate-400">La zona es informativa. SICAR recibirá el total sumado por clave.</span></label><label><span className="app-label">Observación</span><input className="app-input" maxLength={500} value={notes} onChange={(event) => { setNotes(event.target.value); setDraftStatus("active"); }} placeholder="Opcional" /></label></div>
         <div ref={searchRoot} className="relative mt-4"><label className="app-label">Agregar producto</label><div className="relative"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600"><Icon name="search" /></span><input className="app-input pl-12 pr-14" value={query} onChange={(event) => { setQuery(event.target.value); setShowResults(true); }} onFocus={() => setShowResults(true)} onKeyDown={(event) => { if (event.key === "Enter" && results[0]) { event.preventDefault(); addArticle(results[0]); } }} placeholder="Clave, código de barra o nombre" /><button type="button" className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl bg-emerald-600 text-white" onClick={() => results[0] && addArticle(results[0])} aria-label="Agregar"><Icon name="plus" /></button></div>
           {showResults && query.trim() ? <div className="absolute inset-x-0 top-full z-[80] mt-2 max-h-72 overflow-y-auto rounded-2xl border border-emerald-200 bg-white p-2 shadow-2xl">{results.length ? results.map((article) => <button key={article.art_id} type="button" onClick={() => addArticle(article)} className="grid w-full grid-cols-[82px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-emerald-50"><span className="font-mono text-xs font-black text-emerald-700">{article.clave}</span><span className="truncate text-sm font-black text-slate-800">{article.descripcion}</span><span className="text-xs font-bold text-slate-400">{article.existencia === null ? "SICAR valida" : numberFormat.format(article.existencia)} {article.unidad}</span></button>) : <div className="px-4 py-6 text-center text-sm font-bold text-slate-400">Sin coincidencias</div>}</div> : null}
         </div>
       </section>
-      <section className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5"><div><h3 className="text-lg font-black text-slate-950">Productos contados</h3><p className="text-xs font-bold text-slate-400">{lines.length} agregados · {summary.ready} listos · {summary.changed} diferencias</p></div><button type="button" onClick={() => loadData()} className="app-icon-button" aria-label="Actualizar catálogo"><Icon name="refresh" /></button></div>
-        {lines.length ? <div className="divide-y divide-slate-100">{lines.map((line, index) => { const difference = line.countedExistence === "" || line.currentExistence === null ? null : roundQuantity(Number(line.countedExistence) - Number(line.currentExistence)); return <div key={line.articleId} className="grid gap-2 px-4 py-3 sm:grid-cols-[34px_minmax(180px,1fr)_100px_128px_48px] sm:items-center"><span className="hidden text-xs font-black text-slate-300 sm:block">{`${index + 1}`.padStart(2, "0")}</span><div className="min-w-0"><div className="flex items-center gap-2"><span className="rounded-md bg-emerald-50 px-2 py-1 font-mono text-[10px] font-black text-emerald-700">{line.clave}</span><strong className="truncate text-sm text-slate-800">{line.descripcion}</strong></div><div className="mt-1 text-[10px] font-black uppercase text-slate-400">{line.currentExistence === null ? "Existencia actual validada al aplicar en SICAR" : `SICAR ${numberFormat.format(line.currentExistence)} ${line.unidad}${difference !== null ? ` · Diferencia ${difference > 0 ? "+" : ""}${numberFormat.format(difference)}` : ""}`}</div></div><button type="button" className="flex h-10 items-center justify-center gap-1 rounded-xl border border-slate-200 text-xs font-black text-slate-600" onClick={() => setWeightsLineId(line.articleId)}><Icon name="scale" className="h-4 w-4" />Bultos</button><input data-count-id={line.articleId} inputMode="decimal" className="h-10 w-full rounded-xl border border-slate-200 px-3 text-right text-base font-black outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" value={line.countedExistence} onChange={(event) => updateLine(line.articleId, { countedExistence: event.target.value, pesos: [] })} placeholder={`Conteo ${line.unidad}`} /><button type="button" className="app-icon-button text-rose-500" onClick={() => setLines((current) => current.filter((item) => item.articleId !== line.articleId))}><Icon name="trash" /></button></div>; })}</div> : <div className="px-5 py-16 text-center"><Icon name="inventory" className="mx-auto h-9 w-9 text-slate-300" /><div className="mt-3 text-sm font-black text-slate-500">Busca y agrega los productos contados</div></div>}
-        <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_auto] sm:items-center"><div className="grid grid-cols-3 gap-2 text-center"><div><div className="text-[9px] font-black uppercase text-slate-400">Diferencias</div><strong>{summary.changed}</strong></div><div><div className="text-[9px] font-black uppercase text-emerald-600">Positivas</div><strong className="text-emerald-700">{summary.positive}</strong></div><div><div className="text-[9px] font-black uppercase text-rose-600">Negativas</div><strong className="text-rose-700">{summary.negative}</strong></div></div><button type="button" className="app-button-primary min-w-56" disabled={loading || working || summary.ready < 1 || summary.changed < 1 || connectionMismatch || !writeEnabled} onClick={preparePreview}><Icon name="cloud" />{working ? "Validando..." : "Revisar y aplicar"}</button></div>
+      <section className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5"><div><h3 className="text-lg font-black text-slate-950">Productos contados</h3><p className="text-xs font-bold text-slate-400">{lines.length} líneas · {zoneCount} zonas · {summary.ready} claves totalizadas · {summary.changed} diferencias</p></div><button type="button" onClick={() => loadData()} className="app-icon-button" aria-label="Actualizar catálogo"><Icon name="refresh" /></button></div>
+        {lines.length ? <div className="divide-y divide-slate-100">{lines.map((line, index) => {
+          const aggregate = totalsByArticle.get(Number(line.articleId));
+          const difference = !aggregate || aggregate.currentExistence === null ? null : roundQuantity(Number(aggregate.countedExistence) - Number(aggregate.currentExistence));
+          return <div key={line.lineId} className="grid gap-2 px-4 py-3 sm:grid-cols-[34px_minmax(180px,1fr)_100px_128px_48px] sm:items-center">
+            <span className="hidden text-xs font-black text-slate-300 sm:block">{`${index + 1}`.padStart(2, "0")}</span>
+            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-md bg-emerald-50 px-2 py-1 font-mono text-[10px] font-black text-emerald-700">{line.clave}</span><strong className="truncate text-sm text-slate-800">{line.descripcion}</strong><span className="rounded-md bg-amber-50 px-2 py-1 text-[9px] font-black uppercase text-amber-700">{line.zona}</span></div><div className="mt-1 text-[10px] font-black uppercase text-slate-400">{aggregate ? `Total clave ${numberFormat.format(aggregate.countedExistence)} ${line.unidad}${line.currentExistence === null ? " · SICAR valida al aplicar" : ` · SICAR ${numberFormat.format(line.currentExistence)}${difference !== null ? ` · Diferencia ${difference > 0 ? "+" : ""}${numberFormat.format(difference)}` : ""}`}` : `Pendiente en ${line.zona}`}</div></div>
+            <button type="button" className="flex h-10 items-center justify-center gap-1 rounded-xl border border-slate-200 text-xs font-black text-slate-600" onClick={() => setWeightsLineId(line.lineId)}><Icon name="scale" className="h-4 w-4" />Bultos</button>
+            <input data-count-id={line.lineId} inputMode="decimal" className="h-10 w-full rounded-xl border border-slate-200 px-3 text-right text-base font-black outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100" value={line.countedExistence} onChange={(event) => updateLine(line.lineId, { countedExistence: event.target.value, pesos: [] })} placeholder={`Conteo ${line.unidad}`} />
+            <button type="button" className="app-icon-button text-rose-500" onClick={() => { setLines((current) => current.filter((item) => item.lineId !== line.lineId)); setDraftStatus("active"); }}><Icon name="trash" /></button>
+          </div>;
+        })}</div> : <div className="px-5 py-16 text-center"><Icon name="inventory" className="mx-auto h-9 w-9 text-slate-300" /><div className="mt-3 text-sm font-black text-slate-500">Busca y agrega los productos contados</div></div>}
+        <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_auto] sm:items-center"><div className="grid grid-cols-3 gap-2 text-center"><div><div className="text-[9px] font-black uppercase text-slate-400">Diferencias</div><strong>{summary.changed}</strong></div><div><div className="text-[9px] font-black uppercase text-emerald-600">Positivas</div><strong className="text-emerald-700">{summary.positive}</strong></div><div><div className="text-[9px] font-black uppercase text-rose-600">Negativas</div><strong className="text-rose-700">{summary.negative}</strong></div></div><div className="grid gap-2"><button type="button" className="app-button-secondary min-w-56" onClick={holdDraft} disabled={lines.length < 1}>Guardar en espera</button><button type="button" className="app-button-primary min-w-56" disabled={loading || working || summary.ready < 1 || summary.changed < 1 || connectionMismatch || !writeEnabled} onClick={preparePreview}><Icon name="cloud" />{working ? "Validando..." : "Revisar y aplicar"}</button></div></div>
       </section>
     </> : <section className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h3 className="text-lg font-black text-slate-950">Levantamientos aplicados</h3><p className="text-xs font-bold text-slate-400">Historial del SICAR local</p></div><button type="button" className="app-icon-button" onClick={() => loadData()}><Icon name="refresh" /></button></div>
       {history.length ? <div className="divide-y divide-slate-100">{history.map((item) => { const [label, statusClass] = statusMeta(item.status); return <div key={item.sessionId || item.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[150px_130px_minmax(0,1fr)] sm:items-center"><div><div className="font-mono text-base font-black text-slate-900">{item.folio || "Sin folio"}</div><div className="mt-1 truncate font-mono text-[10px] text-slate-400">{item.sessionId}</div></div><div><span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${statusClass}`}>{label}</span>{item.ainId ? <div className="mt-1 text-xs font-bold text-slate-500">SICAR #{item.ainId}</div> : null}</div><div className="min-w-0"><div className="truncate text-sm font-bold text-slate-700">{item.message || "Ajuste aplicado"}</div></div></div>; })}</div> : <div className="px-5 py-16 text-center text-sm font-bold text-slate-400">Todavía no hay ajustes creados por la app.</div>}
     </section>}
 
     {previewOpen ? <div className="app-modal z-[100] px-4" role="dialog" aria-modal="true"><div className="app-modal-panel w-full max-w-xl overflow-hidden p-0"><div className="bg-slate-950 p-5 text-white"><div className="text-[10px] font-black uppercase tracking-[0.2em] text-lime-300">Confirmar levantamiento</div><h2 className="mt-2 text-2xl font-black">Aplicar {identity.current.folio}</h2><p className="mt-2 text-sm font-semibold text-slate-300">La API volverá a validar existencias y aplicará el ajuste en una transacción.</p></div><div className="grid grid-cols-3 gap-3 p-5"><div className="rounded-xl bg-slate-50 p-3 text-center"><div className="text-[9px] font-black uppercase text-slate-400">Diferencias</div><strong className="text-xl">{serverPreview?.summary?.changedLines ?? summary.changed}</strong></div><div className="rounded-xl bg-emerald-50 p-3 text-center"><div className="text-[9px] font-black uppercase text-emerald-600">Positivas</div><strong className="text-xl text-emerald-700">{serverPreview?.summary?.positiveLines ?? summary.positive}</strong></div><div className="rounded-xl bg-rose-50 p-3 text-center"><div className="text-[9px] font-black uppercase text-rose-600">Negativas</div><strong className="text-xl text-rose-700">{serverPreview?.summary?.negativeLines ?? summary.negative}</strong></div></div><div className="border-y border-slate-100 px-5 py-4 text-sm"><div className="flex justify-between py-1"><span className="font-bold text-slate-500">Sucursal</span><strong>{companyContext?.empresa || user}</strong></div><div className="flex justify-between py-1"><span className="font-bold text-slate-500">Realizado</span><strong>{performedBy || "Pendiente"}</strong></div><div className="flex justify-between py-1"><span className="font-bold text-slate-500">Supervisado</span><strong>{supervisedBy || "Pendiente"}</strong></div></div><div className="grid grid-cols-2 gap-3 p-5"><button type="button" className="app-button-secondary" onClick={() => setPreviewOpen(false)} disabled={working}>Volver</button><button type="button" className="app-button-primary" onClick={submitAdjustment} disabled={working}>{working ? "Aplicando..." : "Aplicar en SICAR"}</button></div></div></div> : null}
-    {activeWeightsLine ? <WeightsDialog line={activeWeightsLine} onClose={() => setWeightsLineId(null)} onSave={(weights, total) => { updateLine(activeWeightsLine.articleId, { pesos: weights, cajas: weights.length, countedExistence: `${total}` }); setWeightsLineId(null); }} /> : null}
+    {activeWeightsLine ? <WeightsDialog line={activeWeightsLine} onClose={() => setWeightsLineId(null)} onSave={(weights, total) => { updateLine(activeWeightsLine.lineId, { pesos: weights, cajas: weights.length, countedExistence: `${total}` }); setWeightsLineId(null); }} /> : null}
   </div>;
 }
