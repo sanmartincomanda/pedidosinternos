@@ -1077,8 +1077,8 @@ export default function ProveedoresExternos({ user }) {
   const bultosTotal = bultosTemporal.reduce((sum, weight) => sum + weight, 0);
 
   return (
-    <div className={`provider-form-shell min-w-0 max-w-full space-y-3 overflow-x-clip sm:space-y-4 ${IS_HANDHELD ? "handheld-form handheld-provider-form" : ""}`}>
-      <section className="provider-mobile-toolbar min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:hidden">
+    <div className={`erp-operation-module provider-operation-module provider-form-shell min-w-0 max-w-full space-y-3 overflow-x-clip sm:space-y-4 ${IS_HANDHELD ? "handheld-form handheld-provider-form" : ""}`}>
+      <section className="erp-mobile-toolbar provider-mobile-toolbar min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:hidden">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[1.05rem] font-black leading-tight text-slate-950">Recibir mercaderia</h2>
@@ -1122,7 +1122,7 @@ export default function ProveedoresExternos({ user }) {
         ) : null}
       </section>
 
-      <section className="handheld-provider-hero hidden min-w-0 max-w-full overflow-hidden rounded-[1.7rem] border border-[#3f6212] bg-[radial-gradient(circle_at_88%_8%,rgba(118,185,0,0.3),transparent_20rem),linear-gradient(135deg,#0b1408_0%,#17250e_58%,#223914_100%)] p-5 text-white shadow-[0_24px_60px_-38px_rgba(20,40,8,0.9)] sm:block sm:p-6">
+      <section className="erp-module-hero erp-provider-hero handheld-provider-hero hidden min-w-0 max-w-full overflow-hidden border border-[#31501c] bg-[#12220e] p-5 text-white sm:block sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-4">
             <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-2xl bg-white px-3 shadow-lg sm:h-20 sm:w-36">
@@ -1194,19 +1194,27 @@ export default function ProveedoresExternos({ user }) {
       </section>
 
       {connectionError ? (
-        <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${articleCatalog.length > 0 ? "border-amber-200 bg-amber-50 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+        <div className={`erp-module-alert rounded-2xl border px-4 py-3 text-sm font-bold ${articleCatalog.length > 0 ? "border-amber-200 bg-amber-50 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
           {connectionError}
           {articleCatalog.length > 0 ? " Puedes continuar buscando en el catalogo local y guardar Recibir sin factura." : ""}
         </div>
       ) : null}
 
       {message ? (
-        <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${message.type === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+        <div className={`erp-module-alert rounded-2xl border px-4 py-3 text-sm font-bold ${message.type === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
           {message.text}
         </div>
       ) : null}
 
-      <section className={`handheld-reception-panel app-panel relative min-w-0 max-w-full overflow-visible p-4 sm:p-5 ${supplierOpen ? "z-50" : "z-20"}`}>
+      {catalogSyncing || connection === "checking" ? (
+        <div className="erp-loading-strip" role="status" aria-live="polite">
+          <span className="erp-loading-spinner" aria-hidden="true" />
+          <span>{catalogSyncing ? "Actualizando catalogo SICAR" : "Verificando conexion local"}</span>
+          <span className="erp-loading-track" aria-hidden="true"><span /></span>
+        </div>
+      ) : null}
+
+      <section className={`erp-form-panel handheld-reception-panel app-panel relative min-w-0 max-w-full overflow-visible p-4 sm:p-5 ${supplierOpen ? "z-50" : "z-20"}`}>
         {IS_HANDHELD ? (
           <button
             type="button"
@@ -1332,7 +1340,7 @@ export default function ProveedoresExternos({ user }) {
       </section>
 
       {!IS_HANDHELD || handheldDetailsOpen ? (
-      <section className="handheld-accounting-panel app-panel min-w-0 max-w-full border-lime-200 p-4 sm:p-5">
+      <section className="erp-form-panel handheld-accounting-panel app-panel min-w-0 max-w-full border-lime-200 p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="text-base font-black text-slate-950">Datos contables <span className="text-xs text-slate-400">Opcional</span></div>
@@ -1445,7 +1453,7 @@ export default function ProveedoresExternos({ user }) {
       </section>
       ) : null}
 
-      <section className={`handheld-provider-products app-panel relative min-w-0 max-w-full overflow-visible border-lime-200 p-3 sm:p-4 ${productOpen ? (IS_HANDHELD ? "handheld-provider-products-search-open z-[110]" : "z-40") : "z-10"}`}>
+      <section className={`erp-products-panel handheld-provider-products app-panel relative min-w-0 max-w-full overflow-visible border-lime-200 p-3 sm:p-4 ${productOpen ? (IS_HANDHELD ? "handheld-provider-products-search-open z-[110]" : "z-40") : "z-10"}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-lg font-black text-slate-950">{IS_HANDHELD ? "Captura" : "Productos"} <span className="text-[#5d9100]">{totals.lines}</span></div>
@@ -1467,7 +1475,7 @@ export default function ProveedoresExternos({ user }) {
               openProductSearch();
             }}
             disabled={articleCatalog.length === 0}
-            className="handheld-capture-mode inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#76b900] px-4 text-sm font-black text-[#101807] shadow-[0_14px_28px_-18px_rgba(78,124,15,0.9)] disabled:opacity-40"
+            className="erp-primary-action handheld-capture-mode inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#76b900] px-4 text-sm font-black text-[#101807] disabled:opacity-40"
           >
             {IS_HANDHELD ? (handheldCaptureMode === "scan" ? Icons.search : Icons.scan) : Icons.plus}
             {IS_HANDHELD ? (handheldCaptureMode === "scan" ? "Buscar" : "Escanear") : "Agregar producto"}
@@ -1588,7 +1596,7 @@ export default function ProveedoresExternos({ user }) {
 
         {items.length > 0 ? (
           <div className="handheld-provider-items mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="provider-items-header grid grid-cols-[minmax(56px,1fr)_48px_38px_64px_72px_32px] items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-1.5 py-2 text-[7px] font-black uppercase tracking-[0.08em] text-slate-400 sm:grid-cols-[minmax(160px,1fr)_76px_64px_104px_110px_36px] sm:gap-2 sm:px-3 sm:text-[9px]">
+            <div className="provider-items-header grid grid-cols-[minmax(64px,1fr)_64px_32px_52px_66px_28px] items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-1.5 py-2 text-[7px] font-black uppercase tracking-[0.08em] text-slate-400 sm:grid-cols-[minmax(160px,1fr)_96px_44px_82px_100px_34px] sm:gap-1.5 sm:px-3 sm:text-[9px]">
               <span>Producto</span>
               <span className="text-center">Cant.</span>
               <span className="text-center">Bultos</span>
@@ -1598,7 +1606,7 @@ export default function ProveedoresExternos({ user }) {
             </div>
             <div className="provider-items-list max-h-[min(52vh,560px)] divide-y divide-slate-100 overflow-y-auto overscroll-auto">
               {items.map((item) => (
-                <div key={item.art_id} className="provider-item-row grid min-h-12 grid-cols-[minmax(56px,1fr)_48px_38px_64px_72px_32px] items-center gap-0.5 px-1.5 py-1.5 sm:grid-cols-[minmax(160px,1fr)_76px_64px_104px_110px_36px] sm:gap-2 sm:px-3">
+                <div key={item.art_id} className="provider-item-row grid min-h-12 grid-cols-[minmax(64px,1fr)_64px_32px_52px_66px_28px] items-center gap-0.5 px-1.5 py-1.5 sm:grid-cols-[minmax(160px,1fr)_96px_44px_82px_100px_34px] sm:gap-1.5 sm:px-3">
                   <div className="provider-item-product flex min-w-0 items-center gap-2">
                     <span className="hidden shrink-0 rounded-md bg-lime-100 px-2 py-1 font-mono text-[9px] font-black text-lime-800 md:inline">{item.clave}</span>
                     <span className="min-w-0 truncate text-xs font-black text-slate-900 sm:text-sm" title={item.descripcion}>{item.descripcion}</span>
@@ -1620,12 +1628,12 @@ export default function ProveedoresExternos({ user }) {
                     label={`Cantidad ${item.descripcion}`}
                     decimals={4}
                     placeholder="0"
-                    className="provider-item-quantity app-input h-10 !min-h-10 rounded-lg px-1 text-center text-xs font-black sm:px-2 sm:text-sm"
+                    className="provider-item-quantity app-input h-10 !min-h-10 rounded-lg px-2 text-center text-[13px] font-black sm:px-3 sm:text-[13px]"
                   />
                   <button
                     type="button"
                     onClick={() => openBultos(item.art_id)}
-                    className={`provider-item-bultos flex h-10 items-center justify-center gap-1 rounded-lg border px-1 text-[9px] font-black ${item.bultos?.length ? "border-lime-300 bg-lime-50 text-lime-800" : "border-slate-200 bg-white text-slate-500"}`}
+                    className={`provider-item-bultos flex h-8 items-center justify-center gap-0.5 rounded-md border px-0.5 text-[8px] font-black ${item.bultos?.length ? "border-lime-300 bg-lime-50 text-lime-800" : "border-slate-200 bg-white text-slate-500"}`}
                     aria-label={`Suma de bultos de ${item.descripcion}`}
                   >
                     {Icons.scale}
@@ -1638,9 +1646,9 @@ export default function ProveedoresExternos({ user }) {
                     label={`Precio sin IVA ${item.descripcion}`}
                     decimals={2}
                     placeholder="0.00"
-                    className="provider-item-price app-input h-10 !min-h-10 rounded-lg px-1 text-center text-[11px] font-black text-[#4d7c0f] sm:px-2 sm:text-sm"
+                    className="provider-item-price app-input h-9 !min-h-9 rounded-lg px-1 text-center text-[10px] font-black text-[#4d7c0f] sm:px-1.5 sm:text-xs"
                   />
-                  <div className="provider-item-subtotal truncate text-right text-[10px] font-black text-slate-900 sm:text-sm" title="Cantidad por precio sin IVA">
+                  <div className="provider-item-subtotal truncate text-right text-[10px] font-black text-slate-900 sm:text-xs" title="Cantidad por precio sin IVA">
                     {formatMoney(roundMoney(Number(item.quantity || 0) * Number(item.netUnitPrice || 0)))}
                   </div>
                   <button
@@ -1664,7 +1672,7 @@ export default function ProveedoresExternos({ user }) {
       </section>
 
       <div className={`handheld-provider-actions relative z-30 px-0 lg:fixed lg:inset-x-auto lg:bottom-4 lg:right-5 lg:w-[560px] lg:px-3 ${IS_HANDHELD && productOpen ? "handheld-provider-actions-search-open" : ""}`}>
-        <div className="rounded-[1.4rem] border border-slate-700 bg-slate-950 p-3 text-white shadow-[0_24px_60px_-28px_rgba(2,6,23,0.85)]">
+        <div className="erp-command-bar rounded-[1.1rem] border border-slate-700 bg-slate-950 p-3 text-white">
           <div className="flex items-center justify-between gap-3 px-2 pb-2">
             <div>
               <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Total factura con IVA</div>

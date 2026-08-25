@@ -2357,6 +2357,415 @@ textarea {
   }
 }
 
+/* Dense ERP treatment for the two local SICAR workspaces. */
+.erp-operation-module {
+  --erp-module-accent: #4d7c0f;
+  --erp-module-accent-strong: #365314;
+  --erp-module-soft: #f4f8ee;
+  color: #172033;
+}
+
+.inventory-module {
+  --erp-module-accent: #047857;
+  --erp-module-accent-strong: #065f46;
+  --erp-module-soft: #eef8f4;
+}
+
+.erp-operation-module .app-panel,
+.erp-operation-module .erp-form-panel,
+.erp-operation-module .erp-products-panel {
+  border-radius: 14px;
+  border-color: #d9e1e7;
+  background: #ffffff;
+  box-shadow: 0 8px 22px -20px rgba(15, 23, 42, 0.4);
+  backdrop-filter: none;
+}
+
+.erp-module-hero {
+  border-radius: 16px;
+  box-shadow: 0 10px 26px -22px rgba(15, 23, 42, 0.7);
+}
+
+.erp-provider-hero,
+.erp-inventory-hero {
+  background-image: none !important;
+}
+
+.erp-operation-module .app-label {
+  margin-bottom: 6px;
+  font-size: 0.63rem;
+  letter-spacing: 0.12em;
+}
+
+.erp-operation-module .app-input,
+.erp-operation-module .app-select,
+.erp-operation-module textarea {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.erp-operation-module .app-input:focus,
+.erp-operation-module .app-select:focus,
+.erp-operation-module textarea:focus {
+  border-color: var(--erp-module-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--erp-module-accent) 13%, transparent);
+}
+
+.erp-operation-module button {
+  touch-action: manipulation;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 100ms ease, opacity 140ms ease;
+}
+
+.erp-operation-module button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.erp-operation-module button:focus-visible,
+.erp-operation-module input:focus-visible,
+.erp-operation-module select:focus-visible,
+.erp-operation-module textarea:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--erp-module-accent) 74%, white);
+  outline-offset: 2px;
+}
+
+.erp-operation-module button:disabled {
+  cursor: not-allowed;
+  filter: saturate(0.55);
+  opacity: 0.5;
+}
+
+.erp-primary-action {
+  box-shadow: none !important;
+}
+
+.erp-module-alert {
+  border-radius: 10px !important;
+  border-left-width: 4px;
+  box-shadow: none;
+}
+
+.erp-segmented-control {
+  border-radius: 11px;
+  box-shadow: 0 7px 18px -18px rgba(15, 23, 42, 0.55);
+}
+
+.erp-segmented-button {
+  border-radius: 7px;
+  color: #64748b;
+}
+
+.erp-segmented-button.is-active {
+  background: #172033;
+  color: #ffffff;
+}
+
+.erp-loading-strip {
+  display: grid;
+  grid-template-columns: 16px max-content minmax(60px, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #d9e1e7;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.erp-loading-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid #dbe4e0;
+  border-top-color: var(--erp-module-accent);
+  border-radius: 50%;
+  animation: erpSpin 700ms linear infinite;
+}
+
+.erp-loading-track {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #e8edf1;
+}
+
+.erp-loading-track > span {
+  display: block;
+  width: 34%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--erp-module-accent);
+  animation: erpProgress 1.15s ease-in-out infinite;
+}
+
+@keyframes erpSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes erpProgress {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(300%); }
+}
+
+.provider-items-header {
+  min-height: 34px;
+  background: #f6f8fa;
+  color: #718096;
+}
+
+.provider-item-row {
+  border-color: #edf1f4;
+  background: #ffffff;
+  transition: background-color 120ms ease;
+}
+
+.provider-item-row:focus-within {
+  background: #fbfdf8;
+}
+
+.provider-item-quantity {
+  border-color: #aebbc6 !important;
+  background: #ffffff !important;
+  font-size: 13px !important;
+}
+
+.provider-item-bultos {
+  min-width: 0;
+}
+
+.provider-item-bultos svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.provider-item-price,
+.provider-item-subtotal {
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.provider-item-price {
+  border-color: #d7dee4 !important;
+  background: #f8fafc !important;
+}
+
+.provider-item-subtotal {
+  color: #172033;
+}
+
+.provider-item-delete svg {
+  width: 17px;
+  height: 17px;
+}
+
+.erp-command-bar {
+  border-radius: 14px !important;
+  box-shadow: 0 14px 32px -24px rgba(2, 6, 23, 0.85);
+}
+
+.inventory-item-row {
+  border-color: #edf1f4;
+  transition: background-color 120ms ease;
+}
+
+.inventory-item-row:focus-within {
+  background: #f8fcfa;
+}
+
+.inventory-item-quantity {
+  border-color: #aebbc6;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-item-delete {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 8px;
+}
+
+@media (max-width: 767px) {
+  .erp-operation-module {
+    gap: 10px;
+  }
+
+  .erp-operation-module .app-panel,
+  .erp-operation-module .erp-form-panel,
+  .erp-operation-module .erp-products-panel,
+  .erp-mobile-toolbar,
+  .erp-module-hero {
+    border-radius: 12px;
+  }
+
+  .erp-operation-module .app-input,
+  .erp-operation-module .app-select,
+  .erp-operation-module textarea {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  .erp-loading-strip {
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+
+  .erp-loading-track {
+    grid-column: 1 / -1;
+  }
+
+  .provider-items-header,
+  .provider-item-row {
+    grid-template-columns: minmax(64px, 1fr) 72px 32px 56px 70px 28px !important;
+  }
+
+  .provider-item-row {
+    min-height: 48px;
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+  }
+
+  .provider-item-product span:last-child {
+    font-size: 11px;
+  }
+
+  .provider-item-quantity {
+    min-height: 38px !important;
+    height: 38px !important;
+    padding-right: 7px !important;
+    padding-left: 7px !important;
+    font-size: 13px !important;
+  }
+
+  .provider-item-bultos {
+    width: 30px;
+    height: 30px !important;
+    justify-self: center;
+  }
+
+  .provider-item-price {
+    min-height: 34px !important;
+    height: 34px !important;
+    padding-right: 3px !important;
+    padding-left: 3px !important;
+    font-size: 10px !important;
+  }
+
+  .provider-item-subtotal {
+    font-size: 10px !important;
+  }
+
+  .provider-item-delete {
+    width: 28px;
+    height: 32px;
+  }
+
+  .inventory-item-row {
+    grid-template-columns: minmax(0, 1fr) 62px 38px !important;
+    grid-template-areas:
+      "info info delete"
+      "quantity bultos delete";
+    align-items: center;
+    gap: 7px;
+    padding: 10px 12px !important;
+  }
+
+  .inventory-item-index {
+    display: none !important;
+  }
+
+  .inventory-item-info {
+    grid-area: info;
+  }
+
+  .inventory-item-bultos {
+    grid-area: bultos;
+    width: 62px;
+    height: 36px;
+    justify-self: end;
+  }
+
+  .inventory-item-bultos span {
+    display: none;
+  }
+
+  .inventory-item-bultos svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .inventory-item-quantity {
+    grid-area: quantity;
+    min-height: 40px;
+    font-size: 14px;
+  }
+
+  .inventory-item-delete {
+    grid-area: delete;
+    align-self: stretch;
+    height: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .provider-items-header {
+    display: none;
+  }
+
+  .provider-item-row {
+    grid-template-columns: minmax(0, 1fr) 40px 32px 54px 70px 28px !important;
+    grid-template-rows: 28px 38px;
+    gap: 4px !important;
+    min-height: 78px;
+    padding: 5px 6px !important;
+  }
+
+  .provider-item-product {
+    grid-column: 1 / 6;
+    grid-row: 1;
+  }
+
+  .provider-item-quantity {
+    grid-column: 1 / 3;
+    grid-row: 2;
+  }
+
+  .provider-item-bultos {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .provider-item-price {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  .provider-item-subtotal {
+    grid-column: 5 / 7;
+    grid-row: 2;
+    padding-right: 3px;
+  }
+
+  .provider-item-delete {
+    grid-column: 6;
+    grid-row: 1;
+  }
+}
+
+.handheld-app .provider-item-row {
+  grid-template-columns: 70px 32px 54px minmax(62px, 1fr) 28px !important;
+}
+
+.handheld-app .provider-item-bultos {
+  width: 30px;
+}
+
+.handheld-app .provider-item-price,
+.handheld-app .provider-item-subtotal {
+  font-size: 9px !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
