@@ -2570,6 +2570,108 @@ textarea {
   transition: background-color 120ms ease;
 }
 
+.inventory-add-zone-button {
+  display: inline-flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #047857;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #047857;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 900;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.inventory-add-zone-button:hover {
+  border-color: #065f46;
+  background: #065f46;
+}
+
+.inventory-add-zone-button:active {
+  transform: translateY(1px);
+}
+
+.inventory-add-zone-button:focus-visible,
+.inventory-zone-tab:focus-visible {
+  outline: 3px solid rgba(16, 185, 129, 0.24);
+  outline-offset: 2px;
+}
+
+.inventory-zone-workspace {
+  min-width: 0;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 12px;
+}
+
+.inventory-zone-tabs {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding: 1px 1px 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.inventory-zone-tab {
+  display: inline-flex;
+  min-height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  max-width: 220px;
+  border: 1px solid #d9e1e7;
+  border-radius: 7px;
+  padding: 5px 8px 5px 10px;
+  background: #f8fafc;
+  color: #526174;
+  font-size: 0.7rem;
+  font-weight: 850;
+  white-space: nowrap;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.inventory-zone-tab:hover {
+  border-color: #9fb0bb;
+  background: #f1f5f9;
+}
+
+.inventory-zone-tab > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inventory-zone-tab > strong {
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 5px;
+  padding: 0 4px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-zone-tab.is-active {
+  border-color: #047857;
+  background: #ecfdf5;
+  color: #065f46;
+  box-shadow: inset 0 -2px 0 #047857;
+}
+
+.inventory-zone-tab.is-active > strong {
+  background: #047857;
+  color: #ffffff;
+}
+
 .inventory-item-row:focus-within {
   background: #f8fcfa;
 }
@@ -2669,6 +2771,30 @@ textarea {
     align-items: center;
     gap: 7px;
     padding: 10px 12px !important;
+  }
+
+  .inventory-add-zone-button {
+    min-height: 44px;
+    padding: 0 11px;
+    font-size: 0.7rem;
+  }
+
+  .inventory-zone-workspace > div:first-child > span:last-child {
+    display: none;
+  }
+
+  .inventory-zone-tabs {
+    margin-right: -4px;
+    margin-left: -4px;
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
+  .inventory-zone-tab {
+    min-height: 30px;
+    max-width: 170px;
+    padding: 4px 7px 4px 9px;
+    font-size: 0.67rem;
   }
 
   .inventory-item-index {

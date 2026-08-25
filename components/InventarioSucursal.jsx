@@ -10,6 +10,7 @@ import {
 } from "@/lib/sicarInventoryApi";
 
 const numberFormat = new Intl.NumberFormat("es-NI", { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+const DEFAULT_INVENTORY_ZONE = "Bodega principal";
 
 function normalizeText(value = "") {
   return `${value}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -65,6 +66,25 @@ function hydrateDraftLines(lines = []) {
     lineId: line.lineId || `legacy-${line.articleId}-${normalizeText(line.zona || "Bodega principal")}-${index}`,
     zona: `${line.zona || "Bodega principal"}`.trim() || "Bodega principal",
   }));
+}
+
+function uniqueZoneNames(values = []) {
+  const unique = new Map();
+  values.forEach((value) => {
+    const name = `${value || ""}`.trim().replace(/\s+/g, " ");
+    const token = normalizeText(name);
+    if (token && !unique.has(token)) unique.set(token, name);
+  });
+  return [...unique.values()];
+}
+
+function draftZoneNames(draft) {
+  const zones = uniqueZoneNames([
+    ...(Array.isArray(draft?.zones) ? draft.zones : []),
+    draft?.zone,
+    ...(Array.isArray(draft?.lines) ? draft.lines.map((line) => line.zona) : []),
+  ]);
+  return zones.length ? zones : [DEFAULT_INVENTORY_ZONE];
 }
 
 function aggregateCountedLines(lines = []) {
@@ -143,14 +163,17 @@ export default function InventarioSucursal({ user, companyContext }) {
   }
   const identity = useRef(initialDraft.current?.identity || newIdentity());
   const searchRoot = useRef(null);
+  const zoneTabsRoot = useRef(null);
   const [tab, setTab] = useState("count");
   const [catalog, setCatalog] = useState([]);
   const [branch, setBranch] = useState(null);
   const [health, setHealth] = useState(null);
   const [history, setHistory] = useState([]);
   const [lines, setLines] = useState(() => hydrateDraftLines(initialDraft.current?.lines || []));
+  const [zones, setZones] = useState(() => draftZoneNames(initialDraft.current));
   const [date, setDate] = useState(initialDraft.current?.date || localDate());
-  const [zone, setZone] = useState(initialDraft.current?.zone || "Bodega principal");
+  const [zone, setZone] = useState(() => initialDraft.current?.zone || draftZoneNames(initialDraft.current)[0]);
+  const [newZoneName, setNewZoneName] = useState("");
   const [performedBy, setPerformedBy] = useState(initialDraft.current?.performedBy || "");
   const [supervisedBy, setSupervisedBy] = useState(initialDraft.current?.supervisedBy || "");
   const [notes, setNotes] = useState(initialDraft.current?.notes || "");
@@ -194,21 +217,36 @@ export default function InventarioSucursal({ user, companyContext }) {
     return () => document.removeEventListener("pointerdown", close);
   }, []);
   useEffect(() => {
-    const hasContent = lines.length > 0 || performedBy.trim() || supervisedBy.trim() || notes.trim();
+    const frame = requestAnimationFrame(() => {
+      zoneTabsRoot.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "nearest",
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [zone, zones]);
+  useEffect(() => {
+    const hasContent = lines.length > 0 || zones.length > 1 || performedBy.trim() || supervisedBy.trim() || notes.trim();
     if (!hasContent) {
       window.localStorage.removeItem(draftKey);
       return;
     }
     const updatedAt = new Date().toISOString();
-    window.localStorage.setItem(draftKey, JSON.stringify({ identity: identity.current, date, zone, performedBy, supervisedBy, notes, lines, status: draftStatus, updatedAt }));
-  }, [date, draftKey, draftStatus, lines, notes, performedBy, supervisedBy, zone]);
+    window.localStorage.setItem(draftKey, JSON.stringify({ identity: identity.current, date, zone, zones, performedBy, supervisedBy, notes, lines, status: draftStatus, updatedAt }));
+  }, [date, draftKey, draftStatus, lines, notes, performedBy, supervisedBy, zone, zones]);
 
   const currentZoneToken = normalizeText(zone || "Bodega principal");
   const selectedKeys = useMemo(() => new Set(lines.filter((line) => normalizeText(line.zona) === currentZoneToken).map((line) => `${line.clave}`)), [currentZoneToken, lines]);
   const results = useMemo(() => !query.trim() ? [] : catalog.map((article) => ({ article, score: scoreArticle(article, query) })).filter((entry) => entry.score !== null && !selectedKeys.has(`${entry.article.clave}`)).sort((left, right) => left.score - right.score || left.article.descripcion.localeCompare(right.article.descripcion)).slice(0, 30).map((entry) => entry.article), [catalog, query, selectedKeys]);
   const aggregatedLines = useMemo(() => aggregateCountedLines(lines), [lines]);
   const totalsByArticle = useMemo(() => new Map(aggregatedLines.map((line) => [Number(line.articleId), line])), [aggregatedLines]);
-  const zoneCount = useMemo(() => new Set(lines.map((line) => normalizeText(line.zona)).filter(Boolean)).size, [lines]);
+  const visibleLines = useMemo(() => lines.filter((line) => normalizeText(line.zona) === currentZoneToken), [currentZoneToken, lines]);
+  const zoneTabs = useMemo(() => zones.map((name) => ({
+    name,
+    count: lines.filter((line) => normalizeText(line.zona) === normalizeText(name)).length,
+  })), [lines, zones]);
+  const zoneCount = zones.length;
   const summary = useMemo(() => {
     const ready = aggregatedLines;
     const changed = ready.filter((line) => line.currentExistence === null || Math.abs(Number(line.countedExistence) - Number(line.currentExistence)) > 0.0001);
@@ -233,9 +271,30 @@ export default function InventarioSucursal({ user, companyContext }) {
     setDraftStatus("active");
     setPreviewOpen(false);
   }
+  function addZone() {
+    const nextZone = `${newZoneName || ""}`.trim().replace(/\s+/g, " ");
+    if (!nextZone) {
+      setMessage({ type: "error", text: "Escribe el nombre de la zona." });
+      return;
+    }
+    const existingZone = zones.find((item) => normalizeText(item) === normalizeText(nextZone));
+    if (existingZone) {
+      setZone(existingZone);
+      setNewZoneName("");
+      setMessage(null);
+      return;
+    }
+    setZones((current) => [...current, nextZone]);
+    setZone(nextZone);
+    setNewZoneName("");
+    setQuery("");
+    setShowResults(false);
+    setDraftStatus("active");
+    setMessage({ type: "success", text: `Zona ${nextZone} creada.` });
+  }
   function newDraft(force = false) {
-    if (!force && lines.length > 0 && !window.confirm("¿Descartar el levantamiento actual?")) return;
-    identity.current = newIdentity(); setLines([]); setDate(localDate()); setZone("Bodega principal"); setPerformedBy(""); setSupervisedBy(""); setNotes(""); setPreviewOpen(false); setDraftStatus("active"); setDraftSavedAt(null); window.localStorage.removeItem(draftKey);
+    if (!force && (lines.length > 0 || zones.length > 1) && !window.confirm("¿Descartar el levantamiento actual?")) return;
+    identity.current = newIdentity(); setLines([]); setZones([DEFAULT_INVENTORY_ZONE]); setZone(DEFAULT_INVENTORY_ZONE); setNewZoneName(""); setDate(localDate()); setPerformedBy(""); setSupervisedBy(""); setNotes(""); setPreviewOpen(false); setDraftStatus("active"); setDraftSavedAt(null); window.localStorage.removeItem(draftKey);
   }
   function holdDraft() {
     if (lines.length < 1) {
@@ -243,7 +302,7 @@ export default function InventarioSucursal({ user, companyContext }) {
       return;
     }
     const updatedAt = new Date().toISOString();
-    window.localStorage.setItem(draftKey, JSON.stringify({ identity: identity.current, date, zone, performedBy, supervisedBy, notes, lines, status: "waiting", updatedAt }));
+    window.localStorage.setItem(draftKey, JSON.stringify({ identity: identity.current, date, zone, zones, performedBy, supervisedBy, notes, lines, status: "waiting", updatedAt }));
     setDraftStatus("waiting");
     setDraftSavedAt(updatedAt);
     setMessage({ type: "success", text: "Levantamiento guardado en espera. Puedes cerrar la app y continuar después." });
@@ -318,14 +377,20 @@ export default function InventarioSucursal({ user, companyContext }) {
     {tab === "count" ? <>
       <section className="erp-form-panel rounded-[1.2rem] border border-slate-200 bg-white p-4 sm:p-5">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[150px_180px_1fr_1fr_auto]"><label><span className="app-label">Folio</span><input className="app-input bg-slate-50 font-mono text-xs" value={identity.current.folio} readOnly /></label><label><span className="app-label">Fecha</span><input type="date" className="app-input" max={localDate()} value={date} onChange={(event) => { setDate(event.target.value); setDraftStatus("active"); }} /></label><label><span className="app-label">Realizado por</span><input className="app-input" value={performedBy} onChange={(event) => { setPerformedBy(event.target.value); setDraftStatus("active"); }} placeholder="Nombre" /></label><label><span className="app-label">Supervisado por</span><input className="app-input" value={supervisedBy} onChange={(event) => { setSupervisedBy(event.target.value); setDraftStatus("active"); }} placeholder="Nombre" /></label><div className="grid gap-2 self-end"><button type="button" className="app-button-secondary" onClick={holdDraft}>Guardar en espera</button><button type="button" className="app-button-ghost" onClick={() => newDraft(false)}>Nuevo</button></div></div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(180px,0.4fr)_1fr]"><label><span className="app-label">Zona actual</span><input className="app-input" value={zone} onChange={(event) => { setZone(event.target.value); setDraftStatus("active"); }} placeholder="Bodega principal" /><span className="mt-1 block text-[10px] font-bold text-slate-400">La zona es informativa. SICAR recibirá el total sumado por clave.</span></label><label><span className="app-label">Observación</span><input className="app-input" maxLength={500} value={notes} onChange={(event) => { setNotes(event.target.value); setDraftStatus("active"); }} placeholder="Opcional" /></label></div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(240px,0.55fr)_1fr]"><div><label className="app-label" htmlFor="inventory-new-zone">Nueva zona</label><div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"><input id="inventory-new-zone" className="app-input" maxLength={50} value={newZoneName} onChange={(event) => setNewZoneName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addZone(); } }} placeholder="Ej. Cámara fría" /><button type="button" className="inventory-add-zone-button" onClick={addZone}><Icon name="plus" className="h-4 w-4" />Agregar</button></div></div><label><span className="app-label">Observación</span><input className="app-input" maxLength={500} value={notes} onChange={(event) => { setNotes(event.target.value); setDraftStatus("active"); }} placeholder="Opcional" /></label></div>
+        <div className="inventory-zone-workspace mt-3">
+          <div className="flex items-center justify-between gap-3"><span className="app-label !mb-0">Zona de trabajo</span><span className="text-[10px] font-bold text-slate-400">SICAR recibe el total por clave</span></div>
+          <div ref={zoneTabsRoot} className="inventory-zone-tabs mt-2" role="tablist" aria-label="Zonas del levantamiento">
+            {zoneTabs.map((item) => <button key={normalizeText(item.name)} type="button" role="tab" aria-selected={normalizeText(item.name) === currentZoneToken} className={`inventory-zone-tab ${normalizeText(item.name) === currentZoneToken ? "is-active" : ""}`} onClick={() => { setZone(item.name); setQuery(""); setShowResults(false); }}><span>{item.name}</span><strong>{item.count}</strong></button>)}
+          </div>
+        </div>
         <div ref={searchRoot} className="relative mt-4"><label className="app-label">Agregar producto</label><div className="relative"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600"><Icon name="search" /></span><input className="app-input pl-12 pr-14" value={query} onChange={(event) => { setQuery(event.target.value); setShowResults(true); }} onFocus={() => setShowResults(true)} onKeyDown={(event) => { if (event.key === "Enter" && results[0]) { event.preventDefault(); addArticle(results[0]); } }} placeholder="Clave, código de barra o nombre" /><button type="button" className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl bg-emerald-600 text-white" onClick={() => results[0] && addArticle(results[0])} aria-label="Agregar"><Icon name="plus" /></button></div>
           {showResults && query.trim() ? <div className="absolute inset-x-0 top-full z-[80] mt-2 max-h-72 overflow-y-auto rounded-2xl border border-emerald-200 bg-white p-2 shadow-2xl">{results.length ? results.map((article) => <button key={article.art_id} type="button" onClick={() => addArticle(article)} className="grid w-full grid-cols-[82px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-emerald-50"><span className="font-mono text-xs font-black text-emerald-700">{article.clave}</span><span className="truncate text-sm font-black text-slate-800">{article.descripcion}</span><span className="text-xs font-bold text-slate-400">{article.existencia === null ? "SICAR valida" : numberFormat.format(article.existencia)} {article.unidad}</span></button>) : <div className="px-4 py-6 text-center text-sm font-bold text-slate-400">Sin coincidencias</div>}</div> : null}
         </div>
       </section>
       <section className="erp-products-panel overflow-hidden rounded-[1.2rem] border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5"><div><h3 className="text-lg font-black text-slate-950">Productos contados</h3><p className="text-xs font-bold text-slate-400">{lines.length} líneas · {zoneCount} zonas · {summary.ready} claves totalizadas · {summary.changed} diferencias</p></div><button type="button" onClick={() => loadData()} className="app-icon-button" aria-label="Actualizar catálogo"><Icon name="refresh" /></button></div>
-        {lines.length ? <div className="divide-y divide-slate-100">{lines.map((line, index) => {
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5"><div><div className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">{zone}</div><h3 className="mt-0.5 text-lg font-black text-slate-950">Productos de la zona</h3><p className="text-xs font-bold text-slate-400">{visibleLines.length} aquí · {lines.length} en total · {zoneCount} zonas · {summary.ready} claves totalizadas</p></div><button type="button" onClick={() => loadData()} className="app-icon-button" aria-label="Actualizar catálogo"><Icon name="refresh" /></button></div>
+        {visibleLines.length ? <div className="divide-y divide-slate-100">{visibleLines.map((line, index) => {
           const aggregate = totalsByArticle.get(Number(line.articleId));
           const difference = !aggregate || aggregate.currentExistence === null ? null : roundQuantity(Number(aggregate.countedExistence) - Number(aggregate.currentExistence));
           return <div key={line.lineId} className="inventory-item-row grid gap-2 px-4 py-3 sm:grid-cols-[34px_minmax(180px,1fr)_72px_150px_42px] sm:items-center">
@@ -335,7 +400,7 @@ export default function InventarioSucursal({ user, companyContext }) {
             <input data-count-id={line.lineId} inputMode="decimal" className="inventory-item-quantity h-10 w-full rounded-lg border border-slate-300 px-3 text-right text-sm font-black outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100" value={line.countedExistence} onChange={(event) => updateLine(line.lineId, { countedExistence: event.target.value, pesos: [] })} placeholder={`Conteo ${line.unidad}`} />
             <button type="button" className="inventory-item-delete app-icon-button text-rose-500" onClick={() => { setLines((current) => current.filter((item) => item.lineId !== line.lineId)); setDraftStatus("active"); }}><Icon name="trash" /></button>
           </div>;
-        })}</div> : <div className="px-5 py-16 text-center"><Icon name="inventory" className="mx-auto h-9 w-9 text-slate-300" /><div className="mt-3 text-sm font-black text-slate-500">Busca y agrega los productos contados</div></div>}
+        })}</div> : <div className="px-5 py-12 text-center"><Icon name="inventory" className="mx-auto h-9 w-9 text-slate-300" /><div className="mt-3 text-sm font-black text-slate-500">Esta zona todavía no tiene productos</div><div className="mt-1 text-xs font-bold text-slate-400">Busca arriba para comenzar el conteo en {zone}.</div></div>}
         <div className="grid gap-3 border-t border-slate-200 bg-slate-50 p-4 sm:grid-cols-[1fr_auto] sm:items-center"><div className="grid grid-cols-3 gap-2 text-center"><div><div className="text-[9px] font-black uppercase text-slate-400">Diferencias</div><strong>{summary.changed}</strong></div><div><div className="text-[9px] font-black uppercase text-emerald-600">Positivas</div><strong className="text-emerald-700">{summary.positive}</strong></div><div><div className="text-[9px] font-black uppercase text-rose-600">Negativas</div><strong className="text-rose-700">{summary.negative}</strong></div></div><div className="grid gap-2"><button type="button" className="app-button-secondary min-w-56" onClick={holdDraft} disabled={lines.length < 1}>Guardar en espera</button><button type="button" className="app-button-primary min-w-56" disabled={loading || working || summary.ready < 1 || summary.changed < 1 || connectionMismatch || !writeEnabled} onClick={preparePreview}><Icon name="cloud" />{working ? "Validando..." : "Revisar y aplicar"}</button></div></div>
       </section>
     </> : <section className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><div><h3 className="text-lg font-black text-slate-950">Levantamientos aplicados</h3><p className="text-xs font-bold text-slate-400">Historial del SICAR local</p></div><button type="button" className="app-icon-button" onClick={() => loadData()}><Icon name="refresh" /></button></div>
