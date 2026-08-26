@@ -8,6 +8,14 @@ import {
   previewInventoryAdjustmentRequest,
   submitInventoryAdjustmentRequest,
 } from "@/lib/sicarInventoryApi";
+import {
+  INVENTORY_ENTRY_COUNT,
+  INVENTORY_ENTRY_SALE,
+  aggregateInventoryCountLines,
+  normalizeInventoryEntryType,
+  roundInventoryQuantity as roundQuantity,
+  validateInventoryCountLines,
+} from "@/lib/inventoryCountUtils.mjs";
 
 const numberFormat = new Intl.NumberFormat("es-NI", { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 const DEFAULT_INVENTORY_ZONE = "Bodega principal";
@@ -51,10 +59,6 @@ function scoreArticle(article, query) {
   return needle.split(" ").filter(Boolean).every((word) => description.includes(word)) ? 5 : null;
 }
 
-function roundQuantity(value) {
-  return Math.round((Number(value || 0) + Number.EPSILON) * 10000) / 10000;
-}
-
 function createInventoryLineId(articleId) {
   const random = globalThis.crypto?.randomUUID?.().replaceAll("-", "") || `${Date.now()}${Math.random()}`.replace(/\D/g, "");
   return `inventory-${articleId}-${random}`;
@@ -65,6 +69,7 @@ function hydrateDraftLines(lines = []) {
     ...line,
     lineId: line.lineId || `legacy-${line.articleId}-${normalizeText(line.zona || "Bodega principal")}-${index}`,
     zona: `${line.zona || "Bodega principal"}`.trim() || "Bodega principal",
+    entryType: normalizeInventoryEntryType(line.entryType),
   }));
 }
 
@@ -87,27 +92,6 @@ function draftZoneNames(draft) {
   return zones.length ? zones : [DEFAULT_INVENTORY_ZONE];
 }
 
-function aggregateCountedLines(lines = []) {
-  const totals = new Map();
-  lines.forEach((line) => {
-    if (line.countedExistence === "" || !Number.isFinite(Number(line.countedExistence))) return;
-    const key = Number(line.articleId) || `${line.clave}`;
-    const current = totals.get(key) || {
-      articleId: Number(line.articleId),
-      clave: line.clave,
-      descripcion: line.descripcion,
-      unidad: line.unidad,
-      currentExistence: line.currentExistence === null ? null : Number(line.currentExistence),
-      countedExistence: 0,
-      zones: [],
-    };
-    current.countedExistence = roundQuantity(current.countedExistence + Number(line.countedExistence));
-    if (!current.zones.includes(line.zona)) current.zones.push(line.zona);
-    totals.set(key, current);
-  });
-  return [...totals.values()];
-}
-
 function Icon({ name, className = "h-5 w-5" }) {
   const paths = {
     search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
@@ -117,6 +101,7 @@ function Icon({ name, className = "h-5 w-5" }) {
     settings: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" /></>,
     trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13" /></>,
     plus: <path d="M12 5v14M5 12h14" />,
+    minus: <path d="M5 12h14" />,
     scale: <><path d="M6 5h12l2 16H4L6 5Z" /><path d="M9 10a3 3 0 0 1 6 0M12 10l2-2" /></>,
     cloud: <><path d="M6 19h12a4 4 0 0 0 .4-8A6 6 0 0 0 7 9a5 5 0 0 0-1 10Z" /><path d="m9 14 3-3 3 3M12 11v6" /></>,
   };
@@ -178,6 +163,7 @@ export default function InventarioSucursal({ user, companyContext }) {
   const [supervisedBy, setSupervisedBy] = useState(initialDraft.current?.supervisedBy || "");
   const [notes, setNotes] = useState(initialDraft.current?.notes || "");
   const [query, setQuery] = useState("");
+  const [captureMode, setCaptureMode] = useState(INVENTORY_ENTRY_COUNT);
   const [showResults, setShowResults] = useState(false);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -237,9 +223,8 @@ export default function InventarioSucursal({ user, companyContext }) {
   }, [date, draftKey, draftStatus, lines, notes, performedBy, supervisedBy, zone, zones]);
 
   const currentZoneToken = normalizeText(zone || "Bodega principal");
-  const selectedKeys = useMemo(() => new Set(lines.filter((line) => normalizeText(line.zona) === currentZoneToken).map((line) => `${line.clave}`)), [currentZoneToken, lines]);
-  const results = useMemo(() => !query.trim() ? [] : catalog.map((article) => ({ article, score: scoreArticle(article, query) })).filter((entry) => entry.score !== null && !selectedKeys.has(`${entry.article.clave}`)).sort((left, right) => left.score - right.score || left.article.descripcion.localeCompare(right.article.descripcion)).slice(0, 30).map((entry) => entry.article), [catalog, query, selectedKeys]);
-  const aggregatedLines = useMemo(() => aggregateCountedLines(lines), [lines]);
+  const results = useMemo(() => !query.trim() ? [] : catalog.map((article) => ({ article, score: scoreArticle(article, query) })).filter((entry) => entry.score !== null).sort((left, right) => left.score - right.score || left.article.descripcion.localeCompare(right.article.descripcion)).slice(0, 30).map((entry) => entry.article), [catalog, query]);
+  const aggregatedLines = useMemo(() => aggregateInventoryCountLines(lines), [lines]);
   const totalsByArticle = useMemo(() => new Map(aggregatedLines.map((line) => [Number(line.articleId), line])), [aggregatedLines]);
   const visibleLines = useMemo(() => lines.filter((line) => normalizeText(line.zona) === currentZoneToken), [currentZoneToken, lines]);
   const zoneTabs = useMemo(() => zones.map((name) => ({
@@ -261,7 +246,7 @@ export default function InventarioSucursal({ user, companyContext }) {
       return;
     }
     const lineId = createInventoryLineId(article.art_id);
-    setLines((current) => [...current, { lineId, articleId: Number(article.art_id), clave: article.clave, descripcion: article.descripcion, unidad: `${article.unidad || "PZA"}`.toUpperCase(), currentExistence: article.existencia === null || article.existencia === undefined ? null : Number(article.existencia), countedExistence: "", pesos: [], cajas: 0, zona: activeZone }]);
+    setLines((current) => [{ lineId, articleId: Number(article.art_id), clave: article.clave, descripcion: article.descripcion, unidad: `${article.unidad || "PZA"}`.toUpperCase(), currentExistence: article.existencia === null || article.existencia === undefined ? null : Number(article.existencia), countedExistence: "", pesos: [], cajas: 0, zona: activeZone, entryType: captureMode }, ...current]);
     setDraftStatus("active");
     setQuery(""); setShowResults(false);
     requestAnimationFrame(() => document.querySelector(`[data-count-id="${lineId}"]`)?.focus());
@@ -326,11 +311,18 @@ export default function InventarioSucursal({ user, companyContext }) {
           cantidadContada: Number(line.countedExistence),
           expectedExistence: line.currentExistence === null ? null : Number(line.currentExistence),
           zonas: line.zones,
+          conteoBruto: Number(line.grossCounted),
+          ventasRestadas: Number(line.salesSubtracted),
         })),
     };
   }
   async function preparePreview() {
     if (connectionMismatch || !writeEnabled) return;
+    const lineValidation = validateInventoryCountLines(lines);
+    if (!lineValidation.valid) {
+      setMessage({ type: "error", text: lineValidation.message });
+      return;
+    }
     if (!performedBy.trim() || !supervisedBy.trim()) {
       setMessage({ type: "error", text: "Indica quién realizó y quién supervisó el levantamiento." });
       return;
@@ -384,8 +376,10 @@ export default function InventarioSucursal({ user, companyContext }) {
             {zoneTabs.map((item) => <button key={normalizeText(item.name)} type="button" role="tab" aria-selected={normalizeText(item.name) === currentZoneToken} className={`inventory-zone-tab ${normalizeText(item.name) === currentZoneToken ? "is-active" : ""}`} onClick={() => { setZone(item.name); setQuery(""); setShowResults(false); }}><span>{item.name}</span><strong>{item.count}</strong></button>)}
           </div>
         </div>
-        <div ref={searchRoot} className="relative mt-4"><label className="app-label">Agregar producto</label><div className="relative"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600"><Icon name="search" /></span><input className="app-input pl-12 pr-14" value={query} onChange={(event) => { setQuery(event.target.value); setShowResults(true); }} onFocus={() => setShowResults(true)} onKeyDown={(event) => { if (event.key === "Enter" && results[0]) { event.preventDefault(); addArticle(results[0]); } }} placeholder="Clave, código de barra o nombre" /><button type="button" className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl bg-emerald-600 text-white" onClick={() => results[0] && addArticle(results[0])} aria-label="Agregar"><Icon name="plus" /></button></div>
-          {showResults && query.trim() ? <div className="absolute inset-x-0 top-full z-[80] mt-2 max-h-72 overflow-y-auto rounded-2xl border border-emerald-200 bg-white p-2 shadow-2xl">{results.length ? results.map((article) => <button key={article.art_id} type="button" onClick={() => addArticle(article)} className="grid w-full grid-cols-[82px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-emerald-50"><span className="font-mono text-xs font-black text-emerald-700">{article.clave}</span><span className="truncate text-sm font-black text-slate-800">{article.descripcion}</span><span className="text-xs font-bold text-slate-400">{article.existencia === null ? "SICAR valida" : numberFormat.format(article.existencia)} {article.unidad}</span></button>) : <div className="px-4 py-6 text-center text-sm font-bold text-slate-400">Sin coincidencias</div>}</div> : null}
+        <div ref={searchRoot} className="relative mt-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><label className="app-label !mb-0">{captureMode === INVENTORY_ENTRY_SALE ? "Producto vendido" : "Agregar producto"}</label><div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1"><button type="button" className={`flex min-h-8 items-center gap-1 rounded-md px-3 text-[11px] font-black ${captureMode === INVENTORY_ENTRY_COUNT ? "bg-emerald-700 text-white shadow-sm" : "text-slate-500"}`} onClick={() => setCaptureMode(INVENTORY_ENTRY_COUNT)}><Icon name="plus" className="h-3.5 w-3.5" />Conteo</button><button type="button" className={`flex min-h-8 items-center gap-1 rounded-md px-3 text-[11px] font-black ${captureMode === INVENTORY_ENTRY_SALE ? "bg-rose-600 text-white shadow-sm" : "text-rose-600"}`} onClick={() => setCaptureMode(INVENTORY_ENTRY_SALE)}><Icon name="minus" className="h-3.5 w-3.5" />Restar venta</button></div></div>
+          <div className="relative"><span className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 ${captureMode === INVENTORY_ENTRY_SALE ? "text-rose-600" : "text-emerald-600"}`}><Icon name="search" /></span><input className={`app-input pl-12 pr-14 ${captureMode === INVENTORY_ENTRY_SALE ? "border-rose-300 focus:border-rose-500 focus:ring-rose-100" : ""}`} value={query} onChange={(event) => { setQuery(event.target.value); setShowResults(true); }} onFocus={() => setShowResults(true)} onKeyDown={(event) => { if (event.key === "Enter" && results[0]) { event.preventDefault(); addArticle(results[0]); } }} placeholder="Clave, código de barra o nombre" /><button type="button" className={`absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-white ${captureMode === INVENTORY_ENTRY_SALE ? "bg-rose-600" : "bg-emerald-600"}`} onClick={() => results[0] && addArticle(results[0])} aria-label={captureMode === INVENTORY_ENTRY_SALE ? "Agregar venta a restar" : "Agregar conteo"}><Icon name={captureMode === INVENTORY_ENTRY_SALE ? "minus" : "plus"} /></button></div>
+          {showResults && query.trim() ? <div className={`absolute inset-x-0 top-full z-[80] mt-2 max-h-72 overflow-y-auto rounded-2xl border bg-white p-2 shadow-2xl ${captureMode === INVENTORY_ENTRY_SALE ? "border-rose-200" : "border-emerald-200"}`}>{results.length ? results.map((article) => <button key={article.art_id} type="button" onClick={() => addArticle(article)} className={`grid w-full grid-cols-[82px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-3 text-left ${captureMode === INVENTORY_ENTRY_SALE ? "hover:bg-rose-50" : "hover:bg-emerald-50"}`}><span className={`font-mono text-xs font-black ${captureMode === INVENTORY_ENTRY_SALE ? "text-rose-700" : "text-emerald-700"}`}>{article.clave}</span><span className="truncate text-sm font-black text-slate-800">{article.descripcion}</span><span className="text-xs font-bold text-slate-400">{article.existencia === null ? "SICAR valida" : numberFormat.format(article.existencia)} {article.unidad}</span></button>) : <div className="px-4 py-6 text-center text-sm font-bold text-slate-400">Sin coincidencias</div>}</div> : null}
         </div>
       </section>
       <section className="erp-products-panel overflow-hidden rounded-[1.2rem] border border-slate-200 bg-white">
@@ -393,11 +387,15 @@ export default function InventarioSucursal({ user, companyContext }) {
         {visibleLines.length ? <div className="divide-y divide-slate-100">{visibleLines.map((line, index) => {
           const aggregate = totalsByArticle.get(Number(line.articleId));
           const difference = !aggregate || aggregate.currentExistence === null ? null : roundQuantity(Number(aggregate.countedExistence) - Number(aggregate.currentExistence));
-          return <div key={line.lineId} className="inventory-item-row grid gap-2 px-4 py-3 sm:grid-cols-[34px_minmax(180px,1fr)_72px_150px_42px] sm:items-center">
+          const isSaleSubtraction = normalizeInventoryEntryType(line.entryType) === INVENTORY_ENTRY_SALE;
+          const aggregateLabel = aggregate?.salesSubtracted > 0
+            ? `Total ${numberFormat.format(aggregate.countedExistence)} = conteo ${numberFormat.format(aggregate.grossCounted)} - ventas ${numberFormat.format(aggregate.salesSubtracted)} ${line.unidad}`
+            : aggregate ? `Total clave ${numberFormat.format(aggregate.countedExistence)} ${line.unidad}` : `Pendiente en ${line.zona}`;
+          return <div key={line.lineId} className={`inventory-item-row grid gap-2 px-4 py-3 sm:grid-cols-[34px_minmax(180px,1fr)_72px_150px_42px] sm:items-center ${isSaleSubtraction ? "bg-rose-50/50" : ""}`}>
             <span className="inventory-item-index hidden text-xs font-black text-slate-300 sm:block">{`${index + 1}`.padStart(2, "0")}</span>
-            <div className="inventory-item-info min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-md bg-emerald-50 px-2 py-1 font-mono text-[10px] font-black text-emerald-700">{line.clave}</span><strong className="truncate text-sm text-slate-800">{line.descripcion}</strong><span className="rounded-md bg-amber-50 px-2 py-1 text-[9px] font-black uppercase text-amber-700">{line.zona}</span></div><div className="mt-1 text-[10px] font-black uppercase text-slate-400">{aggregate ? `Total clave ${numberFormat.format(aggregate.countedExistence)} ${line.unidad}${line.currentExistence === null ? " · SICAR valida al aplicar" : ` · SICAR ${numberFormat.format(line.currentExistence)}${difference !== null ? ` · Diferencia ${difference > 0 ? "+" : ""}${numberFormat.format(difference)}` : ""}`}` : `Pendiente en ${line.zona}`}</div></div>
-            <button type="button" className="inventory-item-bultos flex h-8 items-center justify-center gap-1 rounded-md border border-slate-200 px-1 text-[10px] font-black text-slate-600" onClick={() => setWeightsLineId(line.lineId)}><Icon name="scale" className="h-3.5 w-3.5" /><span>Bultos</span></button>
-            <input data-count-id={line.lineId} inputMode="decimal" className="inventory-item-quantity h-10 w-full rounded-lg border border-slate-300 px-3 text-right text-sm font-black outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100" value={line.countedExistence} onChange={(event) => updateLine(line.lineId, { countedExistence: event.target.value, pesos: [] })} placeholder={`Conteo ${line.unidad}`} />
+            <div className="inventory-item-info min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-md px-2 py-1 font-mono text-[10px] font-black ${isSaleSubtraction ? "bg-rose-100 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>{line.clave}</span><strong className="truncate text-sm text-slate-800">{line.descripcion}</strong><span className="rounded-md bg-amber-50 px-2 py-1 text-[9px] font-black uppercase text-amber-700">{line.zona}</span>{isSaleSubtraction ? <span className="rounded-md bg-rose-600 px-2 py-1 text-[9px] font-black uppercase text-white">Venta</span> : null}</div><div className="mt-1 text-[10px] font-black uppercase text-slate-400">{aggregateLabel}{aggregate && line.currentExistence === null ? " · SICAR valida al aplicar" : aggregate && line.currentExistence !== null ? ` · SICAR ${numberFormat.format(line.currentExistence)}${difference !== null ? ` · Diferencia ${difference > 0 ? "+" : ""}${numberFormat.format(difference)}` : ""}` : ""}</div></div>
+            {isSaleSubtraction ? <div className="inventory-item-bultos flex h-8 items-center justify-center gap-1 rounded-md border border-rose-200 bg-white px-1 text-[10px] font-black text-rose-600"><Icon name="minus" className="h-3.5 w-3.5" /><span>Venta</span></div> : <button type="button" className="inventory-item-bultos flex h-8 items-center justify-center gap-1 rounded-md border border-slate-200 px-1 text-[10px] font-black text-slate-600" onClick={() => setWeightsLineId(line.lineId)}><Icon name="scale" className="h-3.5 w-3.5" /><span>Bultos</span></button>}
+            <input data-count-id={line.lineId} inputMode="decimal" min="0" className={`inventory-item-quantity h-10 w-full rounded-lg border px-3 text-right text-sm font-black outline-none focus:ring-4 ${isSaleSubtraction ? "border-rose-300 text-rose-700 focus:border-rose-500 focus:ring-rose-100" : "border-slate-300 focus:border-emerald-600 focus:ring-emerald-100"}`} value={line.countedExistence} onChange={(event) => updateLine(line.lineId, { countedExistence: event.target.value, pesos: [] })} placeholder={`${isSaleSubtraction ? "Venta" : "Conteo"} ${line.unidad}`} />
             <button type="button" className="inventory-item-delete app-icon-button text-rose-500" onClick={() => { setLines((current) => current.filter((item) => item.lineId !== line.lineId)); setDraftStatus("active"); }}><Icon name="trash" /></button>
           </div>;
         })}</div> : <div className="px-5 py-12 text-center"><Icon name="inventory" className="mx-auto h-9 w-9 text-slate-300" /><div className="mt-3 text-sm font-black text-slate-500">Esta zona todavía no tiene productos</div><div className="mt-1 text-xs font-bold text-slate-400">Busca arriba para comenzar el conteo en {zone}.</div></div>}
