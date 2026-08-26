@@ -530,8 +530,11 @@ async function queueAccountingMetadata(payload, context, purchase) {
     ? await persistInvoiceSupport(sourceRecordId, accounting.invoiceSupport)
     : existing?.invoiceSupport || null;
   const metadata = {
-    version: 1,
+    version: 2,
     source: "proveedores-app",
+    companyIdentifier: `${config.company?.identifier || ""}`.trim().toLowerCase(),
+    branchId: `${config.company?.branchId || ""}`.trim(),
+    branchName: `${config.company?.branchName || config.company?.name || ""}`.trim(),
     sourceRecordId,
     rawId: `compra_${sourceRecordId}`,
     purchaseId: Number(purchase.com_id),
@@ -547,6 +550,7 @@ async function queueAccountingMetadata(payload, context, purchase) {
     netTotal: roundMoney(Math.max(context.summary.total - retentionTotal, 0)),
     invoiceSupport,
     uploadedSupport: existing?.uploadedSupport || null,
+    accountingDeliveries: existing?.accountingDeliveries || {},
     capturedAt: new Date().toISOString(),
   };
   await atomicWrite(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
