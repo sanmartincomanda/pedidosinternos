@@ -28,12 +28,17 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 
 $sourceServer = Join-Path $PSScriptRoot "server.mjs"
+$sourceMysqlProcess = Join-Path $PSScriptRoot "mysqlProcess.mjs"
 $installedServer = Join-Path $InstallDirectory "server.mjs"
+$installedMysqlProcess = Join-Path $InstallDirectory "mysqlProcess.mjs"
 $installedConfig = Join-Path $InstallDirectory "config.local.json"
 $installedFirebaseAccount = Join-Path $InstallDirectory "inventory-firebase-service-account.json"
 
 if (-not (Test-Path -LiteralPath $sourceServer)) {
     throw "No existe server.mjs junto al actualizador."
+}
+if (-not (Test-Path -LiteralPath $sourceMysqlProcess)) {
+    throw "No existe mysqlProcess.mjs junto al actualizador."
 }
 if (-not (Test-Path -LiteralPath $installedConfig)) {
     throw "No existe la configuracion instalada: $installedConfig"
@@ -48,6 +53,9 @@ New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
 Copy-Item -LiteralPath $installedConfig -Destination (Join-Path $backupDirectory "config.local.json") -Force
 if (Test-Path -LiteralPath $installedServer) {
     Copy-Item -LiteralPath $installedServer -Destination (Join-Path $backupDirectory "server.mjs") -Force
+}
+if (Test-Path -LiteralPath $installedMysqlProcess) {
+    Copy-Item -LiteralPath $installedMysqlProcess -Destination (Join-Path $backupDirectory "mysqlProcess.mjs") -Force
 }
 if (-not ($settings.PSObject.Properties.Name -contains "allowPurchases")) {
     $settings | Add-Member -NotePropertyName allowPurchases -NotePropertyValue $false
@@ -145,6 +153,7 @@ if ($EnableInventoryTriggers) {
 Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 Copy-Item -LiteralPath $sourceServer -Destination $installedServer -Force
+Copy-Item -LiteralPath $sourceMysqlProcess -Destination $installedMysqlProcess -Force
 Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 2
 

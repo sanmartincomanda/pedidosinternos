@@ -58,8 +58,12 @@ if ([string]::IsNullOrWhiteSpace($MysqlPassword)) {
 $nodeCommand = Get-Command node.exe -ErrorAction Stop
 $nodeExecutable = $nodeCommand.Source
 $sourceServer = Join-Path $PSScriptRoot "server.mjs"
+$sourceMysqlProcess = Join-Path $PSScriptRoot "mysqlProcess.mjs"
 if (-not (Test-Path -LiteralPath $sourceServer)) {
     throw "No existe server.mjs junto al instalador."
+}
+if (-not (Test-Path -LiteralPath $sourceMysqlProcess)) {
+    throw "No existe mysqlProcess.mjs junto al instalador."
 }
 
 if ([string]::IsNullOrWhiteSpace($ApiKey)) {
@@ -72,9 +76,11 @@ if ([string]::IsNullOrWhiteSpace($FirebaseWebApiKey)) {
 
 New-Item -ItemType Directory -Path $InstallDirectory -Force | Out-Null
 $installedServer = Join-Path $InstallDirectory "server.mjs"
+$installedMysqlProcess = Join-Path $InstallDirectory "mysqlProcess.mjs"
 $installedConfig = Join-Path $InstallDirectory "config.local.json"
 $installedFirebaseAccount = Join-Path $InstallDirectory "inventory-firebase-service-account.json"
 Copy-Item -LiteralPath $sourceServer -Destination $installedServer -Force
+Copy-Item -LiteralPath $sourceMysqlProcess -Destination $installedMysqlProcess -Force
 
 if ($EnableInventoryTriggers) {
     if (-not (Test-Path -LiteralPath $InventoryFirebaseServiceAccount)) {

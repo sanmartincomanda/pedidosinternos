@@ -19,6 +19,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:inventory": "node --test lib/inventoryCountUtils.test.mjs",
+    "test:sicar-api": "node --test sicar-purchase-service/mysqlProcess.test.mjs",
     "desktop:dev": "concurrently -k -s first \"next dev\" \"wait-on http://127.0.0.1:3000 && cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .\"",
     "desktop:start": "cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .",
     "desktop:build": "npm run build:web && electron-builder --win nsis",
