@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
 import { createHash, createSign } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runMysqlProcess } from "./mysqlProcess.mjs";
 
 const serviceDirectory = path.dirname(fileURLToPath(import.meta.url));
 const configArgumentIndex = process.argv.indexOf("--config");
@@ -671,35 +671,22 @@ async function getAppPurchaseHistory(limit = 150) {
 }
 
 function runMysql(sql) {
-  return new Promise((resolve, reject) => {
-    const args = [
-      "--protocol=TCP",
-      `--host=${config.mysql.host}`,
-      `--port=${config.mysql.port}`,
-      `--user=${config.mysql.user}`,
-      `--database=${config.mysql.database}`,
-      "--default-character-set=utf8",
-      "--batch",
-      "--raw",
-      "--connect-timeout=8",
-      "-e",
-      sql,
-    ];
-    const child = spawn(config.mysql.executable, args, {
-      windowsHide: true,
-      env: { ...process.env, MYSQL_PWD: config.mysql.password },
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.stderr.on("data", (chunk) => { stderr += chunk; });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) resolve(stdout);
-      else reject(new Error(stderr.trim() || `mysql.exe termino con codigo ${code}.`));
-    });
+  const args = [
+    "--protocol=TCP",
+    `--host=${config.mysql.host}`,
+    `--port=${config.mysql.port}`,
+    `--user=${config.mysql.user}`,
+    `--database=${config.mysql.database}`,
+    "--default-character-set=utf8",
+    "--batch",
+    "--raw",
+    "--connect-timeout=8",
+  ];
+  return runMysqlProcess({
+    executable: config.mysql.executable,
+    args,
+    sql,
+    env: { ...process.env, MYSQL_PWD: config.mysql.password },
   });
 }
 
