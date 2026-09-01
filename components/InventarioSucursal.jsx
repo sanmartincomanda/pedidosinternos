@@ -16,6 +16,7 @@ import {
   roundInventoryQuantity as roundQuantity,
   validateInventoryCountLines,
 } from "@/lib/inventoryCountUtils.mjs";
+import { filterSicarOperationalArticles } from "@/lib/sicarArticleEligibility.mjs";
 
 const numberFormat = new Intl.NumberFormat("es-NI", { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 const DEFAULT_INVENTORY_ZONE = "Bodega principal";
@@ -189,7 +190,10 @@ export default function InventarioSucursal({ user, companyContext }) {
       getInventoryAdjustmentRequests(100),
     ]);
     if (healthResult.status === "fulfilled") setHealth(healthResult.value);
-    if (catalogResult.status === "fulfilled") { setBranch(catalogResult.value.branch); setCatalog(catalogResult.value.articles || []); }
+    if (catalogResult.status === "fulfilled") {
+      setBranch(catalogResult.value.branch);
+      setCatalog(filterSicarOperationalArticles(catalogResult.value.articles));
+    }
     if (historyResult.status === "fulfilled") setHistory(historyResult.value.rows || []);
     const failure = [healthResult, catalogResult, historyResult].find((result) => result.status === "rejected");
     if (failure) setMessage({ type: "error", text: failure.reason?.message || "No se pudo consultar el inventario." });

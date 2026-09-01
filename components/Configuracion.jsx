@@ -5,6 +5,7 @@ import { db } from "../firebase";
 import { off, onValue, ref, update } from "firebase/database";
 import { getSicarOfflineCatalog } from "../lib/sicarPurchaseApi";
 import { saveProviderCatalog } from "../lib/providerCatalogStore";
+import { filterSicarOperationalArticles } from "../lib/sicarArticleEligibility.mjs";
 
 const Icons = {
   settings: (
@@ -150,7 +151,7 @@ function PersonCard({ name, accent, icon, onDelete }) {
 function normalizarProductosSicar(articulos = []) {
   const productosPorClave = new Map();
 
-  articulos.forEach((articulo) => {
+  filterSicarOperationalArticles(articulos).forEach((articulo) => {
     const clave = `${articulo?.clave || ""}`.trim().toUpperCase();
     const nombre = `${articulo?.descripcion || articulo?.nombre || ""}`.trim().toUpperCase();
     if (clave && nombre && !productosPorClave.has(clave)) {
