@@ -791,6 +791,7 @@ async function getArticles(supplierId = 0) {
         a.clave,
         a.descripcion,
         a.factor,
+        a.receta,
         a.existencia,
         a.precioCompra,
         a.precioCompra AS lastPurchaseNet,
@@ -813,13 +814,14 @@ async function getArticles(supplierId = 0) {
         GROUP BY ai.art_id
       ) t ON t.art_id = a.art_id
       ${supplierJoin}
-      WHERE a.status = 1 AND a.servicio = 0
+      WHERE a.status = 1 AND a.servicio = 0 AND COALESCE(a.receta, 0) = 0
       ORDER BY a.descripcion;
     `);
     return rows.map((row) => ({
       ...row,
       art_id: Number(row.art_id),
       factor: Number(row.factor),
+      receta: Number(row.receta || 0),
       existencia: Number(row.existencia),
       precioCompra: Number(row.precioCompra),
       lastPurchaseNet: Number(row.lastPurchaseNet),
@@ -914,7 +916,10 @@ async function getInventoryContext(payload, { requireBaseline = false } = {}) {
         COALESCE(u.nombre, 'PZA') AS unidad
       FROM articulo a
       LEFT JOIN unidad u ON u.uni_id = a.unidadVenta
-      WHERE a.art_id IN (${articleIds.join(",")}) AND a.status = 1
+      WHERE a.art_id IN (${articleIds.join(",")})
+        AND a.status = 1
+        AND a.servicio = 0
+        AND COALESCE(a.receta, 0) = 0
       ORDER BY a.descripcion;
     `),
     validateConfiguredCompany(),
@@ -936,7 +941,7 @@ async function getInventoryContext(payload, { requireBaseline = false } = {}) {
   ) {
     throw new Error(`La sucursal solicitada no corresponde a este servidor SICAR (${branchName || "sin alias"}).`);
   }
-  if (rows.length !== articleIds.length) throw new Error("Uno o mas articulos ya no estan activos en SICAR.");
+  if (rows.length !== articleIds.length) throw new Error("Uno o mas articulos no estan activos o son paquetes SICAR.");
 
   const lines = rows.map((row) => {
     const input = itemsById.get(Number(row.art_id));
@@ -1072,7 +1077,9 @@ async function getPurchaseContext(payload) {
     LEFT JOIN unidad u ON u.uni_id = a.unidadCompra
     LEFT JOIN articuloimpuesto ai ON ai.art_id = a.art_id
     LEFT JOIN impuesto i ON i.imp_id = ai.imp_id AND i.status = 1
-    WHERE a.status = 1 AND a.servicio = 0 AND a.art_id IN (${articleIds})
+    WHERE a.status = 1 AND a.servicio = 0
+      AND COALESCE(a.receta, 0) = 0
+      AND a.art_id IN (${articleIds})
     ORDER BY a.art_id, i.orden;
   `);
 
@@ -1104,7 +1111,7 @@ async function getPurchaseContext(payload) {
       });
     }
   }
-  if (articleMap.size !== itemMap.size) throw new Error("Uno o mas productos ya no estan activos en SICAR.");
+  if (articleMap.size !== itemMap.size) throw new Error("Uno o mas productos no estan activos o son paquetes SICAR.");
 
   const items = [...itemMap.values()].map((input, index) => {
     const article = articleMap.get(input.articleId);

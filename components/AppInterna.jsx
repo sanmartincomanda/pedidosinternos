@@ -14,6 +14,7 @@ import { loginOperations, logoutOperations, observeOperationsSession } from "@/l
 import { setSicarApiCompanyContext } from "@/lib/sicarPurchaseApi";
 import { setProviderCatalogScope } from "@/lib/providerCatalogStore";
 import { setProviderDraftScope } from "@/lib/providerDraftStore";
+import { filterSicarOperationalArticles } from "@/lib/sicarArticleEligibility.mjs";
 import {
   getPedidoCreationTimestamp,
   getPedidoItems,
@@ -436,6 +437,10 @@ export default function AppInterna() {
       return INITIAL_CONFIG;
     }
   });
+  const productosOperativos = useMemo(
+    () => filterSicarOperationalArticles(config.productos),
+    [config.productos],
+  );
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -771,7 +776,7 @@ export default function AppInterna() {
             pedidoEditar={pedidoEditar}
             setPedidoEditar={setPedidoEditar}
             sucursales={branchOptions}
-            productosCSV={config.productos || []}
+            productosCSV={productosOperativos}
           />
         );
       case "vacuna":
@@ -782,7 +787,7 @@ export default function AppInterna() {
             printerSettings={commonPrinterSettings}
             setView={setView}
             sucursales={branchOptions}
-            productosCSV={config.productos || []}
+            productosCSV={productosOperativos}
           />
         );
       case "cocina":

@@ -17,6 +17,7 @@ import {
   saveSicarApiConnection,
 } from "@/lib/sicarPurchaseApi";
 import { loadProviderCatalog, saveProviderCatalog } from "@/lib/providerCatalogStore";
+import { filterSicarOperationalArticles } from "@/lib/sicarArticleEligibility.mjs";
 import {
   deleteProviderPurchaseDraft,
   listProviderPurchaseDrafts,
@@ -371,7 +372,7 @@ export default function ProveedoresExternos({ user }) {
   const applyCatalog = (catalog) => {
     if (!catalog) return;
     setSupplierCatalog(Array.isArray(catalog.suppliers) ? catalog.suppliers : []);
-    setArticleCatalog(Array.isArray(catalog.articles) ? catalog.articles : []);
+    setArticleCatalog(filterSicarOperationalArticles(catalog.articles));
     setCatalogUpdatedAt(catalog.updatedAt || "");
   };
 
@@ -382,7 +383,7 @@ export default function ProveedoresExternos({ user }) {
       const catalog = {
         updatedAt: result.generatedAt || new Date().toISOString(),
         suppliers: result.suppliers || [],
-        articles: result.articles || [],
+        articles: filterSicarOperationalArticles(result.articles),
       };
       await saveProviderCatalog(catalog);
       applyCatalog(catalog);
