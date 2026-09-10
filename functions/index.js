@@ -27,6 +27,7 @@ const STATUS_CONFIG = {
 };
 
 const PREPARATION_STATUSES = new Set(["NUEVO", "STANDBY_ENTREGA"]);
+const SICAR_OUTBOUND_STATUSES = new Set(["ENVIADO", "RECIBIDO_CONFORME"]);
 const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered",
@@ -73,6 +74,30 @@ function getProductSummary(order) {
     itemCount: items.length,
     productSummary: `${visibleNames}${remaining > 0 ? ` y ${remaining} mas` : ""}` || "Ver detalle del pedido",
   };
+}
+
+async function signalSicarOrderTransition(pedidoId, previousStatus, currentStatus) {
+  if (previousStatus === currentStatus) return;
+
+  const now = Date.now();
+  const signal = {
+    pedidoId,
+    estado: currentStatus,
+    revision: now,
+    updatedAt: new Date(now).toISOString(),
+  };
+  const updates = {};
+
+  if (SICAR_OUTBOUND_STATUSES.has(currentStatus)) {
+    updates["integracion_sicar_revisions/salidas"] = signal;
+  }
+  if (currentStatus === "RECIBIDO_CONFORME") {
+    updates["integracion_sicar_revisions/entradas"] = signal;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await getDatabase().ref().update(updates);
+  }
 }
 
 async function sendInBatches(devices, payload) {
@@ -122,6 +147,8 @@ exports.notificarCambioPedido = onValueWritten(
 
     const previousStatus = `${before?.estado || ""}`;
     const currentStatus = `${after?.estado || ""}`;
+    await signalSicarOrderTransition(event.params.pedidoId, previousStatus, currentStatus);
+
     const statusConfig = STATUS_CONFIG[currentStatus];
     if (!statusConfig || previousStatus === currentStatus) return;
 
@@ -165,6 +192,28 @@ exports.notificarCambioPedido = onValueWritten(
         productSummary,
         channelId: statusConfig.channelId,
       },
+    });
+  },
+);
+
+exports.signalCambioIntegracionSicar = onValueWritten(
+  {
+    ref: "/integracion_sicar_pilot/{pedidoId}",
+    instance: "pedidosinterno-3c65d-default-rtdb",
+    region: "us-central1",
+    maxInstances: 2,
+  },
+  async (event) => {
+    const before = event.data.before.exists() ? event.data.before.val() : null;
+    const after = event.data.after.exists() ? event.data.after.val() : null;
+    if (!before && !after) return;
+
+    const now = Date.now();
+    await getDatabase().ref("integracion_sicar_revisions/piloto").set({
+      pedidoId: event.params.pedidoId,
+      estado: `${after?.status || "eliminado"}`,
+      revision: now,
+      updatedAt: new Date(now).toISOString(),
     });
   },
 );
