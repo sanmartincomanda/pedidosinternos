@@ -208,10 +208,14 @@ exports.signalCambioIntegracionSicar = onValueWritten(
     const after = event.data.after.exists() ? event.data.after.val() : null;
     if (!before && !after) return;
 
+    const previousStatus = `${before?.status || ""}`;
+    const currentStatus = `${after?.status || "eliminado"}`;
+    if (before && after && previousStatus === currentStatus) return;
+
     const now = Date.now();
     await getDatabase().ref("integracion_sicar_revisions/piloto").set({
       pedidoId: event.params.pedidoId,
-      estado: `${after?.status || "eliminado"}`,
+      estado: currentStatus,
       revision: now,
       updatedAt: new Date(now).toISOString(),
     });
