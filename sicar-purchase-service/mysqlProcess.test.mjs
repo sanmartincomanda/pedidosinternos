@@ -24,3 +24,17 @@ test("propaga el error del proceso mysql", async () => {
     /consulta invalida/,
   );
 });
+
+test("cancela una consulta mysql que deja de responder", async () => {
+  const stalledProcess = "process.stdin.resume();setInterval(()=>{},1000);";
+
+  await assert.rejects(
+    runMysqlProcess({
+      executable: process.execPath,
+      args: ["-e", stalledProcess],
+      sql: "SELECT SLEEP(999);",
+      timeoutMs: 75,
+    }),
+    /excedio 1 segundos/,
+  );
+});

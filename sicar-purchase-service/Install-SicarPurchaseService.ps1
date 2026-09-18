@@ -19,7 +19,7 @@ param(
     [string[]]$CompanySicarAliases = @("CARNES SAN MARTIN GRANADA"),
     [string[]]$AllowedFirebaseEmails = @("granada.inventory@sanmartinsr.com"),
     [string]$FirebaseWebApiKey = "",
-    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com", "http://localhost", "capacitor://localhost"),
+    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com", "https://pedidosinternossr.netlify.app", "https://main--pedidosinternossr.netlify.app", "http://localhost", "capacitor://localhost"),
     [string]$InventoryFirebaseServiceAccount = "C:\Users\Microsoft Windows 11\Downloads\inventario-sanmartin-firebase-adminsdk-fbsvc-0eff49b1f7.json",
     [string]$InventoryFirebaseProjectId = "inventario-sanmartin",
     [string]$InventoryFirebaseBranchDocumentId = "CARNES SAN MARTIN GRANADA",
@@ -194,6 +194,12 @@ if (-not $health.ok) {
     throw "El servicio se instalo, pero no respondio correctamente."
 }
 
+$watchdogInstaller = Join-Path $PSScriptRoot "Install-CsmSicarApiWatchdog.ps1"
+if (-not (Test-Path -LiteralPath $watchdogInstaller)) {
+    throw "No existe Install-CsmSicarApiWatchdog.ps1 junto al instalador."
+}
+& $watchdogInstaller -InstallDirectory $InstallDirectory -ApiTaskName $taskName | Out-Null
+
 $localIps = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object {
         $_.IPAddress -notlike "127.*" -and
@@ -214,4 +220,5 @@ $localIps = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     FirewallOpened = [bool]$OpenFirewall
     ApiKey = $ApiKey
     ExistingTransferWorkersChanged = $false
+    WatchdogInstalled = $true
 } | Format-List

@@ -1,6 +1,13 @@
 import { spawn } from "node:child_process";
 
-export function runMysqlProcess({ executable, args = [], sql, env = process.env, spawnProcess = spawn }) {
+export function runMysqlProcess({
+  executable,
+  args = [],
+  sql,
+  env = process.env,
+  spawnProcess = spawn,
+  timeoutMs = 120000,
+}) {
   return new Promise((resolve, reject) => {
     const child = spawnProcess(executable, args, {
       windowsHide: true,
@@ -10,10 +17,16 @@ export function runMysqlProcess({ executable, args = [], sql, env = process.env,
     let stdout = "";
     let stderr = "";
     let settled = false;
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      child.kill();
+      fail(new Error(`La consulta SICAR excedio ${Math.ceil(timeoutMs / 1000)} segundos y fue cancelada.`));
+    }, timeoutMs);
 
     const fail = (error) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timeout);
       reject(error);
     };
 
@@ -26,6 +39,7 @@ export function runMysqlProcess({ executable, args = [], sql, env = process.env,
     child.on("close", (code) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timeout);
       if (code === 0) resolve(stdout);
       else reject(new Error(stderr.trim() || `mysql.exe termino con codigo ${code}.`));
     });

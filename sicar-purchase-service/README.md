@@ -1,5 +1,13 @@
 # Servicio local SICAR - Proveedores externos
 
+## Recuperacion automatica
+
+La instalacion registra la tarea `CSM SICAR Proveedores API Watchdog`. Cada 20 segundos
+valida la API completa contra MySQL. Despues de dos fallos consecutivos reinicia el
+servicio y, si la API local funciona pero la ruta remota no, vuelve a publicar
+`/granada-api` mediante Tailscale Serve. Los registros se conservan 14 dias en
+`C:\sicar-proveedores-api\logs`.
+
 La configuración del nuevo módulo de levantamiento físico está documentada en [INVENTARIOS-CSM.md](./INVENTARIOS-CSM.md).
 
 Este servicio es independiente de los workers de traspasos. No lee Firebase y no modifica sus tareas programadas.

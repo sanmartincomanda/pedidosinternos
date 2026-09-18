@@ -15,7 +15,7 @@ param(
     [string[]]$CompanySicarAliases = @("CARNES SAN MARTIN GRANADA"),
     [string[]]$AllowedFirebaseEmails = @("granada.inventory@sanmartinsr.com"),
     [string]$FirebaseWebApiKey = "",
-    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com", "http://localhost", "capacitor://localhost")
+    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com", "https://pedidosinternossr.netlify.app", "https://main--pedidosinternossr.netlify.app", "http://localhost", "capacitor://localhost")
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,6 +29,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 
 $sourceServer = Join-Path $PSScriptRoot "server.mjs"
 $sourceMysqlProcess = Join-Path $PSScriptRoot "mysqlProcess.mjs"
+$watchdogInstaller = Join-Path $PSScriptRoot "Install-CsmSicarApiWatchdog.ps1"
 $installedServer = Join-Path $InstallDirectory "server.mjs"
 $installedMysqlProcess = Join-Path $InstallDirectory "mysqlProcess.mjs"
 $installedConfig = Join-Path $InstallDirectory "config.local.json"
@@ -39,6 +40,9 @@ if (-not (Test-Path -LiteralPath $sourceServer)) {
 }
 if (-not (Test-Path -LiteralPath $sourceMysqlProcess)) {
     throw "No existe mysqlProcess.mjs junto al actualizador."
+}
+if (-not (Test-Path -LiteralPath $watchdogInstaller)) {
+    throw "No existe Install-CsmSicarApiWatchdog.ps1 junto al actualizador."
 }
 if (-not (Test-Path -LiteralPath $installedConfig)) {
     throw "No existe la configuracion instalada: $installedConfig"
@@ -115,9 +119,13 @@ else {
     }
 }
 $settings.authMode = "firebase-or-api-key"
-if ($PSBoundParameters.ContainsKey("AllowedOrigins")) {
-    $settings.allowedOrigins = @($AllowedOrigins)
-}
+$existingAllowedOrigins = if ($settings.PSObject.Properties.Name -contains "allowedOrigins") { @($settings.allowedOrigins) } else { @() }
+$requiredBrowserOrigins = @(
+    "https://traspasos.sanmartinsr.com",
+    "https://pedidosinternossr.netlify.app",
+    "https://main--pedidosinternossr.netlify.app"
+)
+$settings.allowedOrigins = @($existingAllowedOrigins + @($AllowedOrigins) + $requiredBrowserOrigins | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
 if (-not ($settings.PSObject.Properties.Name -contains "inventoryFirebase")) {
     $settings | Add-Member -NotePropertyName inventoryFirebase -NotePropertyValue ([pscustomobject]@{
         enabled = $false
@@ -163,6 +171,8 @@ if (-not $health.ok) {
     throw "El servicio se actualizo, pero no respondio correctamente."
 }
 
+& $watchdogInstaller -InstallDirectory $InstallDirectory -ApiTaskName $taskName | Out-Null
+
 [pscustomobject]@{
     TaskName = $taskName
     State = (Get-ScheduledTask -TaskName $taskName).State
@@ -174,4 +184,5 @@ if (-not $health.ok) {
     ApiKeyPreserved = $true
     MysqlCredentialsPreserved = $true
     ExistingTransferWorkersChanged = $false
+    WatchdogInstalled = $true
 } | Format-List
