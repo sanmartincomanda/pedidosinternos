@@ -39,6 +39,8 @@ if ([string]::IsNullOrWhiteSpace($firebaseWebApiKey)) {
     -FirebaseWebApiKey $firebaseWebApiKey `
     -AllowedOrigins @(
         "https://traspasos.sanmartinsr.com",
+        "https://pedidosinternossr.netlify.app",
+        "https://main--pedidosinternossr.netlify.app",
         "http://localhost",
         "capacitor://localhost"
     )

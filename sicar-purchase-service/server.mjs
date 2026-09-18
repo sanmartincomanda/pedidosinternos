@@ -1224,8 +1224,12 @@ function buildPurchaseSql(context) {
 function setCors(response, request) {
   const origin = request.headers.origin || "";
   const allowedOrigins = Array.isArray(config.allowedOrigins) ? config.allowedOrigins : [];
-  if (origin && (allowedOrigins.includes("*") || allowedOrigins.includes(origin))) {
+  const allowed = origin && (allowedOrigins.includes("*") || allowedOrigins.includes(origin));
+  if (allowed) {
     response.setHeader("Access-Control-Allow-Origin", origin);
+    if (`${request.headers["access-control-request-private-network"] || ""}`.toLowerCase() === "true") {
+      response.setHeader("Access-Control-Allow-Private-Network", "true");
+    }
   }
   response.setHeader("Vary", "Origin");
   response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-CSM-API-Key, X-CSM-Company");
@@ -1566,6 +1570,34 @@ const server = createServer(async (request, response) => {
     console.error(new Date().toISOString(), error.message);
     sendJson(response, Number(error.statusCode) || 400, { ok: false, error: error.message || "No se pudo procesar la solicitud." });
   }
+});
+
+server.requestTimeout = 180000;
+server.headersTimeout = 30000;
+server.keepAliveTimeout = 5000;
+server.on("clientError", (error, socket) => {
+  console.error(new Date().toISOString(), "Cliente HTTP:", error.message);
+  if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+});
+
+let shuttingDown = false;
+function stopServer(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(new Date().toISOString(), `Cerrando API por ${signal}.`);
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 10000).unref();
+}
+
+process.on("SIGINT", () => stopServer("SIGINT"));
+process.on("SIGTERM", () => stopServer("SIGTERM"));
+process.on("uncaughtException", (error) => {
+  console.error(new Date().toISOString(), "Error no controlado:", error);
+  process.exit(1);
+});
+process.on("unhandledRejection", (error) => {
+  console.error(new Date().toISOString(), "Promesa no controlada:", error);
+  process.exit(1);
 });
 
 server.listen(port, host, () => {
