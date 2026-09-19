@@ -5,7 +5,9 @@
 La instalacion registra la tarea `CSM SICAR Proveedores API Watchdog`. Cada 20 segundos
 valida la API completa contra MySQL. Despues de dos fallos consecutivos reinicia el
 servicio y, si la API local funciona pero la ruta remota no, vuelve a publicar
-`/granada-api` mediante Tailscale Serve. Los registros se conservan 14 dias en
+`/granada-api` mediante un Funnel ejecutado con el usuario interactivo de Tailscale.
+La aplicacion usa este HTTPS publico con autenticacion Firebase y conserva las rutas
+privadas como respaldo. Los registros se conservan 14 dias en
 `C:\sicar-proveedores-api\logs`.
 
 La configuración del nuevo módulo de levantamiento físico está documentada en [INVENTARIOS-CSM.md](./INVENTARIOS-CSM.md).

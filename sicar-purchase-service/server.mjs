@@ -1310,6 +1310,11 @@ async function verifyFirebaseIdentity(request) {
 
 async function authorizeRequest(request) {
   const mode = `${config.authMode || (config.firebaseAuth?.enabled ? "firebase-or-api-key" : "api-key")}`;
+  const browserOrigin = `${request.headers.origin || ""}`.trim();
+  if (browserOrigin) {
+    const identity = await verifyFirebaseIdentity(request);
+    return identity ? { type: "firebase", ...identity } : null;
+  }
   if (mode === "api-key") return apiKeyAuthorized(request) ? { type: "api-key" } : null;
   const authorization = `${request.headers.authorization || ""}`;
   const hasBearerToken = authorization.startsWith("Bearer ") && Boolean(authorization.slice(7).trim());

@@ -4,18 +4,13 @@ param(
     [string]$ApiTaskName = "CSM SICAR Proveedores API",
     [int]$IntervalSeconds = 20,
     [int]$FailuresBeforeRestart = 2,
-    [string]$TailnetUrl = "https://microsoft.tail95b6f5.ts.net/granada-api",
-    [string]$TailnetPath = "/granada-api"
+    [string]$TailnetUrl = "https://microsoft.tail95b6f5.ts.net:8443/granada-api",
+    [string]$TailscaleTaskName = "CSM SICAR Tailscale Funnel"
 )
 
 $ErrorActionPreference = "Continue"
 $configPath = Join-Path $InstallDirectory "config.local.json"
 $logDirectory = Join-Path $InstallDirectory "logs"
-$tailscaleCandidates = @(
-    "C:\Program Files\Tailscale\tailscale.exe",
-    "C:\Program Files (x86)\Tailscale\tailscale.exe"
-)
-$tailscale = $tailscaleCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 $localFailures = 0
 $tailnetFailures = 0
 $lastRestartAt = [datetime]::MinValue
@@ -46,6 +41,17 @@ function Test-CsmApi([string]$Url, $Settings) {
     }
 }
 
+function Test-CsmRoute([string]$Url) {
+    try {
+        Invoke-WebRequest -Uri ($Url.TrimEnd("/") + "/health") -UseBasicParsing -TimeoutSec 15 | Out-Null
+        return $true
+    }
+    catch {
+        $statusCode = [int]$_.Exception.Response.StatusCode
+        return $statusCode -eq 401 -or $statusCode -eq 403
+    }
+}
+
 function Restart-CsmApi {
     if (((Get-Date) - $script:lastRestartAt).TotalSeconds -lt 90) {
         Write-WatchdogLog "Reinicio omitido por periodo de enfriamiento."
@@ -64,15 +70,10 @@ function Restart-CsmApi {
     }
 }
 
-function Repair-TailscaleRoute([int]$Port) {
-    if (-not $tailscale) {
-        Write-WatchdogLog "Tailscale no esta instalado; no se pudo reparar la ruta HTTPS."
-        return
-    }
+function Repair-TailscaleRoute {
     try {
-        Write-WatchdogLog "Ruta Tailscale sin respuesta; publicando nuevamente $TailnetPath."
-        & $tailscale serve --bg --https=443 --set-path=$TailnetPath "http://127.0.0.1:$Port" 2>&1 |
-            ForEach-Object { Write-WatchdogLog "tailscale: $_" }
+        Write-WatchdogLog "Ruta publica sin respuesta; iniciando reparacion Tailscale como usuario interactivo."
+        Start-ScheduledTask -TaskName $TailscaleTaskName -ErrorAction Stop
     }
     catch {
         Write-WatchdogLog "No se pudo reparar Tailscale Serve: $($_.Exception.Message)"
@@ -97,14 +98,14 @@ while ($true) {
             }
         }
 
-        if (Test-CsmApi $TailnetUrl $settings) {
+        if (Test-CsmRoute $TailnetUrl) {
             if ($tailnetFailures -gt 0) { Write-WatchdogLog "Ruta Tailscale recuperada." }
             $tailnetFailures = 0
         }
         else {
             $tailnetFailures += 1
             if ($tailnetFailures -ge $FailuresBeforeRestart -and (Test-CsmApi $localUrl $settings)) {
-                Repair-TailscaleRoute ([int]$settings.port)
+                Repair-TailscaleRoute
                 $tailnetFailures = 0
             }
         }
