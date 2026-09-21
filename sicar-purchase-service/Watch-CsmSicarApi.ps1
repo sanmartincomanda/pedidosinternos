@@ -4,6 +4,8 @@ param(
     [string]$ApiTaskName = "CSM SICAR Proveedores API",
     [int]$IntervalSeconds = 20,
     [int]$FailuresBeforeRestart = 2,
+    [int]$RemoteStartupGraceSeconds = 180,
+    [int]$RemoteRepairCooldownSeconds = 300,
     [string]$TailnetUrl = "https://microsoft.tail95b6f5.ts.net:8443/granada-api",
     [string]$TailscaleTaskName = "CSM SICAR Tailscale Funnel"
 )
@@ -14,6 +16,8 @@ $logDirectory = Join-Path $InstallDirectory "logs"
 $localFailures = 0
 $tailnetFailures = 0
 $lastRestartAt = [datetime]::MinValue
+$lastTailnetRepairAt = [datetime]::MinValue
+$startedAt = Get-Date
 
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
 
@@ -71,9 +75,19 @@ function Restart-CsmApi {
 }
 
 function Repair-TailscaleRoute {
+    if (((Get-Date) - $script:lastTailnetRepairAt).TotalSeconds -lt $RemoteRepairCooldownSeconds) {
+        return
+    }
+
     try {
-        Write-WatchdogLog "Ruta publica sin respuesta; iniciando reparacion Tailscale como usuario interactivo."
+        $repairTask = Get-ScheduledTask -TaskName $TailscaleTaskName -ErrorAction Stop
+        if ([string]$repairTask.State -eq "Running") {
+            return
+        }
+
+        Write-WatchdogLog "Ruta publica sin respuesta; iniciando reparacion Tailscale en segundo plano."
         Start-ScheduledTask -TaskName $TailscaleTaskName -ErrorAction Stop
+        $script:lastTailnetRepairAt = Get-Date
     }
     catch {
         Write-WatchdogLog "No se pudo reparar Tailscale Serve: $($_.Exception.Message)"
@@ -98,7 +112,11 @@ while ($true) {
             }
         }
 
-        if (Test-CsmRoute $TailnetUrl) {
+        $remoteGraceComplete = ((Get-Date) - $startedAt).TotalSeconds -ge $RemoteStartupGraceSeconds
+        if (-not $remoteGraceComplete) {
+            $tailnetFailures = 0
+        }
+        elseif (Test-CsmRoute $TailnetUrl) {
             if ($tailnetFailures -gt 0) { Write-WatchdogLog "Ruta Tailscale recuperada." }
             $tailnetFailures = 0
         }

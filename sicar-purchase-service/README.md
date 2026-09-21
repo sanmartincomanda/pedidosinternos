@@ -6,6 +6,8 @@ La instalacion registra la tarea `CSM SICAR Proveedores API Watchdog`. Cada 20 s
 valida la API completa contra MySQL. Despues de dos fallos consecutivos reinicia el
 servicio y, si la API local funciona pero la ruta remota no, vuelve a publicar
 `/granada-api` mediante un Funnel ejecutado con el usuario interactivo de Tailscale.
+La reparacion se abre mediante un lanzador VBS invisible, espera tres minutos tras el
+arranque y aplica un enfriamiento de cinco minutos para evitar ejecuciones repetidas.
 La aplicacion usa este HTTPS publico con autenticacion Firebase y conserva las rutas
 privadas como respaldo. Los registros se conservan 14 dias en
 `C:\sicar-proveedores-api\logs`.
