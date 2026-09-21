@@ -20,6 +20,7 @@ $source = Join-Path $PSScriptRoot "Watch-CsmSicarApi.ps1"
 $installed = Join-Path $InstallDirectory "Watch-CsmSicarApi.ps1"
 $repairSource = Join-Path $PSScriptRoot "Repair-CsmTailscaleFunnel.ps1"
 $repairInstalled = Join-Path $InstallDirectory "Repair-CsmTailscaleFunnel.ps1"
+$repairLauncher = Join-Path $InstallDirectory "Run-CsmTailscaleFunnelHidden.vbs"
 if (-not (Test-Path -LiteralPath $source)) {
     throw "No existe el script del watchdog junto al instalador."
 }
@@ -30,7 +31,18 @@ New-Item -ItemType Directory -Path $InstallDirectory -Force | Out-Null
 Copy-Item -LiteralPath $source -Destination $installed -Force
 Copy-Item -LiteralPath $repairSource -Destination $repairInstalled -Force
 
+$repairCommand = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$repairInstalled`""
+$repairCommandForVbs = $repairCommand.Replace('"', '""')
+$repairLauncherContent = @"
+Set shell = CreateObject("WScript.Shell")
+command = "$repairCommandForVbs"
+exitCode = shell.Run(command, 0, True)
+WScript.Quit exitCode
+"@
+Set-Content -LiteralPath $repairLauncher -Value $repairLauncherContent -Encoding ASCII
+
 $powershell = (Get-Command powershell.exe -ErrorAction Stop).Source
+$wscript = (Get-Command wscript.exe -ErrorAction Stop).Source
 $arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$installed`" -InstallDirectory `"$InstallDirectory`" -ApiTaskName `"$ApiTaskName`" -TailscaleTaskName `"$TailscaleTaskName`""
 $action = New-ScheduledTaskAction -Execute $powershell -Argument $arguments -WorkingDirectory $InstallDirectory
 $trigger = New-ScheduledTaskTrigger -AtStartup
@@ -38,6 +50,7 @@ $taskPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceA
 $taskSettings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
+    -Hidden `
     -RestartCount 10 `
     -RestartInterval (New-TimeSpan -Minutes 1) `
     -ExecutionTimeLimit ([TimeSpan]::Zero)
@@ -56,8 +69,8 @@ Register-ScheduledTask `
 Start-ScheduledTask -TaskName $WatchdogTaskName
 
 $interactiveUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-$repairArguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$repairInstalled`""
-$repairAction = New-ScheduledTaskAction -Execute $powershell -Argument $repairArguments -WorkingDirectory $InstallDirectory
+$repairArguments = "`"$repairLauncher`""
+$repairAction = New-ScheduledTaskAction -Execute $wscript -Argument $repairArguments -WorkingDirectory $InstallDirectory
 $repairTrigger = New-ScheduledTaskTrigger -AtLogOn -User $interactiveUser
 $repairPrincipal = New-ScheduledTaskPrincipal -UserId $interactiveUser -LogonType Interactive -RunLevel Highest
 if (Get-ScheduledTask -TaskName $TailscaleTaskName -ErrorAction SilentlyContinue) {
@@ -81,4 +94,5 @@ Start-ScheduledTask -TaskName $TailscaleTaskName
     ChecksEverySeconds = 20
     RestartsAfterFailures = 2
     TailscaleTaskName = $TailscaleTaskName
+    TailscaleLauncher = $repairLauncher
 } | Format-List
