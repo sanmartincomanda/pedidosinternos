@@ -12,6 +12,10 @@ La aplicacion usa este HTTPS publico con autenticacion Firebase y conserva las r
 privadas como respaldo. Los registros se conservan 14 dias en
 `C:\sicar-proveedores-api\logs`.
 
+En Masaya, `Enable-MasayaPublicFunnel.ps1` publica la API por HTTPS en
+`https://servidor-masaya.tail95b6f5.ts.net:8443/masaya-api`. La ruta privada
+de Tailscale permanece disponible como respaldo y MySQL no se expone.
+
 La configuración del nuevo módulo de levantamiento físico está documentada en [INVENTARIOS-CSM.md](./INVENTARIOS-CSM.md).
 
 Este servicio es independiente de los workers de traspasos. No lee Firebase y no modifica sus tareas programadas.
