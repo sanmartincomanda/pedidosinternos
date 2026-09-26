@@ -28,6 +28,7 @@ import {
   stopMobileNotificationListeners,
 } from "@/lib/mobileNotifications";
 import { IS_HANDHELD } from "@/lib/deviceProfile";
+import { DEMO_COMPANY, IS_DESIGN_PREVIEW } from "@/lib/designPreview";
 import Cocina from "./Cocina";
 import Configuracion from "./Configuracion";
 import EstadoPedidos from "./EstadoPedidos";
@@ -339,16 +340,11 @@ function DesktopNavButton({ item, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-3 rounded-[1rem] border px-4 py-3 text-left transition-all"
-      style={{
-        borderColor: active ? `${item.accent}33` : "rgba(217, 225, 232, 0.9)",
-        background: active ? `${item.accent}12` : "rgba(255,255,255,0.92)",
-        color: active ? "#111827" : "#475569",
-        boxShadow: active ? `0 12px 24px -18px ${item.accent}55` : "none",
-      }}
+      className={`csm-compact-nav-button ${active ? "is-active" : ""}`}
+      aria-current={active ? "page" : undefined}
     >
-      <span style={{ color: item.accent }}>{item.icon}</span>
-      <span className="text-sm font-black">{item.label}</span>
+      {item.icon}
+      <span>{item.label}</span>
     </button>
   );
 }
@@ -373,14 +369,10 @@ function MobileNavButton({ item, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="mobile-nav-button flex min-h-[64px] flex-1 flex-col items-center justify-center gap-1 rounded-[18px] border px-2 text-[11px] font-black transition-all sm:text-xs"
-      style={{
-        borderColor: active ? `${item.accent}30` : "transparent",
-        background: active ? `${item.accent}12` : "transparent",
-        color: active ? "#111827" : "#64748b",
-      }}
+      className={`csm-bottom-tab ${active ? "is-active" : ""}`}
+      aria-current={active ? "page" : undefined}
     >
-      <span style={{ color: item.accent }}>{item.icon}</span>
+      {item.icon}
       <span>{item.label}</span>
     </button>
   );
@@ -679,6 +671,13 @@ export default function AppInterna() {
     }
   };
 
+  const enterDesignPreview = () => {
+    if (!IS_DESIGN_PREVIEW) return;
+    setError("");
+    setSession({ firebaseUser: null, company: DEMO_COMPANY });
+    setBusinessModule("proveedores");
+  };
+
   const handleLogout = async () => {
     deactivateMobileNotifications().catch((notificationError) => {
       console.error("No se pudo desactivar este telefono:", notificationError);
@@ -698,7 +697,7 @@ export default function AppInterna() {
       return { title: "Panel general", icon: Icons.panel };
     }
     if (businessModule === "proveedores") {
-      return { title: "Recibir de proveedor", icon: Icons.external };
+      return { title: "Proveedores", icon: Icons.external };
     }
     if (businessModule === "inventario") {
       return { title: "Inventario fisico", icon: Icons.inventory };
@@ -827,121 +826,78 @@ export default function AppInterna() {
   if (!user) {
     return (
       <div className={`login-shell native-login flex items-center px-4 py-6 ${IS_HANDHELD ? "handheld-app" : ""}`}>
-        <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-          <section className="login-aside page-enter p-6 sm:p-8 lg:p-10">
-            <div className="text-[10px] font-black uppercase tracking-[0.38em] text-[#9bdd3a]">
-              Carnes San Martin
+        <div className="csm-login mx-auto grid w-full max-w-4xl lg:grid-cols-[0.9fr_1.1fr]">
+          <section className="login-aside csm-login-aside hidden lg:flex">
+            <div>
+              <div className="csm-overline text-[#9aa3ad]">Carnes San Martin</div>
+              <h1 className="mt-2 text-3xl font-bold text-white">{IS_HANDHELD ? "CSM Hand Held" : "CSM Operaciones"}</h1>
+              <p className="mt-2 text-sm text-[#b3bac2]">Traspasos, proveedores e inventario</p>
             </div>
-            <h1 className="app-title mt-3 text-4xl font-black text-white sm:text-5xl">
-              {IS_HANDHELD ? "CSM Hand Held" : "CSM Operaciones"}
-            </h1>
-            <div className="mt-3 text-sm font-semibold text-slate-300 sm:text-base">
-              Traspasos, proveedores e inventario
-            </div>
-
-            <div className="mt-7 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[1.25rem] border border-white/12 bg-white/8 p-4">
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">Pedido</div>
-                <div className="mt-2 text-lg font-black text-white">Captura rapida</div>
-              </div>
-              <div className="rounded-[1.25rem] border border-white/12 bg-white/8 p-4">
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">Costo</div>
-                <div className="mt-2 text-lg font-black text-white">Contabilidad</div>
-              </div>
-              <div className="rounded-[1.25rem] border border-white/12 bg-white/8 p-4">
-                <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">PDF</div>
-                <div className="mt-2 text-lg font-black text-white">Soporte</div>
-              </div>
-            </div>
-
-            <div className="mt-7 grid gap-3">
-              {[
-                "Carnes San Martin Granada",
-                "Carnes San Martin Nindiri",
-                "Carnes Amparito",
-                "Carnes San Martin Masaya",
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="rounded-[1.15rem] border border-white/10 bg-white/7 px-4 py-3 text-sm font-semibold text-slate-100"
-                >
-                  {item}
-                </div>
+            <ul className="csm-login-companies">
+              {["Carnes San Martin Granada", "Carnes San Martin Nindiri", "Carnes Amparito", "Carnes San Martin Masaya"].map((item) => (
+                <li key={item}>{item}</li>
               ))}
-            </div>
+            </ul>
           </section>
 
           <section className="login-panel page-enter p-6 sm:p-8">
-            <div className="mx-auto max-w-md">
-              <div className="mb-6 flex items-center gap-4">
-                <div className="native-login-logo flex h-15 w-15 items-center justify-center rounded-[1.35rem] bg-white text-[#08110a] shadow-[0_18px_38px_-22px_rgba(118,185,0,0.62)]">
-                  <Image src="/csm-logo.svg" alt="Carnes San Martin" width={56} height={56} priority />
-                </div>
-                <div>
-                  <div className="app-title text-3xl font-black text-slate-950">Acceso</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-500">Cuenta de empresa</div>
-                </div>
-              </div>
+            <div className="mx-auto max-w-sm">
+              <Image src="/csm-logo.svg" alt="Carnes San Martin" width={96} height={44} priority className="mb-6 h-11 w-auto" />
+              <h2 className="text-xl font-bold text-[var(--ink)]">Iniciar sesión</h2>
+              <p className="mt-1 text-sm text-[var(--gray-600)]">Cuenta de empresa</p>
 
-              <form className="space-y-5" onSubmit={handleLogin}>
+              <form className="mt-6 space-y-4" onSubmit={handleLogin}>
                 <div>
-                  <label className="app-label">Usuario</label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                      {Icons.user}
-                    </span>
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(event) => setUsername(event.target.value)}
-                      placeholder="Usuario o correo"
-                      className="app-input pl-12"
-                    />
-                  </div>
+                  <label className="app-label" htmlFor="login-user">Usuario</label>
+                  <input
+                    id="login-user"
+                    type="text"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    className="app-input"
+                  />
                 </div>
 
                 <div>
-                  <label className="app-label">Contrasena</label>
+                  <label className="app-label" htmlFor="login-password">Contraseña</label>
                   <div className="relative">
-                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                      {Icons.lock}
-                    </span>
                     <input
+                      id="login-password"
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Clave"
-                      className="app-input pl-12 pr-14"
+                      autoComplete="current-password"
+                      className="app-input pr-12"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((current) => !current)}
-                      className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600"
+                      className="csm-icon-btn is-ghost absolute right-0 top-0"
+                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                      aria-pressed={showPassword}
                     >
                       {Icons.eye}
                     </button>
                   </div>
                 </div>
 
-                {error ? (
-                  <div className="rounded-[1rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
-                    {error}
-                  </div>
-                ) : null}
+                {error ? <div className="csm-alert is-err" role="alert">{error}</div> : null}
 
-                <button type="submit" className="app-button-primary w-full text-base" disabled={authLoading}>
+                <button type="submit" className="csm-btn csm-btn-primary csm-btn-lg csm-btn-block" disabled={authLoading}>
                   {authLoading ? "Validando..." : "Entrar"}
                 </button>
               </form>
 
-              <div className="mt-6 grid gap-2 sm:grid-cols-2">
-                <div className="rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                  Granada y Nindiri
+              {IS_DESIGN_PREVIEW ? (
+                <div className="mt-6 border-t border-[var(--gray-200)] pt-5">
+                  <button type="button" onClick={enterDesignPreview} className="csm-btn csm-btn-secondary csm-btn-block">
+                    Probar diseño con datos de ejemplo
+                  </button>
+                  <p className="mt-2 text-xs text-[var(--gray-500)]">No se conecta a SICAR ni guarda compras reales.</p>
                 </div>
-                <div className="rounded-[1rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-                  Amparito y Masaya
-                </div>
-              </div>
+              ) : null}
             </div>
           </section>
         </div>
@@ -1097,17 +1053,16 @@ export default function AppInterna() {
         </header>
 
         <div className={`native-module-strip px-3 pt-2 sm:px-4 sm:pt-3 md:px-6 xl:hidden ${businessModule === "internos" ? "hidden md:block" : "block"}`}>
-          <div className="mobile-business-switch flex gap-2 overflow-x-auto rounded-[1.15rem] border border-slate-200 bg-white/90 p-1.5 shadow-sm backdrop-blur-xl">
+          <div className="mobile-business-switch flex gap-2 overflow-x-auto rounded-lg border border-slate-200 bg-white/90 p-1.5 shadow-sm backdrop-blur-xl">
             {availableBusinessModules.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setBusinessModule(item.key)}
-                className={`flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition ${
-                  businessModule === item.key ? "bg-slate-950 text-white shadow-lg" : "text-slate-500"
-                }`}
+                className={`flex min-h-12 shrink-0 items-center justify-center gap-2 px-4 text-sm ${businessModule === item.key ? "is-active" : ""}`}
+                aria-current={businessModule === item.key ? "page" : undefined}
               >
-                <span style={{ color: businessModule === item.key ? "#67e8f9" : item.accent }}>{item.icon}</span>
+                <span aria-hidden="true">{item.icon}</span>
                 <span>{item.shortLabel}</span>
               </button>
             ))}
@@ -1134,7 +1089,7 @@ export default function AppInterna() {
 
       {businessModule === "internos" ? (
         <nav ref={mobileNavRef} className="mobile-bottom-nav native-bottom-nav fixed inset-x-0 bottom-0 z-50 px-2 pb-[calc(8px+env(safe-area-inset-bottom))] pt-3 lg:hidden" aria-label="Traspasos internos">
-          <div className="mx-auto flex max-w-4xl gap-1 rounded-[22px] border border-slate-200 bg-white/94 p-1.5 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">
+          <div className="mx-auto flex max-w-4xl gap-1 rounded-lg border border-slate-200 bg-white/94 p-1.5 shadow-[0_18px_42px_-24px_rgba(17,24,39,0.32)] backdrop-blur-xl">
             {NAV_ITEMS.map((item) => (
               <MobileNavButton
                 key={item.key}

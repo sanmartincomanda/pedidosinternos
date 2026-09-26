@@ -43,11 +43,11 @@ function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm, onO
 
   return createPortal(
     <div className="app-modal z-[120] items-end px-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:items-center sm:p-4">
-      <div className="w-full max-w-[340px] rounded-[1.65rem] border border-slate-200 bg-white p-4 shadow-[0_30px_80px_-24px_rgba(15,23,42,0.55)]">
+      <div className="w-full max-w-[340px] rounded-lg border border-slate-200 bg-white p-4 shadow-[0_30px_80px_-24px_rgba(15,23,42,0.55)]">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Ingresar valor</div>
-            <div className="mt-1 text-sm font-black text-slate-800">{label}</div>
+            <div className="text-xs font-semibold text-slate-500">Ingresar valor</div>
+            <div className="mt-1 text-sm font-semibold leading-snug text-slate-800">{label}</div>
           </div>
           <button
             type="button"
@@ -55,11 +55,11 @@ function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm, onO
             className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-xl font-bold text-slate-500"
             aria-label="Cerrar teclado"
           >
-            x
+            ×
           </button>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-950 px-4 py-3 text-right font-mono text-3xl font-black tracking-tight text-white">
+        <div className="mt-4 rounded-md border border-[var(--gray-300)] bg-[var(--gray-50)] px-4 py-3 text-right font-mono text-3xl font-bold tracking-tight text-[var(--ink)]">
           {buffer || "0"}
         </div>
 
@@ -69,7 +69,7 @@ function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm, onO
               key={digit}
               type="button"
               onClick={() => append(digit)}
-              className="min-h-14 rounded-2xl border border-slate-200 bg-slate-50 text-xl font-black text-slate-900 active:scale-95 active:bg-slate-200"
+              className="min-h-14 rounded-2xl border border-slate-200 bg-slate-50 text-xl font-black text-slate-900 active:bg-slate-200"
             >
               {digit}
             </button>
@@ -77,14 +77,14 @@ function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm, onO
           <button
             type="button"
             onClick={() => setBuffer("")}
-            className="min-h-14 rounded-2xl border border-rose-200 bg-rose-50 text-sm font-black text-rose-700 active:scale-95"
+            className="min-h-14 rounded-2xl border border-rose-200 bg-rose-50 text-sm font-black text-rose-700 "
           >
             Limpiar
           </button>
           <button
             type="button"
             onClick={() => append("0")}
-            className="min-h-14 rounded-2xl border border-slate-200 bg-slate-50 text-xl font-black text-slate-900 active:scale-95"
+            className="min-h-14 rounded-2xl border border-slate-200 bg-slate-50 text-xl font-black text-slate-900 "
           >
             0
           </button>
@@ -92,7 +92,7 @@ function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm, onO
             type="button"
             disabled={decimals === 0}
             onClick={() => setBuffer((current) => (current.includes(".") ? current : `${current || "0"}.`))}
-            className="min-h-14 rounded-2xl border border-slate-200 bg-slate-50 text-xl font-black text-slate-900 disabled:opacity-35 active:scale-95"
+            className="min-h-14 rounded-2xl border border-slate-200 bg-slate-50 text-xl font-black text-slate-900 disabled:opacity-35 "
           >
             .
           </button>
@@ -113,7 +113,7 @@ function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm, onO
                 onCancel();
                 onOpenBultos();
               }}
-              className="min-h-13 rounded-2xl border border-lime-300 bg-lime-50 px-1 text-[11px] font-black text-lime-800"
+              className="min-h-13 rounded-md border border-[var(--gray-300)] bg-white px-1 text-xs font-semibold text-[var(--ink)]"
             >
               Bultos {bultosCount > 0 ? bultosCount : "+"}
             </button>
@@ -121,7 +121,7 @@ function NumericKeypad({ label, initialValue, decimals, onCancel, onConfirm, onO
           <button
             type="button"
             onClick={() => onConfirm(buffer)}
-            className="min-h-13 rounded-2xl bg-emerald-600 text-sm font-black text-white shadow-[0_16px_30px_-18px_rgba(5,150,105,0.75)] active:scale-[0.98]"
+            className="min-h-13 rounded-md bg-[var(--ink)] text-sm font-bold text-white"
           >
             Aceptar
           </button>
@@ -146,6 +146,7 @@ const TouchNumericInput = forwardRef(function TouchNumericInput(
     min = 0,
     onOpenBultos,
     bultosCount = 0,
+    id,
   },
   ref,
 ) {
@@ -171,6 +172,7 @@ const TouchNumericInput = forwardRef(function TouchNumericInput(
     <>
       <input
         ref={ref}
+        id={id}
         type="text"
         value={value}
         onChange={(event) => onValueChange(normalizeNumericValue(event.target.value, decimals))}

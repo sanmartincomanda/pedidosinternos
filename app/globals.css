@@ -1,25 +1,96 @@
 @import "tailwindcss";
 
+/*
+ * CSM design tokens. Corporate, flat, square-ish.
+ * Colors carry meaning: ink = primary action, red = brand mark only,
+ * green = received/ok, amber = pending/draft, rose = error/destructive.
+ */
 :root {
-  --background: #f3f6f9;
-  --surface: rgba(255, 255, 255, 0.96);
-  --surface-soft: rgba(248, 250, 252, 0.98);
-  --surface-muted: rgba(241, 245, 249, 0.94);
-  --foreground: #111827;
-  --foreground-soft: #475569;
-  --foreground-faint: #7c8ca0;
-  --line: rgba(217, 225, 232, 0.92);
-  --line-strong: rgba(148, 163, 184, 0.42);
-  --brand: #e30613;
-  --brand-dark: #9f111a;
-  --brand-soft: rgba(227, 6, 19, 0.08);
-  --accent: #f5b51b;
-  --accent-soft: rgba(245, 181, 27, 0.16);
-  --sky-soft: rgba(14, 165, 233, 0.12);
-  --success-soft: rgba(5, 150, 105, 0.14);
-  --danger-soft: rgba(220, 38, 38, 0.12);
-  --shadow-panel: 0 18px 48px -34px rgba(17, 24, 39, 0.35);
-  --shadow-soft: 0 12px 28px -24px rgba(17, 24, 39, 0.2);
+  /* Neutrals */
+  --ink: #15191e;
+  --ink-2: #2a3038;
+  --gray-700: #3d4652;
+  --gray-600: #56606d;
+  --gray-500: #6d7784;
+  --gray-400: #97a0ab;
+  --gray-300: #c6ccd3;
+  --gray-200: #dde1e6;
+  --gray-150: #e7eaee;
+  --gray-100: #eff1f4;
+  --gray-50: #f6f7f9;
+  --white: #ffffff;
+
+  /* Semantic */
+  --brand-red: #e0001f;
+  --ok: #1f7a3d;
+  --ok-bg: #e9f5ec;
+  --ok-line: #b9dcc3;
+  --warn: #8a5a00;
+  --warn-bg: #fdf4e1;
+  --warn-line: #ecd29a;
+  --err: #b4232f;
+  --err-bg: #fbeced;
+  --err-line: #efc0c4;
+  --info: #1d4f91;
+  --info-bg: #eaf1fb;
+  --focus: #1d4f91;
+
+  /* Radius */
+  --r-sm: 2px;
+  --r-md: 4px;
+  --r-lg: 6px;
+
+  /* Spacing (4px grid) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+
+  /* Controls */
+  --control-h: 44px;
+  --control-h-sm: 36px;
+  --touch-min: 44px;
+  --mobile-header-h: 52px;
+
+  /* Elevation (used sparingly: menus, sheets, dialogs) */
+  --elev-1: 0 1px 2px rgba(21, 25, 30, 0.06);
+  --elev-2: 0 6px 16px -6px rgba(21, 25, 30, 0.18);
+  --elev-3: 0 16px 40px -12px rgba(21, 25, 30, 0.28);
+
+  /* Motion */
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* z-index */
+  --z-sticky: 30;
+  --z-bar: 50;
+  --z-sheet: 100;
+  --z-dialog: 110;
+
+  /* Legacy aliases used across existing modules */
+  --background: var(--gray-100);
+  --surface: var(--white);
+  --surface-soft: var(--gray-50);
+  --surface-muted: var(--gray-100);
+  --foreground: var(--ink);
+  --foreground-soft: var(--gray-600);
+  --foreground-faint: var(--gray-500);
+  --line: var(--gray-200);
+  --line-strong: var(--gray-300);
+  --brand: var(--ink);
+  --brand-dark: var(--ink);
+  --brand-soft: var(--gray-100);
+  --accent: #c98a00;
+  --accent-soft: var(--warn-bg);
+  --sky-soft: var(--info-bg);
+  --success-soft: var(--ok-bg);
+  --danger-soft: var(--err-bg);
+  --shadow-panel: var(--elev-1);
+  --shadow-soft: none;
 }
 
 @theme inline {
@@ -27,6 +98,26 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-ibm-plex-sans);
   --font-mono: var(--font-jetbrains-mono);
+}
+
+/* Tailwind scale remapped so utility classes across all modules follow the tokens. */
+@theme {
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-2xl: 6px;
+  --radius-3xl: 6px;
+  --radius-4xl: 6px;
+  --shadow-2xs: none;
+  --shadow-xs: 0 1px 2px rgba(21, 25, 30, 0.05);
+  --shadow-sm: 0 1px 2px rgba(21, 25, 30, 0.06);
+  --shadow: 0 1px 2px rgba(21, 25, 30, 0.06);
+  --shadow-md: 0 2px 6px -2px rgba(21, 25, 30, 0.12);
+  --shadow-lg: 0 6px 16px -6px rgba(21, 25, 30, 0.18);
+  --shadow-xl: 0 6px 16px -6px rgba(21, 25, 30, 0.18);
+  --shadow-2xl: 0 16px 40px -12px rgba(21, 25, 30, 0.28);
 }
 
 * {
@@ -121,7 +212,7 @@ textarea {
   position: relative;
   z-index: 1;
   overflow: hidden;
-  border-radius: 2rem;
+  border-radius: var(--r-lg);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 28px 72px -44px rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(18px);
@@ -179,7 +270,7 @@ textarea {
   inset: 0.5rem;
   z-index: -1;
   border: 1px solid rgba(217, 225, 232, 0.72);
-  border-radius: 1.8rem;
+  border-radius: var(--r-lg);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(248, 250, 252, 0.2)),
     radial-gradient(circle at 14% 18%, rgba(227, 6, 19, 0.05), transparent 18rem);
@@ -188,7 +279,7 @@ textarea {
 .app-panel {
   min-width: 0;
   max-width: 100%;
-  border-radius: 1.8rem;
+  border-radius: var(--r-lg);
   border: 1px solid var(--line);
   background: var(--surface);
   box-shadow: var(--shadow-panel);
@@ -197,7 +288,7 @@ textarea {
 
 .module-heading {
   overflow: hidden;
-  border-radius: 1.45rem;
+  border-radius: var(--r-lg);
   border: 1px solid var(--line);
   padding: 18px 22px;
   box-shadow: var(--shadow-panel);
@@ -218,7 +309,7 @@ textarea {
 .compact-order-line .app-input,
 .compact-order-line .app-button-ghost {
   min-height: 44px;
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   padding-top: 9px;
   padding-bottom: 9px;
 }
@@ -226,7 +317,7 @@ textarea {
 .compact-order-line .app-icon-button {
   width: 44px;
   height: 44px;
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
 }
 
 .desktop-business-switch {
@@ -242,7 +333,7 @@ textarea {
   min-height: 52px;
   width: 100%;
   border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   padding: 8px 11px;
   background: rgba(255, 255, 255, 0.045);
   color: #94a3b8;
@@ -259,7 +350,7 @@ textarea {
   height: 36px;
   align-items: center;
   justify-content: center;
-  border-radius: 11px;
+  border-radius: var(--r-lg);
   background: color-mix(in srgb, var(--module-accent) 15%, transparent);
   color: var(--module-accent);
 }
@@ -276,7 +367,7 @@ textarea {
   align-items: center;
   gap: 12px;
   border: 1px solid rgba(14, 165, 233, 0.22);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   padding: 14px;
   background: rgba(14, 165, 233, 0.08);
   color: #67e8f9;
@@ -300,7 +391,7 @@ textarea {
 }
 
 .app-section {
-  border-radius: 1.75rem;
+  border-radius: var(--r-lg);
   border: 1px solid rgba(217, 225, 232, 0.88);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
@@ -308,14 +399,14 @@ textarea {
 }
 
 .app-card {
-  border-radius: 1.35rem;
+  border-radius: var(--r-lg);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--shadow-soft);
 }
 
 .app-card-soft {
-  border-radius: 1.2rem;
+  border-radius: var(--r-lg);
   border: 1px solid rgba(217, 225, 232, 0.88);
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(255, 255, 255, 0.96) 100%);
   box-shadow: 0 10px 22px -20px rgba(17, 24, 39, 0.18);
@@ -343,7 +434,7 @@ textarea {
   max-width: 100%;
   width: 100%;
   border: 1px solid var(--line-strong);
-  border-radius: 1rem;
+  border-radius: var(--r-lg);
   background: rgba(255, 255, 255, 0.98);
   color: var(--foreground);
   transition:
@@ -395,7 +486,7 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  border-radius: 1rem;
+  border-radius: var(--r-lg);
   font-weight: 800;
   cursor: pointer;
   transition:
@@ -484,14 +575,14 @@ textarea {
 }
 
 .app-info-banner {
-  border-radius: 1.2rem;
+  border-radius: var(--r-lg);
   border: 1px solid rgba(245, 181, 27, 0.28);
   background: rgba(255, 248, 225, 0.9);
   color: #7c5a0d;
 }
 
 .app-empty {
-  border-radius: 1.5rem;
+  border-radius: var(--r-lg);
   border: 1px dashed rgba(148, 163, 184, 0.28);
   background: rgba(248, 250, 252, 0.96);
   color: var(--foreground-soft);
@@ -552,7 +643,7 @@ textarea {
   max-height: min(90vh, 900px);
   overflow: auto;
   padding: 24px;
-  border-radius: 1.7rem;
+  border-radius: var(--r-lg);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.98);
   color: var(--foreground);
@@ -619,7 +710,7 @@ textarea {
   width: 48px;
   height: 48px;
   place-items: center;
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   color: #0c1408;
   font-family: var(--font-jetbrains-mono), monospace;
   font-size: 0.8rem;
@@ -655,7 +746,7 @@ textarea {
   margin: 2px 0 24px;
   padding: 15px;
   border: 1px solid rgba(157, 221, 58, 0.14);
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   background: linear-gradient(145deg, rgba(157, 221, 58, 0.09), rgba(255, 255, 255, 0.025));
 }
 
@@ -726,7 +817,7 @@ textarea {
   padding: 6px 8px;
   color: #aeb8b0;
   border: 1px solid transparent;
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   background: transparent;
   font-size: 0.84rem;
   font-weight: 750;
@@ -753,7 +844,7 @@ textarea {
   height: 36px;
   place-items: center;
   color: var(--nav-accent);
-  border-radius: 11px;
+  border-radius: var(--r-lg);
   background: color-mix(in srgb, var(--nav-accent) 11%, transparent);
 }
 
@@ -783,7 +874,7 @@ textarea {
   justify-content: space-between;
   padding: 9px 10px;
   color: #8f9b91;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   font-size: 0.76rem;
   font-weight: 700;
 }
@@ -814,7 +905,7 @@ textarea {
   height: 36px;
   place-items: center;
   color: #9ddd37;
-  border-radius: 11px;
+  border-radius: var(--r-lg);
   background: rgba(157, 221, 55, 0.08);
 }
 
@@ -859,7 +950,7 @@ textarea {
   place-items: center;
   color: #4f8709;
   border: 1px solid rgba(118, 185, 0, 0.18);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   background: linear-gradient(145deg, rgba(157, 221, 58, 0.15), rgba(255, 255, 255, 0.88));
   box-shadow: 0 16px 28px -22px rgba(79, 135, 9, 0.5);
 }
@@ -942,7 +1033,7 @@ textarea {
 @media (max-width: 1024px) {
   .app-route-shell::before {
     inset: 0.25rem;
-    border-radius: 1.3rem;
+    border-radius: var(--r-lg);
   }
 }
 
@@ -977,7 +1068,7 @@ textarea {
   .desktop-module-icon {
     width: 42px;
     height: 42px;
-    border-radius: 12px;
+    border-radius: var(--r-lg);
   }
 
   .app-panel,
@@ -988,7 +1079,7 @@ textarea {
   .app-modal-panel,
   .login-aside,
   .login-panel {
-    border-radius: 1.35rem;
+    border-radius: var(--r-lg);
   }
 
   .app-input,
@@ -1011,7 +1102,7 @@ textarea {
   .app-modal-panel {
     width: 100%;
     max-height: 92vh;
-    border-radius: 1.35rem 1.35rem 0.75rem 0.75rem;
+    border-radius: var(--r-lg) var(--r-lg) var(--r-lg) var(--r-lg);
   }
 }
 
@@ -1039,7 +1130,7 @@ textarea {
 }
 
 .handheld-app.login-shell .login-panel {
-  border-radius: 18px;
+  border-radius: var(--r-lg);
   padding: 18px !important;
 }
 
@@ -1051,7 +1142,7 @@ textarea {
 .handheld-app .desktop-module-icon {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
 }
 
 .handheld-app .desktop-topbar-kicker {
@@ -1070,19 +1161,19 @@ textarea {
 .handheld-app .desktop-topbar-action {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
 }
 
 .handheld-app .mobile-business-switch {
   gap: 4px;
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   padding: 4px;
 }
 
 .handheld-app .mobile-business-switch button {
   min-height: 40px !important;
   gap: 5px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 5px 7px;
   font-size: 10px;
 }
@@ -1106,7 +1197,7 @@ textarea {
 }
 
 .handheld-app .module-heading {
-  border-radius: 13px;
+  border-radius: var(--r-lg);
   padding: 8px 11px;
 }
 
@@ -1124,7 +1215,7 @@ textarea {
 .handheld-app .app-section,
 .handheld-app .app-card,
 .handheld-app .app-card-soft {
-  border-radius: 12px;
+  border-radius: var(--r-lg);
 }
 
 .handheld-app .handheld-meta-panel,
@@ -1156,7 +1247,7 @@ textarea {
 .handheld-app .compact-order-line .app-input,
 .handheld-app .compact-order-line .app-button-ghost {
   min-height: 38px;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   padding: 7px 9px;
   font-size: 12px;
 }
@@ -1178,7 +1269,7 @@ textarea {
 .handheld-app .handheld-products-panel .app-icon-button {
   width: 36px;
   height: 36px;
-  border-radius: 9px;
+  border-radius: var(--r-md);
 }
 
 .handheld-app .handheld-order-line {
@@ -1200,7 +1291,7 @@ textarea {
   grid-row: 1;
   width: 26px;
   height: 38px;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   font-size: 9px;
 }
 
@@ -1276,7 +1367,7 @@ textarea {
 
 .handheld-app .handheld-product-results {
   overflow-y: auto;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 4px;
 }
 
@@ -1284,7 +1375,7 @@ textarea {
   min-height: 36px;
   margin-bottom: 3px;
   gap: 5px;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   padding: 5px 6px;
 }
 
@@ -1318,7 +1409,7 @@ textarea {
 .handheld-app .handheld-actions .app-button-primary,
 .handheld-app .handheld-actions .app-button-secondary {
   min-height: 42px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 7px;
   font-size: 11px;
 }
@@ -1329,14 +1420,14 @@ textarea {
 
 .handheld-app .mobile-bottom-nav > div {
   gap: 1px;
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   padding: 3px;
 }
 
 .handheld-app .mobile-nav-button {
   min-height: 52px;
   gap: 1px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 3px 1px;
   font-size: 8px;
 }
@@ -1351,14 +1442,14 @@ textarea {
 }
 
 .handheld-app .handheld-provider-form > section:first-child {
-  border-radius: 13px;
+  border-radius: var(--r-lg);
   padding: 9px !important;
 }
 
 .handheld-app .handheld-provider-form > section:first-child .h-16 {
   width: 70px;
   height: 48px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
 }
 
 .handheld-app .handheld-provider-form > section:first-child h2 {
@@ -1395,7 +1486,7 @@ textarea {
 .handheld-app .handheld-provider-hero > div:first-child > div:last-child button {
   min-height: 36px;
   gap: 4px;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   padding: 5px 8px;
   font-size: 9px;
 }
@@ -1420,7 +1511,7 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   background: #f7faf8;
   padding: 5px 9px;
 }
@@ -1457,14 +1548,14 @@ textarea {
 .handheld-app .handheld-reception-fields > div:first-child > div:last-child {
   max-height: 180px;
   margin-top: 3px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 3px;
 }
 
 .handheld-app .handheld-reception-fields > div:first-child > div:last-child button {
   min-height: 34px;
   margin: 0;
-  border-radius: 7px;
+  border-radius: var(--r-md);
   padding: 6px 8px;
   font-size: 10px;
 }
@@ -1475,7 +1566,7 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   background: #76b900;
   padding: 6px;
   font-size: 11px;
@@ -1539,7 +1630,7 @@ textarea {
 .handheld-app .handheld-capture-mode {
   min-height: 36px;
   gap: 4px;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   padding: 5px 9px;
   font-size: 10px;
 }
@@ -1551,7 +1642,7 @@ textarea {
 
 .handheld-app .handheld-scan-workspace {
   margin-top: 6px;
-  border-radius: 11px;
+  border-radius: var(--r-lg);
   background: #101807;
   padding: 6px;
 }
@@ -1562,7 +1653,7 @@ textarea {
   align-items: center;
   overflow: hidden;
   border: 2px solid #76b900;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: white;
 }
 
@@ -1595,7 +1686,7 @@ textarea {
 .handheld-app .handheld-scan-confirm {
   height: 36px;
   margin-right: 3px;
-  border-radius: 7px;
+  border-radius: var(--r-md);
   background: #76b900;
   font-size: 9px;
   font-weight: 900;
@@ -1607,7 +1698,7 @@ textarea {
   grid-template-columns: 70px minmax(0, 1fr);
   gap: 5px;
   margin-top: 5px;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   background: white;
   padding: 6px;
 }
@@ -1642,7 +1733,7 @@ textarea {
   width: 100%;
   min-height: 40px;
   border: 1px solid #a3e635;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   padding: 5px;
   text-align: center;
   font-size: 15px;
@@ -1655,7 +1746,7 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   background: #76b900;
   font-size: 10px;
   font-weight: 900;
@@ -1684,7 +1775,7 @@ textarea {
 .handheld-app .handheld-provider-products > .relative.mt-3 > div:last-child {
   max-height: 190px;
   margin-top: 3px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   padding: 3px;
 }
 
@@ -1693,7 +1784,7 @@ textarea {
   grid-template-columns: 58px minmax(0, 1fr);
   gap: 5px;
   margin: 0;
-  border-radius: 7px;
+  border-radius: var(--r-md);
   padding: 4px 5px;
 }
 
@@ -1703,7 +1794,7 @@ textarea {
 
 .handheld-app .handheld-provider-items {
   margin-top: 6px;
-  border-radius: 9px;
+  border-radius: var(--r-md);
 }
 
 .handheld-app .handheld-provider-items .provider-items-header {
@@ -1766,7 +1857,7 @@ textarea {
 .handheld-app .provider-item-price {
   min-height: 36px !important;
   height: 36px;
-  border-radius: 7px;
+  border-radius: var(--r-md);
   padding: 3px;
   font-size: 10px;
 }
@@ -1781,7 +1872,7 @@ textarea {
 }
 
 .handheld-app .handheld-provider-actions > div {
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   padding: 5px;
 }
 
@@ -1799,7 +1890,7 @@ textarea {
 
 .handheld-app .handheld-provider-actions button {
   min-height: 38px;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   padding: 4px;
   font-size: 9px;
 }
@@ -1914,7 +2005,7 @@ textarea {
 .native-bottom-nav .mobile-nav-button {
   min-width: 0;
   min-height: 58px;
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   padding: 6px 3px;
   transition: color 160ms ease, background 160ms ease, transform 120ms ease;
 }
@@ -1967,7 +2058,7 @@ textarea {
   place-items: center;
   padding: 5px;
   border: 1px solid #dbe8db;
-  border-radius: 15px;
+  border-radius: var(--r-lg);
   background: #ffffff;
 }
 
@@ -1980,7 +2071,7 @@ textarea {
   padding: 6px 12px;
   color: #1e293b;
   border: 1px solid #e2e8f0;
-  border-radius: 15px;
+  border-radius: var(--r-lg);
   background: #ffffff;
   text-align: left;
 }
@@ -1991,7 +2082,7 @@ textarea {
   height: 38px;
   place-items: center;
   color: var(--native-green);
-  border-radius: 12px;
+  border-radius: var(--r-lg);
   background: #eaf7ef;
 }
 
@@ -2018,7 +2109,7 @@ textarea {
   width: min(100%, 430px);
   padding: 22px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 26px;
+  border-radius: var(--r-lg);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 30px 70px -38px rgba(0, 0, 0, 0.72);
 }
@@ -2094,7 +2185,7 @@ textarea {
 
   .native-login .login-panel {
     padding: 22px 18px !important;
-    border-radius: 25px;
+    border-radius: var(--r-lg);
   }
 
   .native-login .app-title {
@@ -2112,7 +2203,7 @@ textarea {
     width: 40px;
     height: 40px;
     padding: 4px;
-    border-radius: 12px;
+    border-radius: var(--r-lg);
     background: #ffffff;
   }
 
@@ -2141,14 +2232,14 @@ textarea {
 
   .native-module-strip .mobile-business-switch {
     gap: 3px;
-    border-radius: 14px;
+    border-radius: var(--r-lg);
     padding: 3px;
   }
 
   .native-module-strip .mobile-business-switch button {
     min-height: 40px;
     gap: 5px;
-    border-radius: 11px;
+    border-radius: var(--r-lg);
     padding: 5px 10px;
     font-size: 11px;
   }
@@ -2163,12 +2254,12 @@ textarea {
   .app-card,
   .app-card-soft,
   .app-empty {
-    border-radius: 18px;
+    border-radius: var(--r-lg);
     box-shadow: 0 14px 36px -30px rgba(15, 45, 31, 0.42);
   }
 
   .module-heading {
-    border-radius: 19px;
+    border-radius: var(--r-lg);
     padding: 16px;
   }
 
@@ -2182,7 +2273,7 @@ textarea {
   .app-select,
   textarea {
     min-height: 48px;
-    border-radius: 13px;
+    border-radius: var(--r-lg);
     font-size: 16px;
   }
 
@@ -2191,13 +2282,13 @@ textarea {
   .app-button-danger,
   .app-button-ghost {
     min-height: 48px;
-    border-radius: 14px;
+    border-radius: var(--r-lg);
   }
 
   .app-icon-button {
     min-width: 42px;
     min-height: 42px;
-    border-radius: 13px;
+    border-radius: var(--r-lg);
   }
 
   .app-modal {
@@ -2214,7 +2305,7 @@ textarea {
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
-    border-radius: 25px 25px 0 0;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
     animation: nativeSheetUp 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
@@ -2236,7 +2327,7 @@ textarea {
   }
 
   .native-module-hero {
-    border-radius: 21px;
+    border-radius: var(--r-lg);
     padding: 18px !important;
   }
 
@@ -2253,7 +2344,7 @@ textarea {
   .native-module-hero .grid.grid-cols-2 {
     width: 100%;
     grid-template-columns: minmax(0, 1fr) minmax(0, 0.75fr);
-    border-radius: 15px;
+    border-radius: var(--r-lg);
   }
 
   .native-module-hero .grid.grid-cols-2 > div {
@@ -2269,7 +2360,7 @@ textarea {
     align-items: center;
     gap: 2px 12px;
     padding: 13px !important;
-    border-radius: 18px;
+    border-radius: var(--r-lg);
   }
 
   .native-module-card > .absolute {
@@ -2281,7 +2372,7 @@ textarea {
     grid-row: 1 / 3;
     width: 46px;
     height: 46px;
-    border-radius: 14px;
+    border-radius: var(--r-lg);
   }
 
   .native-module-card-title {
@@ -2320,7 +2411,7 @@ textarea {
 
   .native-activity-card {
     padding: 15px;
-    border-radius: 18px;
+    border-radius: var(--r-lg);
   }
 
   .native-activity-card .mt-5 {
@@ -2374,7 +2465,7 @@ textarea {
 .erp-operation-module .app-panel,
 .erp-operation-module .erp-form-panel,
 .erp-operation-module .erp-products-panel {
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   border-color: #d9e1e7;
   background: #ffffff;
   box-shadow: 0 8px 22px -20px rgba(15, 23, 42, 0.4);
@@ -2382,7 +2473,7 @@ textarea {
 }
 
 .erp-module-hero {
-  border-radius: 16px;
+  border-radius: var(--r-lg);
   box-shadow: 0 10px 26px -22px rgba(15, 23, 42, 0.7);
 }
 
@@ -2400,7 +2491,7 @@ textarea {
 .erp-operation-module .app-input,
 .erp-operation-module .app-select,
 .erp-operation-module textarea {
-  border-radius: 8px;
+  border-radius: var(--r-md);
   box-shadow: none;
 }
 
@@ -2439,18 +2530,18 @@ textarea {
 }
 
 .erp-module-alert {
-  border-radius: 10px !important;
+  border-radius: var(--r-md) !important;
   border-left-width: 4px;
   box-shadow: none;
 }
 
 .erp-segmented-control {
-  border-radius: 11px;
+  border-radius: var(--r-lg);
   box-shadow: 0 7px 18px -18px rgba(15, 23, 42, 0.55);
 }
 
 .erp-segmented-button {
-  border-radius: 7px;
+  border-radius: var(--r-md);
   color: #64748b;
 }
 
@@ -2467,7 +2558,7 @@ textarea {
   min-height: 40px;
   padding: 8px 12px;
   border: 1px solid #d9e1e7;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: #ffffff;
   color: #475569;
   font-size: 0.75rem;
@@ -2561,7 +2652,7 @@ textarea {
 }
 
 .erp-command-bar {
-  border-radius: 14px !important;
+  border-radius: var(--r-lg) !important;
   box-shadow: 0 14px 32px -24px rgba(2, 6, 23, 0.85);
 }
 
@@ -2577,7 +2668,7 @@ textarea {
   justify-content: center;
   gap: 6px;
   border: 1px solid #047857;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   padding: 0 14px;
   background: #047857;
   color: #ffffff;
@@ -2627,7 +2718,7 @@ textarea {
   gap: 7px;
   max-width: 220px;
   border: 1px solid #d9e1e7;
-  border-radius: 7px;
+  border-radius: var(--r-md);
   padding: 5px 8px 5px 10px;
   background: #f8fafc;
   color: #526174;
@@ -2686,7 +2777,7 @@ textarea {
   height: 38px;
   min-width: 38px;
   min-height: 38px;
-  border-radius: 8px;
+  border-radius: var(--r-md);
 }
 
 @media (max-width: 767px) {
@@ -2699,7 +2790,7 @@ textarea {
   .erp-operation-module .erp-products-panel,
   .erp-mobile-toolbar,
   .erp-module-hero {
-    border-radius: 12px;
+    border-radius: var(--r-lg);
   }
 
   .erp-operation-module .app-input,

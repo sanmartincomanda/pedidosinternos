@@ -382,7 +382,7 @@ export default function Cocina({
                   </div>
 
                   {isStandby ? (
-                    <div className="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
                       <div className="mb-2 flex items-center gap-2 font-black uppercase tracking-[0.16em] text-amber-700">
                         {Icons.alert}
                         Entrega programada
@@ -392,7 +392,7 @@ export default function Cocina({
                   ) : null}
 
                   {status === "LISTO" ? (
-                    <div className="rounded-[24px] border border-red-300 bg-red-50 px-4 py-5 text-center shadow-[0_12px_24px_rgba(220,38,38,0.08)]">
+                    <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-5 text-center shadow-[0_12px_24px_rgba(220,38,38,0.08)]">
                       <div className="text-[11px] font-extrabold uppercase tracking-[0.28em] text-red-500">Alerta de despacho</div>
                       <div className="mt-2 text-2xl font-black tracking-[0.08em] text-red-400 sm:text-3xl">
                         LISTOS PARA ENVIAR
@@ -401,7 +401,7 @@ export default function Cocina({
                   ) : null}
 
                   {pedido.notaGeneral ? (
-                    <div className="rounded-[22px] border border-sky-200 bg-sky-50 px-4 py-4 text-sm text-sky-900">
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-4 text-sm text-sky-900">
                       <div className="mb-2 font-black uppercase tracking-[0.16em] text-sky-700">Nota general</div>
                       <div>{pedido.notaGeneral}</div>
                     </div>
@@ -414,12 +414,12 @@ export default function Cocina({
                         pesosEditando[pesoKey] !== undefined ? pesosEditando[pesoKey] : item.pesoReal || "";
 
                       return (
-                        <div key={`${pedido.firebaseId}-${idx}`} className="rounded-[24px] border border-white/10 bg-white/88 p-4 text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.10)]">
+                        <div key={`${pedido.firebaseId}-${idx}`} className="rounded-lg border border-white/10 bg-white/88 p-4 text-slate-900 shadow-[0_12px_30px_rgba(15,23,42,0.10)]">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
                               <div className="text-base font-black uppercase text-slate-900">{item.producto}</div>
                               {item.nota ? (
-                                <div className="mt-2 rounded-[16px] border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                                <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
                                   <div className="mb-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-amber-700">
                                     Nota especial
                                   </div>
@@ -429,7 +429,7 @@ export default function Cocina({
                             </div>
 
                             <div className="grid gap-2 sm:min-w-[220px]">
-                              <div className="rounded-[16px] border border-sky-200 bg-sky-50 px-3 py-3">
+                              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3">
                                 <div className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-sky-700">Solicitado</div>
                                 <div className="mt-1 text-lg font-black text-sky-900">
                                   {item.cantidad} {item.unidad}
@@ -440,7 +440,7 @@ export default function Cocina({
 
                           <div className="mt-3">
                             {status === "NUEVO" || status === "STANDBY_ENTREGA" ? (
-                              <div className="rounded-[16px] border border-dashed border-slate-300 bg-slate-100 px-3 py-3 text-center text-sm font-bold text-slate-500">
+                              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-100 px-3 py-3 text-center text-sm font-bold text-slate-500">
                                 Peso real se habilita al iniciar preparacion.
                               </div>
                             ) : (
@@ -454,7 +454,7 @@ export default function Cocina({
                                     onChange={(event) => actualizarPesoReal(pedido.firebaseId, idx, event.target.value)}
                                     onBlur={() => guardarPesoReal(pedido.firebaseId, idx)}
                                     placeholder="0.00"
-                                    className="w-full rounded-[16px] border border-slate-300 bg-white px-4 py-3 pr-12 text-center text-lg font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 pr-12 text-center text-lg font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
                                     style={{
                                       borderColor: pesoEditado ? "#22c55e" : undefined,
                                       background: pesoEditado ? "#f0fdf4" : "#ffffff",
@@ -480,7 +480,7 @@ export default function Cocina({
                           setModalPreparador(pedido.firebaseId);
                           setPreparadorSeleccionado(null);
                         }}
-                        className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-orange-300 bg-orange-50 px-4 py-4 text-base font-black text-orange-800 transition hover:-translate-y-0.5"
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-4 py-4 text-base font-black text-orange-800 transition hover:-translate-y-0.5"
                       >
                         {Icons.chef}
                         {isStandby ? "Iniciar preparacion de standby" : "Iniciar preparacion"}
@@ -492,7 +492,7 @@ export default function Cocina({
                         type="button"
                         onClick={() => marcarListo(pedido.firebaseId)}
                         disabled={!todosPesosLlenos}
-                        className="flex w-full items-center justify-center gap-2 rounded-[18px] border-none px-4 py-4 text-base font-black text-white transition"
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border-none px-4 py-4 text-base font-black text-white transition"
                         style={{
                           background: todosPesosLlenos
                             ? "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)"
@@ -513,7 +513,7 @@ export default function Cocina({
                           setModalRepartidor(pedido.firebaseId);
                           setRepartidorSeleccionado("");
                         }}
-                        className="flex w-full items-center justify-center gap-2 rounded-[18px] border-none bg-[linear-gradient(135deg,#0f766e_0%,#115e59_100%)] px-4 py-4 text-base font-black text-white shadow-[0_16px_30px_rgba(15,118,110,0.24)]"
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border-none bg-[linear-gradient(135deg,#0f766e_0%,#115e59_100%)] px-4 py-4 text-base font-black text-white shadow-[0_16px_30px_rgba(15,118,110,0.24)]"
                       >
                         {Icons.truck}
                         Enviar pedido
@@ -616,7 +616,7 @@ export default function Cocina({
                   type="button"
                   key={nombre}
                   onClick={() => setPreparadorSeleccionado(nombre)}
-                  className="rounded-[24px] border p-4 text-left transition-all"
+                  className="rounded-lg border p-4 text-left transition-all"
                   style={{
                     borderColor: preparadorSeleccionado === nombre ? "#fb923c" : "#cbd5e1",
                     background:
@@ -640,7 +640,7 @@ export default function Cocina({
                 }
               }}
               disabled={!preparadorSeleccionado}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-[18px] border-none bg-[linear-gradient(135deg,#fb923c_0%,#ea580c_100%)] px-4 py-4 text-base font-black text-white shadow-[0_16px_30px_rgba(234,88,12,0.24)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border-none bg-[linear-gradient(135deg,#fb923c_0%,#ea580c_100%)] px-4 py-4 text-base font-black text-white shadow-[0_16px_30px_rgba(234,88,12,0.24)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
             >
               {Icons.chef}
               {preparadorSeleccionado ? `Asignar a ${preparadorSeleccionado}` : "Selecciona un preparador"}
@@ -685,7 +685,7 @@ export default function Cocina({
                   type="button"
                   key={nombre}
                   onClick={() => setRepartidorSeleccionado(nombre)}
-                  className="rounded-[18px] border px-4 py-3 text-left text-base font-black transition"
+                  className="rounded-lg border px-4 py-3 text-left text-base font-black transition"
                   style={{
                     borderColor: repartidorSeleccionado === nombre ? "#0f766e" : "#cbd5e1",
                     background: repartidorSeleccionado === nombre ? "#0f766e" : "#f8fafc",

@@ -6,7 +6,9 @@ import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import { IS_HANDHELD } from "@/lib/deviceProfile";
 import ProviderPurchaseHistory from "./ProviderPurchaseHistory";
+import ProviderReceivingMobile from "./ProviderReceivingMobile";
 import TouchNumericInput from "./TouchNumericInput";
+import { articleUnit, Icon, ProductIdentity, useMediaQuery } from "./ui/csm";
 import {
   checkSicarPurchaseApi,
   getSicarOfflineCatalog,
@@ -285,6 +287,8 @@ function ConnectionDialog({ initial, onClose, onSaved }) {
 }
 
 export default function ProveedoresExternos({ user }) {
+  // Phones get their own screen-by-screen flow; the handheld build keeps its scanner layout.
+  const isPhone = useMediaQuery("(max-width: 767px)") && !IS_HANDHELD;
   const [view, setView] = useState("form");
   const [connection, setConnection] = useState("checking");
   const [connectionError, setConnectionError] = useState("");
@@ -879,7 +883,7 @@ export default function ProveedoresExternos({ user }) {
     if (validationError) {
       setMessage({ type: "error", text: validationError });
       if (IS_HANDHELD && !supplier) setHandheldDetailsOpen(true);
-      return;
+      return false;
     }
 
     setLoading(true);
@@ -908,10 +912,12 @@ export default function ProveedoresExternos({ user }) {
       await saveProviderPurchaseDraft(draft);
       await refreshDrafts();
       resetForm();
-      setView("history");
+      if (!isPhone) setView("history");
       setMessage(null);
+      return true;
     } catch (error) {
       setMessage({ type: "error", text: `No se pudo guardar la recepcion local: ${error.message}` });
+      return false;
     } finally {
       setLoading(false);
     }
@@ -1054,7 +1060,16 @@ export default function ProveedoresExternos({ user }) {
     }
   };
 
-  if (view === "history") {
+  const history = {
+    purchases: purchaseHistory,
+    loading: historyLoading,
+    error: historyError,
+    refresh: refreshHistory,
+    onDeleteDraft: removePendingReception,
+    onEditDraft: editPendingReception,
+  };
+
+  if (view === "history" && !isPhone) {
     return (
       <ProviderPurchaseHistory
         drafts={drafts}
@@ -1076,133 +1091,362 @@ export default function ProveedoresExternos({ user }) {
     ? handheldScanProduct
     : items.find((item) => Number(item.art_id) === Number(bultosArticleId));
   const bultosTotal = bultosTemporal.reduce((sum, weight) => sum + weight, 0);
+  const clearInvoiceSupport = () => {
+    setInvoiceSupport(null);
+    if (invoiceSupportInputRef.current) invoiceSupportInputRef.current.value = "";
+    if (invoiceCameraInputRef.current) invoiceCameraInputRef.current.value = "";
+  };
+  const connectionLabel = catalogSyncing
+    ? "Actualizando catálogo"
+    : connection === "online" ? "SICAR conectado" : connection === "checking" ? "Verificando SICAR" : "SICAR sin conexión";
+  const connectionTone = catalogSyncing || connection === "checking" ? "is-warn" : connection === "online" ? "is-ok" : "is-err";
+  const addedArticleIds = new Set(items.map((item) => Number(item.art_id)));
+
+  const fileInputs = (
+    <>
+      <input
+        ref={invoiceSupportInputRef}
+        type="file"
+        accept="image/*"
+        onChange={(event) => selectInvoiceSupport(event.target.files?.[0])}
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      <input
+        ref={invoiceCameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(event) => selectInvoiceSupport(event.target.files?.[0])}
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+    </>
+  );
+
+  const dialogs = (
+    <>
+      {connectionDialog ? (
+        <ConnectionDialog
+          initial={getSicarApiConnection()}
+          onClose={() => setConnectionDialog(false)}
+          onSaved={() => {
+            setConnectionDialog(false);
+            checkConnection({ forceCatalog: true, showMessage: true });
+          }}
+        />
+      ) : null}
+
+      {bultosArticleId !== null && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="app-modal z-[120] items-end px-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:items-center sm:p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="bultos-title"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) closeBultosAndReturn();
+              }}
+            >
+              <div className="app-modal-panel w-full max-w-md p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="csm-overline">Suma de bultos</div>
+                    <h3 id="bultos-title" className="csm-dialog-title mt-1">{activeBultoItem?.descripcion}</h3>
+                    {activeBultoItem ? (
+                      <div className="mt-0.5 text-xs text-[var(--gray-600)]">
+                        <span className="font-mono">{activeBultoItem.clave}</span>
+                        {articleUnit(activeBultoItem) ? ` · ${articleUnit(activeBultoItem)}` : ""}
+                      </div>
+                    ) : null}
+                  </div>
+                  <button type="button" onClick={closeBultosAndReturn} className="csm-icon-btn" aria-label="Cerrar suma de bultos">
+                    <Icon name="close" size={18} />
+                  </button>
+                </div>
+
+                <div className="csm-bultos-total mt-3">
+                  <div>
+                    <div className="csm-figure-label">Peso total</div>
+                    <div className="font-mono text-3xl font-bold text-[var(--ink)]">{formatBultoWeight(bultosTotal)}</div>
+                  </div>
+                  <span className="csm-tag is-plain">{bultosTemporal.length} bultos</span>
+                </div>
+
+                <label className="app-label mt-3" htmlFor="bulto-weight">Peso del bulto</label>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                  <input
+                    id="bulto-weight"
+                    ref={bultoInputRef}
+                    type="text"
+                    inputMode="decimal"
+                    enterKeyHint="next"
+                    value={bultoTemporal}
+                    onChange={(event) => {
+                      setBultoTemporal(event.target.value);
+                      setBultoError("");
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addBulto();
+                      }
+                    }}
+                    onFocus={(event) => event.target.select()}
+                    className="app-input csm-num csm-num-lg"
+                    aria-invalid={bultoError ? "true" : undefined}
+                  />
+                  <button type="button" onClick={addBulto} className="csm-btn csm-btn-secondary" aria-label="Agregar peso">
+                    <Icon name="plus" size={18} /> Agregar
+                  </button>
+                </div>
+                <div className={`mt-1.5 min-h-5 text-xs ${bultoError ? "font-semibold text-[var(--err)]" : "text-[var(--gray-500)]"}`} role={bultoError ? "alert" : undefined}>
+                  {bultoError || "Escribe el peso y presiona Enter para agregar otro."}
+                </div>
+
+                {bultosTemporal.length > 0 ? (
+                  <ol className="mt-2 max-h-44 divide-y divide-[var(--gray-150)] overflow-y-auto rounded-md border border-[var(--gray-200)]">
+                    {[...bultosTemporal].reverse().map((weight, reverseIndex) => {
+                      const originalIndex = bultosTemporal.length - 1 - reverseIndex;
+                      return (
+                        <li key={`${originalIndex}-${weight}`} className="flex min-h-10 items-center justify-between gap-3 px-3 py-1">
+                          <span className="text-xs text-[var(--gray-500)]">Bulto {originalIndex + 1}</span>
+                          <span className="ml-auto font-mono text-sm font-semibold">{formatBultoWeight(weight)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setBultosTemporal((current) => current.filter((_, index) => index !== originalIndex))}
+                            className="csm-icon-btn is-ghost h-9 w-9 text-[var(--err)]"
+                            aria-label={`Quitar bulto ${originalIndex + 1}`}
+                          >
+                            <Icon name="trash" size={16} />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : null}
+
+                <div className="csm-dialog-actions">
+                  <button type="button" onClick={closeBultosAndReturn} className="csm-btn csm-btn-secondary">Cancelar</button>
+                  <button type="button" onClick={finishBultos} className="csm-btn csm-btn-primary">Usar {formatBultoWeight(bultosTotal + (parseBultoWeight(bultoTemporal) || 0))}</button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {paymentPromptOpen ? (
+        <div className="app-modal z-[115] px-4" role="dialog" aria-modal="true" aria-labelledby="payment-method-title">
+          <div className="app-modal-panel w-full max-w-lg p-5 sm:p-6">
+            <h2 id="payment-method-title" className="csm-dialog-title">Método de pago</h2>
+            <p className="mt-1 text-sm text-[var(--gray-600)]">Cómo debe quedar registrada la compra en SICAR.</p>
+            <div className="mt-4 grid gap-2">
+              <button type="button" onClick={() => openPreview("credit")} disabled={loading} className="csm-choice">
+                <span className="csm-choice-title">Crédito</span>
+                <span className="csm-choice-copy">Genera la cuenta por pagar al proveedor.</span>
+              </button>
+              <button type="button" onClick={() => openPreview("other")} disabled={loading} className="csm-choice">
+                <span className="csm-choice-title">Otro medio de pago</span>
+                <span className="csm-choice-copy">Conserva la clasificación actual de SICAR.</span>
+              </button>
+            </div>
+            <div className="csm-dialog-actions">
+              <button type="button" onClick={() => setPaymentPromptOpen(false)} disabled={loading} className="csm-btn csm-btn-secondary">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {preview ? (
+        <div className="app-modal z-[110] px-4" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+          <div className="app-modal-panel w-full max-w-lg p-5 sm:p-6">
+            <div className="csm-overline">Confirmar recepción</div>
+            <h2 id="preview-title" className="csm-dialog-title mt-1">{preview.supplier?.nombre}</h2>
+            <dl className="csm-totals mt-4">
+              <div><dt>Factura</dt><dd>{invoiceNumber} · {purchaseDate}</dd></div>
+              <div><dt>Artículos</dt><dd>{preview.summary?.lines}</dd></div>
+              <div><dt>Subtotal sin IVA</dt><dd>{formatMoney(preview.summary?.subtotal)}</dd></div>
+              <div className="is-strong"><dt>Total factura</dt><dd>{formatMoney(preview.summary?.total)}</dd></div>
+              <div>
+                <dt>Método de pago</dt>
+                <dd>{preview.payment?.label}{preview.payment?.method === "credit" && preview.payment?.dueDate ? ` · vence ${preview.payment.dueDate}` : ""}</dd>
+              </div>
+              {retentionTotal > 0 ? (
+                <>
+                  <div><dt>Retenciones (contabilidad)</dt><dd>− {formatMoney(retentionTotal)}</dd></div>
+                  <div><dt>Neto a pagar</dt><dd>{formatMoney(netTotal)}</dd></div>
+                </>
+              ) : null}
+              {invoiceSupport ? <div><dt>Foto de factura</dt><dd className="break-all">{invoiceSupport.name}</dd></div> : null}
+            </dl>
+            <p className="csm-alert is-warn mt-4">
+              SICAR recibe el total de la factura (subtotal más IVA). Las retenciones no se envían a SICAR; solo al sistema contable.
+            </p>
+            <div className="csm-dialog-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  setPreview(null);
+                  setPaymentMethod("");
+                }}
+                className="csm-btn csm-btn-secondary"
+              >
+                Volver a revisar
+              </button>
+              <button type="button" onClick={receivePurchase} disabled={loading} className="csm-btn csm-btn-primary">
+                {loading ? "Registrando..." : "Confirmar recepción"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {receipt ? (
+        <div className="app-modal z-[110] px-4" role="dialog" aria-modal="true" aria-labelledby="receipt-title">
+          <div className="app-modal-panel w-full max-w-md p-5 sm:p-6">
+            <span className="csm-tag is-ok">Compra registrada en SICAR</span>
+            <h2 id="receipt-title" className="csm-dialog-title mt-2">Factura {receipt.folio}</h2>
+            <dl className="csm-totals mt-3">
+              <div className="is-strong"><dt>Total</dt><dd>{formatMoney(receipt.total)}</dd></div>
+              <div><dt>Método de pago</dt><dd>{receipt.payment?.label}</dd></div>
+            </dl>
+            <p className="mt-3 text-sm text-[var(--gray-700)]">Inventario actualizado en SICAR.</p>
+            {receipt.accounting?.requested ? (
+              <p className={`csm-alert mt-3 ${receipt.accounting?.queued ? "is-ok" : "is-warn"}`}>
+                {receipt.accounting?.queued
+                  ? "Retenciones y factura preparadas para el sistema contable."
+                  : `Compra registrada; complemento contable pendiente: ${receipt.accounting?.error || "vuelve a intentarlo desde el servidor."}`}
+              </p>
+            ) : null}
+            <div className="csm-dialog-actions">
+              <button type="button" onClick={() => setReceipt(null)} className="csm-btn csm-btn-primary">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+
+  if (isPhone) {
+    return (
+      <>
+        {fileInputs}
+        <ProviderReceivingMobile
+          ctx={{
+            user,
+            connection,
+            connectionError,
+            catalogSyncing,
+            supplierCatalog,
+            articleCatalog,
+            supplierQuery,
+            setSupplierQuery,
+            suppliers,
+            supplier,
+            setSupplier,
+            productQuery,
+            setProductQuery,
+            products,
+            resultLimit: CATALOG_RESULT_LIMIT,
+            items,
+            setItems,
+            updateItem,
+            addProduct,
+            openBultos,
+            invoiceNumber,
+            setInvoiceNumber,
+            purchaseDate,
+            setPurchaseDate,
+            maxDate: localDate(),
+            comment,
+            setComment,
+            retentionIrEnabled,
+            retentionMunicipalEnabled,
+            retentionIr2,
+            retentionMunicipal1,
+            setRetentionIr2,
+            setRetentionMunicipal1,
+            setRetentionIrEdited,
+            setRetentionMunicipalEdited,
+            toggleRetentionIr,
+            toggleRetentionMunicipal,
+            invoiceSupport,
+            clearInvoiceSupport,
+            takeInvoicePhoto,
+            chooseInvoiceFile: () => invoiceSupportInputRef.current?.click(),
+            cameraLoading,
+            totals,
+            retentionTotal,
+            netTotal,
+            formatMoney,
+            drafts,
+            editingDraftId,
+            resetForm,
+            savePendingReception,
+            requestPaymentMethod,
+            loading,
+            message,
+            setMessage,
+            openConnectionDialog: () => setConnectionDialog(true),
+            receipt,
+            history,
+          }}
+        />
+        {dialogs}
+      </>
+    );
+  }
 
   return (
-    <div className={`erp-operation-module provider-operation-module provider-form-shell min-w-0 max-w-full space-y-3 overflow-x-clip sm:space-y-4 ${IS_HANDHELD ? "handheld-form handheld-provider-form" : ""}`}>
-      <section className="erp-mobile-toolbar provider-mobile-toolbar min-w-0 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:hidden">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-[1.05rem] font-black leading-tight text-slate-950">Recibir mercaderia</h2>
-            <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.04em] text-slate-500">
-              <span className="truncate">{user}</span>
-              <span aria-hidden="true" className="text-slate-300">&bull;</span>
-              <span className="shrink-0">{purchaseDate}</span>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setView("history")}
-            className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700"
-            aria-label="Abrir historial de recepciones"
-            title="Historial"
-          >
-            {Icons.invoice}
-            {drafts.length > 0 ? <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-amber-300 px-1 text-center text-[9px] font-black leading-4 text-amber-950">{drafts.length}</span> : null}
-          </button>
-          <button
-            type="button"
-            onClick={() => setConnectionDialog(true)}
-            className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-950 text-white"
-            aria-label="Ver conexion y configuracion de SICAR"
-            title="SICAR"
-          >
-            {Icons.settings}
-            <span
-              aria-hidden="true"
-              className={`absolute right-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ring-slate-950 ${connection === "online" ? "bg-lime-400" : connection === "checking" ? "bg-amber-300" : "bg-rose-400"}`}
-            />
-          </button>
-        </div>
-        {editingDraftId ? (
-          <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-            <span className="truncate text-xs font-black text-amber-900">Editando recepcion en espera</span>
-            <button type="button" onClick={() => resetForm()} className="shrink-0 text-[10px] font-black uppercase text-amber-800">
-              Cancelar
-            </button>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="erp-module-hero erp-provider-hero handheld-provider-hero hidden min-w-0 max-w-full overflow-hidden border border-[#31501c] bg-[#12220e] p-5 text-white sm:block sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-2xl bg-white px-3 shadow-lg sm:h-20 sm:w-36">
-              <div
-                role="img"
-                aria-label="Carnes San Martin"
-                className="h-full w-full bg-contain bg-center bg-no-repeat"
-                style={{ backgroundImage: 'url("./csm-logo.svg")' }}
-              />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-black uppercase tracking-[0.22em] text-lime-300">Proveedores externos</div>
-              <h2 className="mt-1 text-2xl font-black sm:text-3xl">Recibir mercaderia</h2>
-              <p className="mt-1 max-w-2xl text-sm font-semibold text-slate-300">Factura de compra e inventario SICAR.</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setView("history")}
-              className="flex min-h-11 items-center gap-2 rounded-xl bg-[#76b900] px-4 text-sm font-black text-[#101807]"
-            >
-              {Icons.invoice}
-              Historial
-              {drafts.length > 0 ? <span className="rounded-full bg-amber-300 px-2 py-0.5 text-[10px] text-amber-950">{drafts.length}</span> : null}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConnectionDialog(true)}
-              className="flex min-h-11 items-center gap-2 rounded-xl border border-lime-300/25 bg-white/10 px-4 text-sm font-black text-white"
-            >
-              {Icons.settings}
-              SICAR
-            </button>
-          </div>
-        </div>
-        {editingDraftId ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-amber-300/40 bg-amber-300/10 px-4 py-3">
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-300">Recepcion en espera</div>
-              <div className="mt-0.5 text-sm font-black text-white">Editando antes de enviarla a SICAR</div>
-            </div>
-            <button type="button" onClick={() => resetForm()} className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-black text-white">
-              Cancelar edicion
-            </button>
-          </div>
-        ) : null}
-        <div className="handheld-provider-status mt-5 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-white/7 p-4">
-            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Sucursal</div>
-            <div className="mt-1 font-black">{user}</div>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/7 p-4">
-            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Fecha</div>
-            <div className="mt-1 font-black">{purchaseDate}</div>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-white/7 p-4">
-            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Conexion local</div>
-            <div className={`mt-1 font-black ${connection === "online" ? "text-emerald-300" : connection === "checking" ? "text-amber-300" : "text-rose-300"}`}>
-              {catalogSyncing ? "Actualizando catalogo..." : connection === "online" ? "SICAR disponible" : connection === "checking" ? "Verificando..." : "Sin conexion"}
-            </div>
+    <div className={`csm-page erp-operation-module provider-operation-module provider-form-shell min-w-0 max-w-full overflow-x-clip ${IS_HANDHELD ? "handheld-form handheld-provider-form space-y-3" : ""}`}>
+      {fileInputs}
+      <header className="csm-page-header handheld-provider-hero">
+        <div className="min-w-0">
+          <h2 className="csm-page-title">Recibir mercadería</h2>
+          <div className="csm-page-meta">
+            <span>{user}</span>
+            <span aria-hidden="true">·</span>
+            <span className={`csm-tag ${connectionTone}`}>{connectionLabel}</span>
             {articleCatalog.length > 0 ? (
-              <div className="mt-1 text-[10px] font-bold text-lime-200">
-                {articleCatalog.length} productos y {supplierCatalog.length} proveedores disponibles sin conexion
-              </div>
+              <span className="hidden md:inline">Catálogo local: {articleCatalog.length} productos · {supplierCatalog.length} proveedores</span>
             ) : null}
           </div>
         </div>
-      </section>
+        <div className="flex shrink-0 gap-2">
+          <button type="button" onClick={() => setView("history")} className="csm-btn csm-btn-secondary">
+            <Icon name="history" size={18} />
+            Recepciones
+            {drafts.length > 0 ? <span className="csm-count is-warn" aria-label={`${drafts.length} en espera`}>{drafts.length}</span> : null}
+          </button>
+          <button type="button" onClick={() => setConnectionDialog(true)} className="csm-icon-btn" aria-label="Conexión con SICAR" title="Conexión con SICAR">
+            <Icon name="settings" />
+          </button>
+        </div>
+      </header>
+
+      {editingDraftId ? (
+        <div className="csm-alert is-warn">
+          <span className="min-w-0 flex-1">Editando una recepción en espera. Complétala y envíala a SICAR.</span>
+          <button type="button" onClick={() => resetForm()} className="csm-btn csm-btn-ghost csm-btn-sm">Cancelar edición</button>
+        </div>
+      ) : null}
 
       {connectionError ? (
-        <div className={`erp-module-alert rounded-2xl border px-4 py-3 text-sm font-bold ${articleCatalog.length > 0 ? "border-amber-200 bg-amber-50 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
-          {connectionError}
-          {articleCatalog.length > 0 ? " Puedes continuar buscando en el catalogo local y guardar Recibir sin factura." : ""}
+        <div className={`csm-alert ${articleCatalog.length > 0 ? "is-warn" : "is-err"}`}>
+          <span>
+            {connectionError}
+            {articleCatalog.length > 0 ? " Puedes continuar con el catálogo local y usar Recibir sin factura." : ""}
+          </span>
         </div>
       ) : null}
 
       {message ? (
-        <div className={`erp-module-alert rounded-2xl border px-4 py-3 text-sm font-bold ${message.type === "error" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+        <div className={`csm-alert ${message.type === "error" ? "is-err" : "is-ok"}`} role={message.type === "error" ? "alert" : "status"}>
           {message.text}
         </div>
       ) : null}
@@ -1210,12 +1454,12 @@ export default function ProveedoresExternos({ user }) {
       {catalogSyncing || connection === "checking" ? (
         <div className="erp-loading-strip" role="status" aria-live="polite">
           <span className="erp-loading-spinner" aria-hidden="true" />
-          <span>{catalogSyncing ? "Actualizando catalogo SICAR" : "Verificando conexion local"}</span>
+          <span>{catalogSyncing ? "Actualizando catálogo SICAR" : "Verificando conexión local"}</span>
           <span className="erp-loading-track" aria-hidden="true"><span /></span>
         </div>
       ) : null}
 
-      <section className={`erp-form-panel handheld-reception-panel app-panel relative min-w-0 max-w-full overflow-visible p-4 sm:p-5 ${supplierOpen ? "z-50" : "z-20"}`}>
+      <section className={`csm-panel erp-form-panel handheld-reception-panel app-panel relative min-w-0 max-w-full overflow-visible ${supplierOpen ? "z-50" : "z-20"}`} aria-labelledby="rcv-document-title">
         {IS_HANDHELD ? (
           <button
             type="button"
@@ -1228,49 +1472,57 @@ export default function ProveedoresExternos({ user }) {
             </span>
             <span className="shrink-0 text-[10px] font-black text-lime-700">{handheldDetailsOpen ? "Ocultar" : "Editar"}</span>
           </button>
-        ) : null}
-        <div className={`${IS_HANDHELD && !handheldDetailsOpen ? "hidden" : ""} handheld-reception-fields grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.75fr)_minmax(0,0.72fr)_minmax(0,1fr)]`}>
-          <div ref={supplierPickerRef} className="relative min-w-0">
-            <label className="app-label">Proveedor</label>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">{Icons.supplier}</span>
-              <input
-                value={supplierOpen ? supplierQuery : supplier?.nombre || supplierQuery}
-                onChange={(event) => {
-                  setSupplierQuery(event.target.value);
-                  setSupplier(null);
-                  setSupplierOpen(true);
-                }}
-                onFocus={() => setSupplierOpen(true)}
-                className="app-input pl-12"
-                placeholder="Buscar proveedor"
-                disabled={supplierCatalog.length === 0}
-              />
-            </div>
+        ) : (
+          <h3 id="rcv-document-title" className="csm-section-title">Documento</h3>
+        )}
+        <div className={`${IS_HANDHELD && !handheldDetailsOpen ? "hidden" : ""} handheld-reception-fields csm-doc-grid`}>
+          <div ref={supplierPickerRef} className="csm-doc-supplier relative min-w-0">
+            <label className="app-label" htmlFor="rcv-supplier">Proveedor</label>
+            <input
+              id="rcv-supplier"
+              value={supplierOpen ? supplierQuery : supplier?.nombre || supplierQuery}
+              onChange={(event) => {
+                setSupplierQuery(event.target.value);
+                setSupplier(null);
+                setSupplierOpen(true);
+              }}
+              onFocus={() => setSupplierOpen(true)}
+              className="app-input"
+              placeholder="Buscar proveedor"
+              disabled={supplierCatalog.length === 0}
+              role="combobox"
+              aria-expanded={supplierOpen}
+              aria-controls="rcv-supplier-list"
+              autoComplete="off"
+            />
+            {supplier && !supplierOpen && `${supplier.nombre || ""}`.length > 36 ? (
+              <p className="csm-hint mt-1 font-medium text-[var(--gray-700)]">{supplier.nombre}</p>
+            ) : null}
             {supplierOpen ? (
-              <div className="absolute inset-x-0 top-full z-[60] mt-2 max-h-[min(18rem,calc(100vh-10rem))] max-w-full overflow-y-auto overflow-x-hidden overscroll-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.45)]">
-                <div className="sticky top-0 z-10 mb-1 flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white/95 px-3 py-2 backdrop-blur">
-                  <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">{suppliers.length} resultados</span>
-                  <button type="button" onClick={() => setSupplierOpen(false)} className="rounded-lg bg-slate-100 px-3 py-1.5 text-[10px] font-black text-slate-700">
-                    Cerrar
-                  </button>
+              <div id="rcv-supplier-list" className="csm-dropdown" role="listbox">
+                <div className="csm-dropdown-head">
+                  <span>{suppliers.length} resultados</span>
+                  <button type="button" onClick={() => setSupplierOpen(false)} className="csm-btn csm-btn-ghost csm-btn-sm">Cerrar</button>
                 </div>
                 {suppliers.map((row) => (
                   <button
                     key={row.pro_id}
                     type="button"
+                    role="option"
+                    aria-selected={Number(supplier?.pro_id) === Number(row.pro_id)}
                     onClick={() => {
                       setSupplier(row);
                       setSupplierQuery("");
                       setSupplierOpen(false);
                     }}
-                    className="mb-1 w-full min-w-0 break-words rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 hover:bg-lime-50"
+                    className="csm-dropdown-row"
                   >
-                    {row.nombre}
+                    <span className="csm-list-title">{row.nombre}</span>
+                    {row.alias || row.rfc ? <span className="csm-list-meta">{[row.alias, row.rfc].filter(Boolean).join(" · ")}</span> : null}
                   </button>
                 ))}
                 {suppliers.length === 0 ? (
-                  <div className="p-4 text-center text-sm text-slate-400">
+                  <div className="csm-empty">
                     {supplierCatalog.length === 0 ? "Conecta una vez con SICAR para descargar proveedores" : "Sin coincidencias"}
                   </div>
                 ) : null}
@@ -1279,7 +1531,7 @@ export default function ProveedoresExternos({ user }) {
           </div>
           <div className="min-w-0">
             <label className="app-label" htmlFor="provider-invoice-number">
-              Numero de factura <span className="text-rose-600">*</span>
+              Número de factura <span className="csm-required">obligatorio para SICAR</span>
             </label>
             <input
               ref={invoiceNumberInputRef}
@@ -1287,16 +1539,13 @@ export default function ProveedoresExternos({ user }) {
               value={invoiceNumber}
               onChange={(event) => setInvoiceNumber(event.target.value.toUpperCase())}
               className="app-input uppercase"
-              placeholder="Obligatorio para SICAR"
               maxLength={19}
-              required
               aria-required="true"
+              autoComplete="off"
             />
           </div>
           <div className="provider-purchase-date min-w-0">
-            <label className="app-label" htmlFor="provider-purchase-date">
-              Fecha de factura <span className="text-rose-600">*</span>
-            </label>
+            <label className="app-label" htmlFor="provider-purchase-date">Fecha de factura</label>
             <input
               id="provider-purchase-date"
               type="date"
@@ -1309,12 +1558,12 @@ export default function ProveedoresExternos({ user }) {
             />
           </div>
           <div className="min-w-0">
-            <label className="app-label">Nota</label>
+            <label className="app-label" htmlFor="provider-note">Nota <span className="csm-optional">opcional</span></label>
             <input
+              id="provider-note"
               value={comment}
               onChange={(event) => setComment(event.target.value)}
               className="app-input"
-              placeholder="Opcional"
               maxLength={180}
             />
           </div>
@@ -1340,130 +1589,15 @@ export default function ProveedoresExternos({ user }) {
         </div>
       </section>
 
-      {!IS_HANDHELD || handheldDetailsOpen ? (
-      <section className="erp-form-panel handheld-accounting-panel app-panel min-w-0 max-w-full border-lime-200 p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="text-base font-black text-slate-950">Datos contables <span className="text-xs text-slate-400">Opcional</span></div>
-            <div className="mt-1 text-xs font-semibold text-slate-500">No se guardan en SICAR.</div>
-          </div>
-          <div className="rounded-full bg-lime-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-lime-700">
-            Base {formatMoney(totals.subtotal)}
-          </div>
-        </div>
-
-        <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_1fr_1.2fr]">
-          <div className={`rounded-xl border p-2.5 ${retentionIrEnabled ? "border-lime-300 bg-lime-50" : "border-slate-200 bg-white"}`}>
-            <button type="button" onClick={toggleRetentionIr} className="flex min-h-9 w-full items-center justify-between gap-2 text-left">
-              <span className="text-xs font-black text-slate-800">Retencion IR 2%</span>
-              <span className={`flex h-6 w-6 items-center justify-center rounded-full ${retentionIrEnabled ? "bg-[#76b900] text-[#101807]" : "bg-slate-100 text-slate-400"}`}>
-                {retentionIrEnabled ? Icons.check : Icons.plus}
-              </span>
-            </button>
-            {retentionIrEnabled ? (
-              <TouchNumericInput
-                value={retentionIr2}
-                onValueChange={(value) => {
-                  setRetentionIr2(value);
-                  setRetentionIrEdited(true);
-                }}
-                label="Monto retencion IR 2%"
-                decimals={2}
-                placeholder="0.00"
-                className="app-input mt-2 h-10 !min-h-10 rounded-lg text-right text-sm font-black text-lime-800"
-              />
-            ) : null}
-          </div>
-
-          <div className={`rounded-xl border p-2.5 ${retentionMunicipalEnabled ? "border-lime-300 bg-lime-50" : "border-slate-200 bg-white"}`}>
-            <button type="button" onClick={toggleRetentionMunicipal} className="flex min-h-9 w-full items-center justify-between gap-2 text-left">
-              <span className="text-xs font-black text-slate-800">Retencion municipal 1%</span>
-              <span className={`flex h-6 w-6 items-center justify-center rounded-full ${retentionMunicipalEnabled ? "bg-[#76b900] text-[#101807]" : "bg-slate-100 text-slate-400"}`}>
-                {retentionMunicipalEnabled ? Icons.check : Icons.plus}
-              </span>
-            </button>
-            {retentionMunicipalEnabled ? (
-              <TouchNumericInput
-                value={retentionMunicipal1}
-                onValueChange={(value) => {
-                  setRetentionMunicipal1(value);
-                  setRetentionMunicipalEdited(true);
-                }}
-                label="Monto retencion municipal 1%"
-                decimals={2}
-                placeholder="0.00"
-                className="app-input mt-2 h-10 !min-h-10 rounded-lg text-right text-sm font-black text-lime-800"
-              />
-            ) : null}
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-            <input
-              ref={invoiceSupportInputRef}
-              type="file"
-              accept="image/*"
-              onChange={(event) => selectInvoiceSupport(event.target.files?.[0])}
-              className="hidden"
-            />
-            <input
-              ref={invoiceCameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={(event) => selectInvoiceSupport(event.target.files?.[0])}
-              className="hidden"
-            />
-            <div className="flex min-h-9 w-full items-center gap-2 text-left">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">{Icons.invoice}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-xs font-black text-slate-800">Foto de factura</span>
-                <span className="block truncate text-[10px] font-semibold text-slate-400">{invoiceSupport?.name || "Agregar foto opcional"}</span>
-              </span>
-              <span className="text-lime-700">{invoiceSupport ? Icons.check : Icons.plus}</span>
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              <button type="button" onClick={takeInvoicePhoto} disabled={cameraLoading} className="min-h-9 rounded-lg bg-[#76b900] px-2 text-[10px] font-black text-[#101807] disabled:opacity-60">
-                {cameraLoading ? "Abriendo..." : "Tomar foto"}
-              </button>
-              <button type="button" onClick={() => invoiceSupportInputRef.current?.click()} className="min-h-9 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-black text-slate-700">
-                Elegir archivo
-              </button>
-            </div>
-            {invoiceSupport ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setInvoiceSupport(null);
-                  if (invoiceSupportInputRef.current) invoiceSupportInputRef.current.value = "";
-                  if (invoiceCameraInputRef.current) invoiceCameraInputRef.current.value = "";
-                }}
-                className="mt-1 w-full text-right text-[10px] font-black uppercase tracking-wider text-rose-500"
-              >
-                Quitar foto
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        {retentionTotal > 0 ? (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-white">
-            <span className="text-xs font-bold text-slate-300">Retenciones {formatMoney(retentionTotal)}</span>
-            <span className="text-sm font-black">Neto a pagar {formatMoney(netTotal)}</span>
-          </div>
-        ) : null}
-      </section>
-      ) : null}
-
-      <section className={`erp-products-panel handheld-provider-products app-panel relative min-w-0 max-w-full overflow-visible border-lime-200 p-3 sm:p-4 ${productOpen ? (IS_HANDHELD ? "handheld-provider-products-search-open z-[110]" : "z-40") : "z-10"}`}>
+      <section className={`csm-panel erp-products-panel handheld-provider-products app-panel relative min-w-0 max-w-full overflow-visible ${productOpen ? (IS_HANDHELD ? "handheld-provider-products-search-open z-[110]" : "z-40") : "z-10"}`} aria-labelledby="rcv-items-title">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-lg font-black text-slate-950">{IS_HANDHELD ? "Captura" : "Productos"} <span className="text-[#5d9100]">{totals.lines}</span></div>
-            <div className="text-xs font-bold text-slate-400">{IS_HANDHELD ? "Escanea clave y agrega cantidad" : "Hasta 100 lineas"}</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (IS_HANDHELD) {
+          <h3 id="rcv-items-title" className="csm-section-title mb-0">
+            {IS_HANDHELD ? "Captura" : "Artículos"} <span className="csm-count">{totals.lines}</span>
+          </h3>
+          {IS_HANDHELD ? (
+            <button
+              type="button"
+              onClick={() => {
                 const nextMode = handheldCaptureMode === "scan" ? "search" : "scan";
                 setHandheldCaptureMode(nextMode);
                 setProductOpen(nextMode === "search");
@@ -1471,16 +1605,14 @@ export default function ProveedoresExternos({ user }) {
                   if (nextMode === "scan") handheldScanInputRef.current?.focus();
                   else productSearchRef.current?.focus();
                 });
-                return;
-              }
-              openProductSearch();
-            }}
-            disabled={articleCatalog.length === 0}
-            className="erp-primary-action handheld-capture-mode inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#76b900] px-4 text-sm font-black text-[#101807] disabled:opacity-40"
-          >
-            {IS_HANDHELD ? (handheldCaptureMode === "scan" ? Icons.search : Icons.scan) : Icons.plus}
-            {IS_HANDHELD ? (handheldCaptureMode === "scan" ? "Buscar" : "Escanear") : "Agregar producto"}
-          </button>
+              }}
+              disabled={articleCatalog.length === 0}
+              className="erp-primary-action handheld-capture-mode inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#76b900] px-4 text-sm font-black text-[#101807] disabled:opacity-40"
+            >
+              {handheldCaptureMode === "scan" ? Icons.search : Icons.scan}
+              {handheldCaptureMode === "scan" ? "Buscar" : "Escanear"}
+            </button>
+          ) : null}
         </div>
 
         {IS_HANDHELD && handheldCaptureMode === "scan" ? (
@@ -1513,48 +1645,59 @@ export default function ProveedoresExternos({ user }) {
         ) : null}
 
         {!IS_HANDHELD || handheldCaptureMode === "search" ? (
-        <div ref={productPickerRef} className="relative mt-3 min-w-0 max-w-full">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5d9100]">{Icons.search}</span>
-          <input
-            ref={productSearchRef}
-            value={productQuery}
-            onChange={(event) => {
-              setProductQuery(event.target.value);
-              setProductOpen(true);
-            }}
-            onFocus={() => setProductOpen(true)}
-            className="app-input !min-h-12 border-lime-200 bg-lime-50/40 pl-11 text-base focus:border-[#76b900]"
-            placeholder="Clave o nombre del producto"
-            disabled={articleCatalog.length === 0}
-          />
-          {productOpen ? (
-            <div className="handheld-provider-product-dropdown absolute inset-x-0 top-full z-[120] mt-2 max-h-[min(360px,55vh)] max-w-full overflow-y-auto overflow-x-hidden overscroll-auto rounded-2xl border border-lime-200 bg-white p-2 shadow-[0_24px_60px_-24px_rgba(30,50,12,0.45)]">
-              <div className="sticky top-0 z-10 mb-1 flex items-center justify-between gap-2 rounded-xl border border-lime-100 bg-white/95 px-3 py-2 backdrop-blur">
-                <span className="text-[10px] font-black uppercase tracking-wide text-lime-700">{products.length} resultados</span>
-                <button type="button" onClick={() => setProductOpen(false)} className="rounded-lg bg-lime-100 px-3 py-1.5 text-[10px] font-black text-lime-800">
-                  Cerrar
-                </button>
-              </div>
-              {products.map((product) => (
-                <button
-                  key={product.art_id}
-                  type="button"
-                  onClick={() => addProduct(product)}
-                  className="mb-1 grid min-h-11 w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-lime-50"
-                >
-                  <span className="rounded-lg bg-lime-100 px-2 py-1 font-mono text-[10px] font-black text-lime-800">{product.clave}</span>
-                  <span className="min-w-0 truncate text-sm font-bold text-slate-800">{product.descripcion}</span>
-                  <span className="shrink-0 text-right text-xs font-black text-[#4d7c0f]" title="Precio sin IVA">{formatMoney(product.lastPurchaseNet ?? product.precioCompra)}</span>
-                </button>
-              ))}
-              {products.length === 0 ? (
-                <div className="p-5 text-center text-sm text-slate-400">
-                  {articleCatalog.length === 0 ? "Conecta una vez con SICAR para descargar productos" : "Sin coincidencias"}
-                </div>
-              ) : null}
+          <div ref={productPickerRef} className="relative mt-3 min-w-0 max-w-full">
+            <label className="app-label" htmlFor="rcv-product-search">Agregar artículo</label>
+            <div className="csm-search">
+              <Icon name="search" size={18} />
+              <input
+                id="rcv-product-search"
+                ref={productSearchRef}
+                value={productQuery}
+                onChange={(event) => {
+                  setProductQuery(event.target.value);
+                  setProductOpen(true);
+                }}
+                onFocus={() => setProductOpen(true)}
+                className="app-input"
+                placeholder="Nombre o clave del producto"
+                disabled={articleCatalog.length === 0}
+                role="combobox"
+                aria-expanded={productOpen}
+                aria-controls="rcv-product-list"
+                autoComplete="off"
+              />
             </div>
-          ) : null}
-        </div>
+            {productOpen ? (
+              <div id="rcv-product-list" className="csm-dropdown handheld-provider-product-dropdown" role="listbox">
+                <div className="csm-dropdown-head">
+                  <span>{products.length}{products.length >= CATALOG_RESULT_LIMIT ? "+" : ""} resultados</span>
+                  <button type="button" onClick={() => setProductOpen(false)} className="csm-btn csm-btn-ghost csm-btn-sm">Cerrar</button>
+                </div>
+                {products.map((product) => (
+                  <button
+                    key={product.art_id}
+                    type="button"
+                    role="option"
+                    aria-selected={addedArticleIds.has(Number(product.art_id))}
+                    onClick={() => addProduct(product)}
+                    className="csm-dropdown-row csm-dropdown-product"
+                  >
+                    <ProductIdentity article={product} size="md" />
+                    <span className="csm-dropdown-aside">
+                      <span className="csm-figure-value" title="Último costo sin IVA">{formatMoney(product.lastPurchaseNet ?? product.precioCompra)}</span>
+                      {addedArticleIds.has(Number(product.art_id)) ? <span className="csm-tag is-ok">Agregado</span> : null}
+                    </span>
+                  </button>
+                ))}
+                {products.length === 0 ? (
+                  <div className="csm-empty">
+                    {articleCatalog.length === 0 ? "Conecta una vez con SICAR para descargar productos" : "Sin coincidencias"}
+                  </div>
+                ) : null}
+                {products.length >= CATALOG_RESULT_LIMIT ? <div className="csm-hint px-3 pb-2">Hay más coincidencias. Escribe más para precisar.</div> : null}
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {IS_HANDHELD && handheldScanProduct ? (
@@ -1595,9 +1738,9 @@ export default function ProveedoresExternos({ user }) {
           </div>
         ) : null}
 
-        {items.length > 0 ? (
+        {items.length > 0 && IS_HANDHELD ? (
           <div className="handheld-provider-items mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="provider-items-header grid grid-cols-[minmax(64px,1fr)_64px_32px_52px_66px_28px] items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-1.5 py-2 text-[7px] font-black uppercase tracking-[0.08em] text-slate-400 sm:grid-cols-[minmax(160px,1fr)_96px_44px_82px_100px_34px] sm:gap-1.5 sm:px-3 sm:text-[9px]">
+            <div className="provider-items-header grid grid-cols-[minmax(64px,1fr)_64px_32px_52px_66px_28px] items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-1.5 py-2 text-[7px] font-black uppercase tracking-[0.08em] text-slate-400">
               <span>Producto</span>
               <span className="text-center">Cant.</span>
               <span className="text-center">Bultos</span>
@@ -1607,10 +1750,9 @@ export default function ProveedoresExternos({ user }) {
             </div>
             <div className="provider-items-list max-h-[min(52vh,560px)] divide-y divide-slate-100 overflow-y-auto overscroll-auto">
               {items.map((item) => (
-                <div key={item.art_id} className="provider-item-row grid min-h-12 grid-cols-[minmax(64px,1fr)_64px_32px_52px_66px_28px] items-center gap-0.5 px-1.5 py-1.5 sm:grid-cols-[minmax(160px,1fr)_96px_44px_82px_100px_34px] sm:gap-1.5 sm:px-3">
+                <div key={item.art_id} className="provider-item-row grid min-h-12 grid-cols-[minmax(64px,1fr)_64px_32px_52px_66px_28px] items-center gap-0.5 px-1.5 py-1.5">
                   <div className="provider-item-product flex min-w-0 items-center gap-2">
-                    <span className="hidden shrink-0 rounded-md bg-lime-100 px-2 py-1 font-mono text-[9px] font-black text-lime-800 md:inline">{item.clave}</span>
-                    <span className="min-w-0 truncate text-xs font-black text-slate-900 sm:text-sm" title={item.descripcion}>{item.descripcion}</span>
+                    <span className="min-w-0 break-words text-xs font-black leading-tight text-slate-900">{item.descripcion}</span>
                   </div>
                   <TouchNumericInput
                     ref={(element) => {
@@ -1620,16 +1762,10 @@ export default function ProveedoresExternos({ user }) {
                     value={item.quantity}
                     onValueChange={(value) => updateItem(item.art_id, "quantity", value)}
                     onConfirmValue={openProductSearch}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        openProductSearch();
-                      }
-                    }}
                     label={`Cantidad ${item.descripcion}`}
                     decimals={4}
                     placeholder="0"
-                    className="provider-item-quantity app-input h-10 !min-h-10 rounded-lg px-2 text-center text-[13px] font-black sm:px-3 sm:text-[13px]"
+                    className="provider-item-quantity app-input h-10 !min-h-10 rounded-lg px-2 text-center text-[13px] font-black"
                   />
                   <button
                     type="button"
@@ -1638,8 +1774,7 @@ export default function ProveedoresExternos({ user }) {
                     aria-label={`Suma de bultos de ${item.descripcion}`}
                   >
                     {Icons.scale}
-                    <span className="hidden sm:inline">{item.bultos?.length || "+"}</span>
-                    <span className="sm:hidden">{item.bultos?.length || "+"}</span>
+                    <span>{item.bultos?.length || "+"}</span>
                   </button>
                   <TouchNumericInput
                     value={item.netUnitPrice}
@@ -1647,15 +1782,15 @@ export default function ProveedoresExternos({ user }) {
                     label={`Precio sin IVA ${item.descripcion}`}
                     decimals={2}
                     placeholder="0.00"
-                    className="provider-item-price app-input h-9 !min-h-9 rounded-lg px-1 text-center text-[10px] font-black text-[#4d7c0f] sm:px-1.5 sm:text-xs"
+                    className="provider-item-price app-input h-9 !min-h-9 rounded-lg px-1 text-center text-[10px] font-black text-[#4d7c0f]"
                   />
-                  <div className="provider-item-subtotal truncate text-right text-[10px] font-black text-slate-900 sm:text-xs" title="Cantidad por precio sin IVA">
+                  <div className="provider-item-subtotal truncate text-right text-[10px] font-black text-slate-900">
                     {formatMoney(roundMoney(Number(item.quantity || 0) * Number(item.netUnitPrice || 0)))}
                   </div>
                   <button
                     type="button"
                     onClick={() => setItems((current) => current.filter((row) => row.art_id !== item.art_id))}
-                    className="provider-item-delete flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50 sm:h-9 sm:w-9"
+                    className="provider-item-delete flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50"
                     aria-label={`Quitar ${item.descripcion}`}
                   >
                     {Icons.trash}
@@ -1664,270 +1799,204 @@ export default function ProveedoresExternos({ user }) {
               ))}
             </div>
           </div>
-        ) : (
-          <button type="button" onClick={openProductSearch} className="mt-3 flex min-h-24 w-full items-center justify-center gap-3 rounded-xl border border-dashed border-lime-300 bg-lime-50/40 text-sm font-black text-lime-800">
-            {Icons.plus}
-            Agregar el primer producto
-          </button>
-        )}
+        ) : null}
+
+        {items.length > 0 && !IS_HANDHELD ? (
+          <div className="csm-table-wrap mt-3">
+            <table className="csm-table rcv-table">
+              <caption className="sr-only">Artículos de la recepción</caption>
+              <colgroup>
+                <col className="rcv-col-index" />
+                <col className="rcv-col-product" />
+                <col className="rcv-col-qty" />
+                <col className="rcv-col-cost" />
+                <col className="rcv-col-subtotal" />
+                <col className="rcv-col-action" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th scope="col" className="is-num">#</th>
+                  <th scope="col">Producto</th>
+                  <th scope="col">Cantidad recibida</th>
+                  <th scope="col" className="is-num">Costo s/IVA</th>
+                  <th scope="col" className="is-num">Subtotal</th>
+                  <th scope="col"><span className="sr-only">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => {
+                  const unit = articleUnit(item);
+                  const hasQuantity = Number(item.quantity) > 0;
+                  return (
+                    <tr key={item.art_id} className={hasQuantity ? "" : "is-incomplete"}>
+                      <td className="is-num text-[var(--gray-500)]">{items.length - index}</td>
+                      <th scope="row" className="rcv-product-cell">
+                        <ProductIdentity article={item} size="md" />
+                      </th>
+                      <td>
+                        <div className="rcv-qty">
+                          <TouchNumericInput
+                            ref={(element) => {
+                              if (element) quantityRefs.current.set(Number(item.art_id), element);
+                              else quantityRefs.current.delete(Number(item.art_id));
+                            }}
+                            value={item.quantity}
+                            onValueChange={(value) => updateItem(item.art_id, "quantity", value)}
+                            onConfirmValue={openProductSearch}
+                            onOpenBultos={() => openBultos(item.art_id)}
+                            bultosCount={item.bultos?.length || 0}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                openProductSearch();
+                              }
+                            }}
+                            label={`Cantidad recibida · ${item.descripcion}`}
+                            decimals={4}
+                            placeholder="0"
+                            className="app-input csm-num"
+                          />
+                          <span className="rcv-unit">{unit}</span>
+                          <button
+                            type="button"
+                            onClick={() => openBultos(item.art_id)}
+                            className={`csm-icon-btn rcv-bultos ${item.bultos?.length ? "is-set" : ""}`}
+                            aria-label={`Sumar bultos de ${item.descripcion}${item.bultos?.length ? ` (${item.bultos.length} registrados)` : ""}`}
+                            title="Sumar bultos"
+                          >
+                            <Icon name="scale" size={17} />
+                            {item.bultos?.length ? <span>{item.bultos.length}</span> : null}
+                          </button>
+                        </div>
+                        {!hasQuantity ? <div className="rcv-flag">Falta cantidad</div> : null}
+                      </td>
+                      <td className="is-num">
+                        <TouchNumericInput
+                          value={item.netUnitPrice}
+                          onValueChange={(value) => updateItem(item.art_id, "netUnitPrice", value)}
+                          label={`Costo sin IVA · ${item.descripcion}`}
+                          decimals={2}
+                          placeholder="0.00"
+                          className="app-input csm-num"
+                        />
+                      </td>
+                      <td className="is-num font-semibold">{formatMoney(roundMoney(Number(item.quantity || 0) * Number(item.netUnitPrice || 0)))}</td>
+                      <td className="is-action">
+                        <button
+                          type="button"
+                          onClick={() => setItems((current) => current.filter((row) => row.art_id !== item.art_id))}
+                          className="csm-icon-btn is-ghost text-[var(--gray-500)] hover:text-[var(--err)]"
+                          aria-label={`Quitar ${item.descripcion}`}
+                          title="Quitar"
+                        >
+                          <Icon name="trash" size={18} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {items.length === 0 && !IS_HANDHELD ? (
+          <div className="csm-empty mt-3">Sin artículos. Busca por nombre o clave para agregar el primero.</div>
+        ) : null}
       </section>
 
-      <div className={`handheld-provider-actions relative z-30 px-0 lg:fixed lg:inset-x-auto lg:bottom-4 lg:right-5 lg:w-[560px] lg:px-3 ${IS_HANDHELD && productOpen ? "handheld-provider-actions-search-open" : ""}`}>
-        <div className="erp-command-bar rounded-[1.1rem] border border-slate-700 bg-slate-950 p-3 text-white">
-          <div className="flex items-center justify-between gap-3 px-2 pb-2">
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Total factura con IVA</div>
-              <div className="mt-0.5 text-xl font-black sm:text-2xl">{formatMoney(totals.gross)}</div>
+      {!IS_HANDHELD || handheldDetailsOpen ? (
+        <section className="csm-panel erp-form-panel handheld-accounting-panel app-panel min-w-0 max-w-full" aria-labelledby="rcv-accounting-title">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 id="rcv-accounting-title" className="csm-section-title mb-0">
+              Datos contables <span className="csm-optional">opcional · no se guardan en SICAR</span>
+            </h3>
+            <span className="text-sm text-[var(--gray-600)]">Base {formatMoney(totals.subtotal)}</span>
+          </div>
+          <div className="csm-accounting-grid mt-3">
+            <div className="csm-check-row">
+              <label className="csm-check">
+                <input type="checkbox" checked={retentionIrEnabled} onChange={toggleRetentionIr} />
+                <span>Retención IR 2%</span>
+              </label>
+              {retentionIrEnabled ? (
+                <TouchNumericInput
+                  value={retentionIr2}
+                  onValueChange={(value) => {
+                    setRetentionIr2(value);
+                    setRetentionIrEdited(true);
+                  }}
+                  label="Monto retención IR 2%"
+                  decimals={2}
+                  placeholder="0.00"
+                  className="app-input csm-num w-32"
+                />
+              ) : null}
             </div>
-            <div className="text-right">
-              {retentionTotal > 0 ? <div className="text-[10px] font-bold text-lime-300">Neto {formatMoney(netTotal)}</div> : null}
-              {editingDraftId ? <div className="mt-1 text-[9px] font-black uppercase tracking-wide text-amber-300">Pendiente abierto</div> : null}
+            <div className="csm-check-row">
+              <label className="csm-check">
+                <input type="checkbox" checked={retentionMunicipalEnabled} onChange={toggleRetentionMunicipal} />
+                <span>Retención municipal 1%</span>
+              </label>
+              {retentionMunicipalEnabled ? (
+                <TouchNumericInput
+                  value={retentionMunicipal1}
+                  onValueChange={(value) => {
+                    setRetentionMunicipal1(value);
+                    setRetentionMunicipalEdited(true);
+                  }}
+                  label="Monto retención municipal 1%"
+                  decimals={2}
+                  placeholder="0.00"
+                  className="app-input csm-num w-32"
+                />
+              ) : null}
+            </div>
+            <div className="csm-check-row">
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">Foto de factura</span>
+                <span className="block break-all text-xs text-[var(--gray-500)]">{invoiceSupport?.name || "Sin foto"}</span>
+              </span>
+              <div className="flex shrink-0 gap-1.5">
+                <button type="button" onClick={takeInvoicePhoto} disabled={cameraLoading} className="csm-btn csm-btn-secondary csm-btn-sm">
+                  {cameraLoading ? "Abriendo..." : "Tomar foto"}
+                </button>
+                <button type="button" onClick={() => invoiceSupportInputRef.current?.click()} className="csm-btn csm-btn-secondary csm-btn-sm">
+                  Archivo
+                </button>
+                {invoiceSupport ? (
+                  <button type="button" onClick={clearInvoiceSupport} className="csm-btn csm-btn-ghost csm-btn-sm text-[var(--err)]">Quitar</button>
+                ) : null}
+              </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={savePendingReception}
-              disabled={loading}
-              className="min-h-13 rounded-2xl border border-amber-300/60 bg-amber-300/10 px-3 text-xs font-black text-amber-200 disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
-            >
-              {loading ? "Guardando..." : "Recibir sin factura"}
-            </button>
-            <button
-              type="button"
-              onClick={requestPaymentMethod}
-              disabled={loading || connection !== "online"}
-              className="min-h-13 rounded-2xl bg-[#76b900] px-3 text-xs font-black text-[#101807] disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
-            >
-              {loading ? "Validando..." : "Recibir en SICAR"}
-            </button>
-          </div>
+        </section>
+      ) : null}
+
+      <div className={`csm-command-bar handheld-provider-actions ${IS_HANDHELD && productOpen ? "handheld-provider-actions-search-open" : ""}`}>
+        <dl className="csm-command-totals">
+          <div><dt>Artículos</dt><dd>{totals.lines}</dd></div>
+          <div><dt>Subtotal</dt><dd>{formatMoney(totals.subtotal)}</dd></div>
+          <div className="is-strong"><dt>Total con IVA</dt><dd>{formatMoney(totals.gross)}</dd></div>
+          {retentionTotal > 0 ? <div><dt>Neto a pagar</dt><dd>{formatMoney(netTotal)}</dd></div> : null}
+        </dl>
+        <div className="csm-command-actions">
+          <button type="button" onClick={savePendingReception} disabled={loading} className="csm-btn csm-btn-secondary csm-btn-lg">
+            {loading ? "Guardando..." : "Recibir sin factura"}
+          </button>
+          <button
+            type="button"
+            onClick={requestPaymentMethod}
+            disabled={loading || connection !== "online"}
+            className="csm-btn csm-btn-primary csm-btn-lg"
+            title={connection !== "online" ? "SICAR sin conexión" : undefined}
+          >
+            {loading ? "Validando..." : "Recibir en SICAR"}
+          </button>
         </div>
       </div>
 
-      {connectionDialog ? (
-        <ConnectionDialog
-          initial={getSicarApiConnection()}
-          onClose={() => setConnectionDialog(false)}
-          onSaved={() => {
-            setConnectionDialog(false);
-            checkConnection({ forceCatalog: true, showMessage: true });
-          }}
-        />
-      ) : null}
-
-      {bultosArticleId !== null && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className="app-modal z-[120] items-end px-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:items-center sm:p-4"
-              onClick={(event) => {
-                if (event.target === event.currentTarget) closeBultosAndReturn();
-              }}
-            >
-              <div className="w-full max-w-md rounded-[1.5rem] border border-lime-200 bg-white p-4 shadow-[0_30px_80px_-24px_rgba(30,50,12,0.55)] sm:p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[#5d9100]">Suma de bultos</div>
-                    <h3 className="mt-1 truncate text-lg font-black text-slate-950">{activeBultoItem?.descripcion}</h3>
-                  </div>
-                  <button type="button" onClick={closeBultosAndReturn} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500" aria-label="Cerrar">
-                    {Icons.close}
-                  </button>
-                </div>
-
-                <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-3 rounded-2xl bg-lime-50 px-4 py-3">
-                  <div>
-                    <div className="text-[9px] font-black uppercase tracking-[0.14em] text-lime-700">Peso total</div>
-                    <div className="mt-1 font-mono text-3xl font-black text-slate-950">{formatBultoWeight(bultosTotal)}</div>
-                  </div>
-                  <div className="rounded-full bg-white px-3 py-2 text-xs font-black text-lime-800">{bultosTemporal.length} bultos</div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-[minmax(0,1fr)_46px] gap-2">
-                  <input
-                    ref={bultoInputRef}
-                    type="text"
-                    inputMode="decimal"
-                    enterKeyHint="next"
-                    value={bultoTemporal}
-                    onChange={(event) => {
-                      setBultoTemporal(event.target.value);
-                      setBultoError("");
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        addBulto();
-                      }
-                    }}
-                    onFocus={(event) => event.target.select()}
-                    className="app-input !min-h-12 border-lime-200 text-center font-mono text-xl font-black"
-                    placeholder="Peso"
-                  />
-                  <button type="button" onClick={addBulto} className="flex min-h-12 items-center justify-center rounded-xl bg-[#76b900] text-[#101807]" aria-label="Agregar peso">
-                    {Icons.plus}
-                  </button>
-                </div>
-                <div className={`mt-2 min-h-5 text-xs font-bold ${bultoError ? "text-rose-600" : "text-slate-400"}`}>
-                  {bultoError || "Peso + Enter para agregar otro."}
-                </div>
-
-                {bultosTemporal.length > 0 ? (
-                  <div className="mt-2 max-h-44 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
-                    {[...bultosTemporal].reverse().map((weight, reverseIndex) => {
-                      const originalIndex = bultosTemporal.length - 1 - reverseIndex;
-                      return (
-                        <div key={`${originalIndex}-${weight}`} className="flex min-h-10 items-center justify-between gap-3 px-3 py-1.5">
-                          <span className="text-xs font-bold text-slate-400">#{originalIndex + 1}</span>
-                          <span className="ml-auto font-mono text-sm font-black text-slate-900">{formatBultoWeight(weight)}</span>
-                          <button
-                            type="button"
-                            onClick={() => setBultosTemporal((current) => current.filter((_, index) => index !== originalIndex))}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 hover:bg-rose-50"
-                            aria-label={`Quitar bulto ${originalIndex + 1}`}
-                          >
-                            {Icons.trash}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-
-                <div className="mt-4 grid grid-cols-[0.8fr_1.2fr] gap-2">
-                  <button type="button" onClick={closeBultosAndReturn} className="app-button app-button-secondary">Cancelar</button>
-                  <button type="button" onClick={finishBultos} className="min-h-12 rounded-xl bg-[#76b900] text-sm font-black text-[#101807]">Finalizar</button>
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
-
-      {paymentPromptOpen ? (
-        <div className="app-modal z-[115] px-4" role="dialog" aria-modal="true" aria-labelledby="payment-method-title">
-          <div className="app-modal-panel w-full max-w-xl p-5 sm:p-6">
-            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-lime-700">Antes de terminar</div>
-            <h2 id="payment-method-title" className="mt-1 text-2xl font-black text-slate-950">Metodo de pago</h2>
-            <p className="mt-2 text-sm font-semibold text-slate-500">Selecciona como debe quedar registrada la compra en SICAR.</p>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => openPreview("credit")}
-                disabled={loading}
-                className="min-h-32 rounded-[1.4rem] border-2 border-lime-200 bg-lime-50 p-5 text-left text-lime-950 transition hover:border-lime-500 hover:bg-lime-100 disabled:opacity-50"
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#76b900] text-[#101807]">{Icons.credit}</span>
-                <span className="mt-4 block text-lg font-black">Credito</span>
-                <span className="mt-1 block text-xs font-bold leading-5 text-lime-700">Genera la cuenta por pagar al proveedor.</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => openPreview("other")}
-                disabled={loading}
-                className="min-h-32 rounded-[1.4rem] border-2 border-slate-200 bg-slate-50 p-5 text-left text-slate-950 transition hover:border-slate-500 hover:bg-slate-100 disabled:opacity-50"
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-800 text-white">{Icons.otherPayment}</span>
-                <span className="mt-4 block text-lg font-black">Otro medio de pago</span>
-                <span className="mt-1 block text-xs font-bold leading-5 text-slate-500">Conserva la clasificacion actual de SICAR.</span>
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPaymentPromptOpen(false)}
-              disabled={loading}
-              className="app-button app-button-secondary mt-4 w-full"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {preview ? (
-        <div className="app-modal z-[110] px-4" role="dialog" aria-modal="true">
-          <div className="app-modal-panel w-full max-w-xl p-5 sm:p-6">
-            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-lime-700">Confirmar recepcion</div>
-            <h2 className="mt-1 text-2xl font-black text-slate-950">{preview.supplier?.nombre}</h2>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <div className="text-[9px] font-black uppercase text-slate-400">Productos</div>
-                <div className="mt-1 text-sm font-black sm:text-xl">{preview.summary?.lines}</div>
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4 text-right">
-                <div className="text-[9px] font-black uppercase text-slate-400">Subtotal sin IVA</div>
-                <div className="mt-1 text-sm font-black text-slate-950 sm:text-xl">{formatMoney(preview.summary?.subtotal)}</div>
-              </div>
-              <div className="rounded-2xl bg-lime-50 p-4 text-right">
-                <div className="text-[9px] font-black uppercase text-lime-700">Total factura</div>
-                <div className="mt-1 text-sm font-black text-lime-950 sm:text-xl">{formatMoney(preview.summary?.total)}</div>
-              </div>
-            </div>
-            {retentionTotal > 0 || invoiceSupport ? (
-              <div className="mt-3 rounded-2xl border border-lime-200 bg-lime-50 p-4">
-                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-lime-700">Datos para contabilidad</div>
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm font-bold text-slate-700">
-                  <span>Retenciones {formatMoney(retentionTotal)}</span>
-                  <span className="font-black text-slate-950">Neto {formatMoney(netTotal)}</span>
-                </div>
-                {invoiceSupport ? <div className="mt-1 truncate text-xs font-semibold text-lime-800">Factura: {invoiceSupport.name}</div> : null}
-              </div>
-            ) : null}
-            <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Metodo de pago</div>
-              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-base font-black text-slate-950">{preview.payment?.label}</div>
-                {preview.payment?.method === "credit" ? (
-                  <div className="rounded-full bg-lime-100 px-3 py-1 text-xs font-black text-lime-800">
-                    Vence {preview.payment?.dueDate}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
-              SICAR recibira el total completo de la factura: subtotal mas IVA. Las retenciones no se envian a SICAR; se guardan solamente en el sistema contable.
-            </p>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setPreview(null);
-                  setPaymentMethod("");
-                }}
-                className="app-button app-button-secondary"
-              >
-                Revisar
-              </button>
-              <button type="button" onClick={receivePurchase} disabled={loading} className="app-button app-button-primary">
-                {loading ? "Registrando..." : "Confirmar recepcion"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {receipt ? (
-        <div className="app-modal z-[110] px-4" role="dialog" aria-modal="true">
-          <div className="app-modal-panel w-full max-w-md p-6 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">{Icons.check}</div>
-            <div className="mt-4 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Compra registrada</div>
-            <h2 className="mt-1 text-2xl font-black text-slate-950">Folio {receipt.folio}</h2>
-            <div className="mt-3 text-3xl font-black text-slate-950">{formatMoney(receipt.total)}</div>
-            <div className="mt-3 rounded-full bg-slate-100 px-4 py-2 text-sm font-black text-slate-700">
-              {receipt.payment?.label}
-            </div>
-            <p className="mt-2 text-sm font-semibold text-slate-500">Inventario actualizado en SICAR.</p>
-            {receipt.accounting?.requested ? (
-              <p className={`mt-3 rounded-xl px-3 py-2 text-xs font-bold ${receipt.accounting?.queued ? "bg-lime-50 text-lime-800" : "bg-amber-50 text-amber-800"}`}>
-                {receipt.accounting?.queued
-                  ? "Retenciones y factura preparadas para el sistema contable."
-                  : `Compra registrada; complemento contable pendiente: ${receipt.accounting?.error || "vuelve a intentarlo desde el servidor."}`}
-              </p>
-            ) : null}
-            <button type="button" onClick={() => setReceipt(null)} className="app-button app-button-primary mt-6 w-full">Cerrar</button>
-          </div>
-        </div>
-      ) : null}
+      {dialogs}
     </div>
   );
 }

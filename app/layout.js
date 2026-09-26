@@ -1,5 +1,7 @@
 import { IBM_Plex_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import "./design-system.css";
+import "./design-components.css";
 
 const ibmPlexSans = IBM_Plex_Sans({
   variable: "--font-ibm-plex-sans",
@@ -32,7 +34,7 @@ export const viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f4f7f5",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }) {
