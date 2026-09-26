@@ -517,7 +517,7 @@ export default function Configuracion({ setConfig }) {
         </div>
 
         {mensaje ? (
-          <div className={`mt-5 rounded-[22px] border px-4 py-4 text-sm font-semibold ${messageStyles}`}>{mensaje.text}</div>
+          <div className={`mt-5 rounded-lg border px-4 py-4 text-sm font-semibold ${messageStyles}`}>{mensaje.text}</div>
         ) : null}
       </section>
 
@@ -666,13 +666,13 @@ export default function Configuracion({ setConfig }) {
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
-                className="rounded-[28px] border-2 border-dashed p-6 text-center transition-all sm:p-8"
+                className="rounded-lg border-2 border-dashed p-6 text-center transition-all sm:p-8"
                 style={{
                   borderColor: dragActive ? "rgba(56,189,248,0.68)" : "rgba(148,163,184,0.26)",
                   background: dragActive ? "rgba(56,189,248,0.10)" : "rgba(247,251,255,0.98)",
                 }}
               >
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] bg-sky-100 text-sky-700">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
                   {Icons.upload}
                 </div>
                 <h4 className="mt-4 text-xl font-black text-slate-900">Arrastra el archivo aqui</h4>
@@ -713,7 +713,7 @@ export default function Configuracion({ setConfig }) {
             </>
           ) : (
             <div className="space-y-5">
-              <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                 <div className="text-sm font-black uppercase tracking-[0.16em] text-amber-700">Vista previa</div>
                 <div className="mt-2 text-base text-amber-900">
                   {previewCSV.length} productos listos para entrar al catalogo.
@@ -791,7 +791,7 @@ export default function Configuracion({ setConfig }) {
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-emerald-300/35 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          <div className="rounded-lg border border-emerald-300/35 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
             <div className="mb-2 font-black uppercase tracking-[0.16em] text-emerald-700">Importante</div>
             <p className="leading-6">
               Android o Windows mostraran su selector de impresion. Puedes elegir impresora, copias y orientacion, o cancelar para regresar a la app sin afectar el pedido enviado.
@@ -800,7 +800,7 @@ export default function Configuracion({ setConfig }) {
         </section>
       ) : null}
 
-      <section className="rounded-[26px] border border-amber-300/35 bg-amber-50 p-5 text-sm text-amber-900">
+      <section className="rounded-lg border border-amber-300/35 bg-amber-50 p-5 text-sm text-amber-900">
         <div className="mb-2 font-black uppercase tracking-[0.16em] text-amber-700">CSV</div>
         <p className="leading-6">
           Formato: <span className="font-black">CLAVE,PRODUCTO</span>

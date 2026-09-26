@@ -930,9 +930,9 @@ export default function PedidoVacuna({
                     </div>
 
                     {item.mostrarDropdown ? (
-                      <div className={`app-scroll-y rounded-[22px] border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)] ${IS_HANDHELD ? "handheld-product-results absolute inset-x-0 top-full z-[85] mt-1 max-h-[190px]" : "mt-2 max-h-64"}`}>
+                      <div className={`app-scroll-y rounded-lg border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)] ${IS_HANDHELD ? "handheld-product-results absolute inset-x-0 top-full z-[85] mt-1 max-h-[190px]" : "mt-2 max-h-64"}`}>
                         {productosFiltrados.length === 0 ? (
-                          <div className="rounded-[18px] px-4 py-5 text-center text-sm text-slate-400">
+                          <div className="rounded-lg px-4 py-5 text-center text-sm text-slate-400">
                             Sin coincidencias
                           </div>
                         ) : (
@@ -941,7 +941,7 @@ export default function PedidoVacuna({
                               type="button"
                               key={`${producto.clave}-${producto.nombre}`}
                               onClick={() => seleccionarProducto(idx, producto)}
-                              className="handheld-product-result mb-2 flex w-full items-start gap-3 rounded-[18px] border border-transparent bg-slate-50 px-4 py-3 text-left transition hover:border-emerald-300 hover:bg-emerald-50"
+                              className="handheld-product-result mb-2 flex w-full items-start gap-3 rounded-lg border border-transparent bg-slate-50 px-4 py-3 text-left transition hover:border-emerald-300 hover:bg-emerald-50"
                             >
                               <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-emerald-700">
                                 {producto.clave}
@@ -1076,7 +1076,7 @@ export default function PedidoVacuna({
               </button>
             </div>
 
-            <div className="mb-4 rounded-[22px] border border-emerald-200 bg-emerald-50 px-5 py-4">
+            <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-4">
               <div className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Peso total</div>
               <div className="mt-1 flex items-end gap-2 text-slate-900">
                 <span className="font-mono text-4xl font-black">
@@ -1133,7 +1133,7 @@ export default function PedidoVacuna({
                   return (
                     <div
                       key={`${originalIndex}-${peso}`}
-                      className="flex items-center justify-between gap-3 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
                     >
                       <span className="text-sm font-black text-slate-500">Bulto {originalIndex + 1}</span>
                       <div className="flex items-center gap-3">

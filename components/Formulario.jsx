@@ -1109,9 +1109,9 @@ export default function Formulario({
                     </div>
 
                     {item.mostrarDropdown ? (
-                      <div className={`app-scroll-y rounded-[22px] border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)] ${IS_HANDHELD ? "handheld-product-results absolute inset-x-0 top-full z-[85] mt-1 max-h-[190px]" : "mt-2 max-h-64"}`}>
+                      <div className={`app-scroll-y rounded-lg border border-slate-200 bg-white p-2 shadow-[0_18px_44px_rgba(60,90,122,0.16)] ${IS_HANDHELD ? "handheld-product-results absolute inset-x-0 top-full z-[85] mt-1 max-h-[190px]" : "mt-2 max-h-64"}`}>
                         {productosFiltrados.length === 0 ? (
-                          <div className="rounded-[18px] px-4 py-5 text-center text-sm text-slate-400">
+                          <div className="rounded-lg px-4 py-5 text-center text-sm text-slate-400">
                             Sin coincidencias
                           </div>
                         ) : (
@@ -1120,7 +1120,7 @@ export default function Formulario({
                               type="button"
                               key={`${producto.clave}-${producto.nombre}`}
                               onClick={() => seleccionarProducto(idx, producto)}
-                              className="handheld-product-result mb-2 flex w-full items-start gap-3 rounded-[18px] border border-transparent bg-slate-50 px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50"
+                              className="handheld-product-result mb-2 flex w-full items-start gap-3 rounded-lg border border-transparent bg-slate-50 px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50"
                             >
                               <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-black tracking-[0.16em] text-sky-700">
                                 {producto.clave}
@@ -1264,7 +1264,7 @@ export default function Formulario({
               </button>
             </div>
 
-            <div className="mb-4 rounded-[20px] border border-emerald-200 bg-emerald-50 px-5 py-4">
+            <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-5 py-4">
               <div className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Peso total</div>
               <div className="mt-1 text-4xl font-black text-slate-900">
                 {formatBultoWeight(bultosTemporal.reduce((sum, peso) => sum + peso, 0))} lb
@@ -1350,7 +1350,7 @@ export default function Formulario({
                   key={unidad.value}
                   type="button"
                   onClick={() => seleccionarUnidad(unitPickerIndex, unidad.value)}
-                  className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-base font-black text-slate-900 transition hover:border-sky-400 hover:bg-sky-50"
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-base font-black text-slate-900 transition hover:border-sky-400 hover:bg-sky-50"
                 >
                   {unidad.label}
                 </button>
