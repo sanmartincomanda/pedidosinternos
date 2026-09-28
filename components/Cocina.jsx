@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { db } from "../firebase";
 import { ref, update } from "firebase/database";
 import { getBranchDisplayName, isSameBranch } from "@/lib/branchUtils";
-import { printTransferRequisition } from "@/lib/historialPdf";
+import { printOrderPreparationChecklist, printTransferRequisition } from "@/lib/historialPdf";
 import { formatOrderNumber, getPedidoItems, isPedidoAfterOperativeReset } from "@/lib/orderUtils";
 
 const Icons = {
@@ -74,6 +74,13 @@ const Icons = {
       <path d="M3 7h11v8H3zM14 10h4l3 3v2h-7z" />
       <circle cx="7.5" cy="18" r="2" />
       <circle cx="17.5" cy="18" r="2" />
+    </svg>
+  ),
+  print: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <path d="M6 14h12v7H6z" />
+      <path d="M18 12h.01" />
     </svg>
   ),
 };
@@ -150,6 +157,15 @@ export default function Cocina({
       pedido.estado !== "RECIBIDO_CONFORME" &&
       pedido.estado !== "ANULADO",
   );
+
+  const imprimirListaPreparacion = async (pedido) => {
+    try {
+      await printOrderPreparationChecklist(pedido);
+    } catch (error) {
+      console.error("No se pudo abrir la lista de preparacion:", error);
+      alert("No se pudo abrir la lista de preparacion. Revisa que el navegador permita abrir la impresion.");
+    }
+  };
 
   const actualizarPesoReal = (firebaseId, itemIdx, valor) => {
     const key = `${firebaseId}_${itemIdx}`;
@@ -473,6 +489,15 @@ export default function Cocina({
                   </div>
 
                   <div className="grid gap-3">
+                    <button
+                      type="button"
+                      onClick={() => imprimirListaPreparacion(pedido)}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:border-emerald-500 hover:text-emerald-800"
+                    >
+                      {Icons.print}
+                      Imprimir lista de preparacion
+                    </button>
+
                     {(status === "NUEVO" || status === "STANDBY_ENTREGA") ? (
                       <button
                         type="button"
