@@ -41,6 +41,8 @@ if ([string]::IsNullOrWhiteSpace($firebaseWebApiKey)) {
         "https://traspasos.sanmartinsr.com",
         "https://pedidosinternossr.netlify.app",
         "https://main--pedidosinternossr.netlify.app",
+        "http://127.0.0.1:41731",
+        "http://localhost:41731",
         "http://localhost",
         "capacitor://localhost"
     )

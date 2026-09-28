@@ -5,7 +5,7 @@
   "authMode": "firebase-only",
   "allowPurchases": false,
   "allowInventoryAdjustments": false,
-  "allowedOrigins": ["https://traspasos.sanmartinsr.com", "http://localhost", "capacitor://localhost"],
+  "allowedOrigins": ["https://traspasos.sanmartinsr.com", "http://127.0.0.1:41731", "http://localhost:41731", "http://localhost", "capacitor://localhost"],
   "cacheSeconds": 60,
   "timeZone": "America/Managua",
   "mysql": {

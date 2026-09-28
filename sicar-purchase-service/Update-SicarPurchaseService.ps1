@@ -15,7 +15,7 @@ param(
     [string[]]$CompanySicarAliases = @("CARNES SAN MARTIN GRANADA"),
     [string[]]$AllowedFirebaseEmails = @("granada.inventory@sanmartinsr.com"),
     [string]$FirebaseWebApiKey = "",
-    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com", "https://pedidosinternossr.netlify.app", "https://main--pedidosinternossr.netlify.app", "http://localhost", "capacitor://localhost")
+    [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com", "https://pedidosinternossr.netlify.app", "https://main--pedidosinternossr.netlify.app", "http://127.0.0.1:41731", "http://localhost:41731", "http://localhost", "capacitor://localhost")
 )
 
 $ErrorActionPreference = "Stop"
@@ -123,7 +123,9 @@ $existingAllowedOrigins = if ($settings.PSObject.Properties.Name -contains "allo
 $requiredBrowserOrigins = @(
     "https://traspasos.sanmartinsr.com",
     "https://pedidosinternossr.netlify.app",
-    "https://main--pedidosinternossr.netlify.app"
+    "https://main--pedidosinternossr.netlify.app",
+    "http://127.0.0.1:41731",
+    "http://localhost:41731"
 )
 $settings.allowedOrigins = @($existingAllowedOrigins + @($AllowedOrigins) + $requiredBrowserOrigins | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
 if (-not ($settings.PSObject.Properties.Name -contains "inventoryFirebase")) {
