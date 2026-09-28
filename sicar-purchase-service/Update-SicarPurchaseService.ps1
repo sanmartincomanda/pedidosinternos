@@ -15,6 +15,7 @@ param(
     [string[]]$CompanySicarAliases = @("CARNES SAN MARTIN GRANADA"),
     [string[]]$AllowedFirebaseEmails = @("granada.inventory@sanmartinsr.com"),
     [string]$FirebaseWebApiKey = "",
+    [string]$FixedQuotaPin = "",
     [string[]]$AllowedOrigins = @("https://traspasos.sanmartinsr.com", "https://pedidosinternossr.netlify.app", "https://main--pedidosinternossr.netlify.app", "http://127.0.0.1:41731", "http://localhost:41731", "http://localhost", "capacitor://localhost")
 )
 
@@ -29,9 +30,11 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 
 $sourceServer = Join-Path $PSScriptRoot "server.mjs"
 $sourceMysqlProcess = Join-Path $PSScriptRoot "mysqlProcess.mjs"
+$sourceAccountingTreatment = Join-Path $PSScriptRoot "accountingTreatment.mjs"
 $watchdogInstaller = Join-Path $PSScriptRoot "Install-CsmSicarApiWatchdog.ps1"
 $installedServer = Join-Path $InstallDirectory "server.mjs"
 $installedMysqlProcess = Join-Path $InstallDirectory "mysqlProcess.mjs"
+$installedAccountingTreatment = Join-Path $InstallDirectory "accountingTreatment.mjs"
 $installedConfig = Join-Path $InstallDirectory "config.local.json"
 $installedFirebaseAccount = Join-Path $InstallDirectory "inventory-firebase-service-account.json"
 
@@ -40,6 +43,9 @@ if (-not (Test-Path -LiteralPath $sourceServer)) {
 }
 if (-not (Test-Path -LiteralPath $sourceMysqlProcess)) {
     throw "No existe mysqlProcess.mjs junto al actualizador."
+}
+if (-not (Test-Path -LiteralPath $sourceAccountingTreatment)) {
+    throw "No existe accountingTreatment.mjs junto al actualizador."
 }
 if (-not (Test-Path -LiteralPath $watchdogInstaller)) {
     throw "No existe Install-CsmSicarApiWatchdog.ps1 junto al actualizador."
@@ -60,6 +66,46 @@ if (Test-Path -LiteralPath $installedServer) {
 }
 if (Test-Path -LiteralPath $installedMysqlProcess) {
     Copy-Item -LiteralPath $installedMysqlProcess -Destination (Join-Path $backupDirectory "mysqlProcess.mjs") -Force
+}
+if (Test-Path -LiteralPath $installedAccountingTreatment) {
+    Copy-Item -LiteralPath $installedAccountingTreatment -Destination (Join-Path $backupDirectory "accountingTreatment.mjs") -Force
+}
+
+function New-FixedQuotaSettings {
+    param([string]$Pin)
+    if ($Pin -notmatch '^\d{4,8}$') {
+        throw "El PIN de cuota fija debe contener entre 4 y 8 digitos."
+    }
+    $salt = New-Object byte[] 16
+    $generator = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $generator.GetBytes($salt) } finally { $generator.Dispose() }
+    $iterations = 120000
+    $deriver = [Security.Cryptography.Rfc2898DeriveBytes]::new(
+        $Pin,
+        $salt,
+        $iterations,
+        [Security.Cryptography.HashAlgorithmName]::SHA256
+    )
+    try { $hash = $deriver.GetBytes(32) } finally { $deriver.Dispose() }
+    return [pscustomobject]@{
+        enabled = $true
+        pinIterations = $iterations
+        pinSalt = [Convert]::ToBase64String($salt)
+        pinHash = [Convert]::ToBase64String($hash)
+    }
+}
+
+if (-not ($settings.PSObject.Properties.Name -contains "accounting")) {
+    $settings | Add-Member -NotePropertyName accounting -NotePropertyValue ([pscustomobject]@{
+        queueDirectory = "C:\SICAR\state\sicar-purchase-accounting"
+        fixedQuota = [pscustomobject]@{ enabled = $false; pinIterations = 120000; pinSalt = ""; pinHash = "" }
+    })
+}
+elseif (-not ($settings.accounting.PSObject.Properties.Name -contains "fixedQuota")) {
+    $settings.accounting | Add-Member -NotePropertyName fixedQuota -NotePropertyValue ([pscustomobject]@{ enabled = $false; pinIterations = 120000; pinSalt = ""; pinHash = "" })
+}
+if (-not [string]::IsNullOrWhiteSpace($FixedQuotaPin)) {
+    $settings.accounting.fixedQuota = New-FixedQuotaSettings -Pin $FixedQuotaPin
 }
 if (-not ($settings.PSObject.Properties.Name -contains "allowPurchases")) {
     $settings | Add-Member -NotePropertyName allowPurchases -NotePropertyValue $false
@@ -164,6 +210,7 @@ Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 Copy-Item -LiteralPath $sourceServer -Destination $installedServer -Force
 Copy-Item -LiteralPath $sourceMysqlProcess -Destination $installedMysqlProcess -Force
+Copy-Item -LiteralPath $sourceAccountingTreatment -Destination $installedAccountingTreatment -Force
 Start-ScheduledTask -TaskName $taskName
 Start-Sleep -Seconds 2
 

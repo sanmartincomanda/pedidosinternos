@@ -25,6 +25,7 @@ param(
     [string]$InventoryFirebaseBranchDocumentId = "CARNES SAN MARTIN GRANADA",
     [string]$InventoryPayloadBranchAlias = "Granada",
     [string]$InventoryRequestedByEmail = "operaciones@sanmartinsr.com",
+    [string]$FixedQuotaPin = "",
     [switch]$EnablePurchases,
     [switch]$EnableInventoryAdjustments,
     [switch]$EnableInventoryTriggers
@@ -59,11 +60,15 @@ $nodeCommand = Get-Command node.exe -ErrorAction Stop
 $nodeExecutable = $nodeCommand.Source
 $sourceServer = Join-Path $PSScriptRoot "server.mjs"
 $sourceMysqlProcess = Join-Path $PSScriptRoot "mysqlProcess.mjs"
+$sourceAccountingTreatment = Join-Path $PSScriptRoot "accountingTreatment.mjs"
 if (-not (Test-Path -LiteralPath $sourceServer)) {
     throw "No existe server.mjs junto al instalador."
 }
 if (-not (Test-Path -LiteralPath $sourceMysqlProcess)) {
     throw "No existe mysqlProcess.mjs junto al instalador."
+}
+if (-not (Test-Path -LiteralPath $sourceAccountingTreatment)) {
+    throw "No existe accountingTreatment.mjs junto al instalador."
 }
 
 if ([string]::IsNullOrWhiteSpace($ApiKey)) {
@@ -77,10 +82,39 @@ if ([string]::IsNullOrWhiteSpace($FirebaseWebApiKey)) {
 New-Item -ItemType Directory -Path $InstallDirectory -Force | Out-Null
 $installedServer = Join-Path $InstallDirectory "server.mjs"
 $installedMysqlProcess = Join-Path $InstallDirectory "mysqlProcess.mjs"
+$installedAccountingTreatment = Join-Path $InstallDirectory "accountingTreatment.mjs"
 $installedConfig = Join-Path $InstallDirectory "config.local.json"
 $installedFirebaseAccount = Join-Path $InstallDirectory "inventory-firebase-service-account.json"
 Copy-Item -LiteralPath $sourceServer -Destination $installedServer -Force
 Copy-Item -LiteralPath $sourceMysqlProcess -Destination $installedMysqlProcess -Force
+Copy-Item -LiteralPath $sourceAccountingTreatment -Destination $installedAccountingTreatment -Force
+
+function New-FixedQuotaSettings {
+    param([string]$Pin)
+    if ([string]::IsNullOrWhiteSpace($Pin)) {
+        return [ordered]@{ enabled = $false; pinIterations = 120000; pinSalt = ""; pinHash = "" }
+    }
+    if ($Pin -notmatch '^\d{4,8}$') {
+        throw "El PIN de cuota fija debe contener entre 4 y 8 digitos."
+    }
+    $salt = New-Object byte[] 16
+    $generator = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $generator.GetBytes($salt) } finally { $generator.Dispose() }
+    $iterations = 120000
+    $deriver = [Security.Cryptography.Rfc2898DeriveBytes]::new(
+        $Pin,
+        $salt,
+        $iterations,
+        [Security.Cryptography.HashAlgorithmName]::SHA256
+    )
+    try { $hash = $deriver.GetBytes(32) } finally { $deriver.Dispose() }
+    return [ordered]@{
+        enabled = $true
+        pinIterations = $iterations
+        pinSalt = [Convert]::ToBase64String($salt)
+        pinHash = [Convert]::ToBase64String($hash)
+    }
+}
 
 if ($EnableInventoryTriggers) {
     if (-not (Test-Path -LiteralPath $InventoryFirebaseServiceAccount)) {
@@ -103,6 +137,10 @@ $settings = [ordered]@{
     allowedOrigins = @($AllowedOrigins)
     cacheSeconds = 60
     timeZone = "America/Managua"
+    accounting = [ordered]@{
+        queueDirectory = "C:\SICAR\state\sicar-purchase-accounting"
+        fixedQuota = New-FixedQuotaSettings -Pin $FixedQuotaPin
+    }
     mysql = [ordered]@{
         executable = $MysqlExecutable
         host = $MysqlHost

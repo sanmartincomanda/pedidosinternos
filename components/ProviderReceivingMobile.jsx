@@ -75,6 +75,9 @@ export default function ProviderReceivingMobile({ ctx }) {
     retentionMunicipalEnabled,
     retentionIr2,
     retentionMunicipal1,
+    fixedQuotaEnabled,
+    fixedQuotaAuthorized,
+    toggleFixedQuota,
     setRetentionIr2,
     setRetentionMunicipal1,
     setRetentionIrEdited,
@@ -87,6 +90,8 @@ export default function ProviderReceivingMobile({ ctx }) {
     chooseInvoiceFile,
     cameraLoading,
     totals,
+    accountingTaxes,
+    accountingTotal,
     retentionTotal,
     netTotal,
     formatMoney,
@@ -228,7 +233,7 @@ export default function ProviderReceivingMobile({ ctx }) {
     <div className="csm-summary-bar">
       <div className="min-w-0">
         <div className="csm-summary-count">{totals.lines} {totals.lines === 1 ? "artículo" : "artículos"}</div>
-        <div className="csm-summary-total">{formatMoney(totals.gross)}</div>
+        <div className="csm-summary-total">{formatMoney(accountingTotal)}</div>
       </div>
       <button type="button" onClick={() => push("review")} className="csm-btn csm-btn-primary" disabled={items.length === 0}>
         Revisar recepción
@@ -275,7 +280,7 @@ export default function ProviderReceivingMobile({ ctx }) {
             <div className="csm-overline">{editingDraftId ? "Pendiente abierto" : "Recepción en curso"}</div>
             <div className="csm-rx-resume-name">{supplier.nombre}</div>
             <div className="csm-rx-resume-meta">
-              {items.length} {items.length === 1 ? "artículo" : "artículos"} · {formatMoney(totals.gross)}
+              {items.length} {items.length === 1 ? "artículo" : "artículos"} · {formatMoney(accountingTotal)}
               {invoiceNumber ? ` · Fact. ${invoiceNumber}` : ""}
             </div>
             <button type="button" onClick={continueReception} className="csm-btn csm-btn-primary csm-btn-block mt-3">
@@ -412,6 +417,29 @@ export default function ProviderReceivingMobile({ ctx }) {
               Elegir archivo
             </button>
           </div>
+        </section>
+
+        <section className="csm-block">
+          <div className="flex items-center justify-between gap-3">
+            <span className="min-w-0 flex-1">
+              <span className="csm-section-title block">CUOTA FIJA</span>
+              <span className="block text-xs text-[var(--gray-500)]">
+                {fixedQuotaEnabled
+                  ? `${fixedQuotaAuthorized ? "Autorizada" : "Pendiente de reautorizar"} · IVA acreditable C$0.00`
+                  : "Factura del proveedor sin IVA"}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={toggleFixedQuota}
+              className={`csm-btn csm-btn-sm ${fixedQuotaEnabled ? "csm-btn-secondary" : "csm-btn-primary"}`}
+            >
+              {fixedQuotaEnabled ? (fixedQuotaAuthorized ? "Desactivar" : "Reautorizar") : "Activar"}
+            </button>
+          </div>
+          {fixedQuotaEnabled ? (
+            <p className="csm-alert is-warn mt-3">SICAR mantiene el IVA del artículo; contabilidad registra esta factura sin IVA acreditable.</p>
+          ) : null}
         </section>
 
         <section className="csm-block">
@@ -746,8 +774,9 @@ export default function ProviderReceivingMobile({ ctx }) {
         <section className="csm-block">
         <dl className="csm-totals is-flush">
           <div><dt>Subtotal sin IVA</dt><dd>{formatMoney(totals.subtotal)}</dd></div>
-          <div><dt>IVA</dt><dd>{formatMoney(totals.taxes)}</dd></div>
-          <div className="is-strong"><dt>Total factura</dt><dd>{formatMoney(totals.gross)}</dd></div>
+          <div><dt>IVA acreditable</dt><dd>{formatMoney(accountingTaxes)}</dd></div>
+          <div className="is-strong"><dt>{fixedQuotaEnabled ? "Total contable" : "Total factura"}</dt><dd>{formatMoney(accountingTotal)}</dd></div>
+          {fixedQuotaEnabled ? <div><dt>Total técnico en SICAR</dt><dd>{formatMoney(totals.gross)}</dd></div> : null}
           {retentionTotal > 0 ? (
             <>
               <div><dt>Retenciones</dt><dd>− {formatMoney(retentionTotal)}</dd></div>
@@ -756,6 +785,9 @@ export default function ProviderReceivingMobile({ ctx }) {
           ) : null}
         </dl>
         </section>
+        {fixedQuotaEnabled ? (
+          <p className="csm-alert is-warn">Cuota fija: se paga el subtotal y no se reconoce IVA acreditable.</p>
+        ) : null}
         {invoiceSupport ? <p className="csm-hint">Foto de factura adjunta: {invoiceSupport.name}</p> : null}
       </MobileScreen>
     );

@@ -8,6 +8,15 @@
   "allowedOrigins": ["https://traspasos.sanmartinsr.com", "http://127.0.0.1:41731", "http://localhost:41731", "http://localhost", "capacitor://localhost"],
   "cacheSeconds": 60,
   "timeZone": "America/Managua",
+  "accounting": {
+    "queueDirectory": "C:\\SICAR\\state\\sicar-purchase-accounting",
+    "fixedQuota": {
+      "enabled": false,
+      "pinIterations": 120000,
+      "pinSalt": "CONFIGURAR-LOCALMENTE",
+      "pinHash": "CONFIGURAR-LOCALMENTE"
+    }
+  },
   "mysql": {
     "executable": "C:\\Program Files (x86)\\SICAR-S-131AB\\MySQL\\MySQL Server 5.6\\bin\\mysql.exe",
     "host": "::1",
