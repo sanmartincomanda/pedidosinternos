@@ -10,6 +10,7 @@ import ProviderReceivingMobile from "./ProviderReceivingMobile";
 import TouchNumericInput from "./TouchNumericInput";
 import { articleUnit, Icon, ProductIdentity, useMediaQuery } from "./ui/csm";
 import {
+  authorizeSicarFixedQuota,
   checkSicarPurchaseApi,
   getSicarOfflineCatalog,
   getSicarPurchaseHistory,
@@ -205,6 +206,8 @@ function buildPurchasePayload({
   paymentMethod,
   retentionIr2,
   retentionMunicipal1,
+  fixedQuotaEnabled,
+  fixedQuotaPin,
   invoiceSupport = null,
 }) {
   return {
@@ -218,6 +221,8 @@ function buildPurchasePayload({
     accounting: {
       retentionIr2: roundMoney(retentionIr2),
       retentionMunicipal1: roundMoney(retentionMunicipal1),
+      supplierTaxRegime: fixedQuotaEnabled ? "fixed-quota" : "general",
+      ...(fixedQuotaEnabled ? { fixedQuotaPin } : {}),
       ...(invoiceSupport ? { invoiceSupport } : {}),
     },
     items: items.map((item) => ({
@@ -321,6 +326,12 @@ export default function ProveedoresExternos({ user }) {
   const [retentionMunicipal1, setRetentionMunicipal1] = useState("");
   const [retentionIrEdited, setRetentionIrEdited] = useState(false);
   const [retentionMunicipalEdited, setRetentionMunicipalEdited] = useState(false);
+  const [fixedQuotaEnabled, setFixedQuotaEnabled] = useState(false);
+  const [fixedQuotaPin, setFixedQuotaPin] = useState("");
+  const [fixedQuotaDialogOpen, setFixedQuotaDialogOpen] = useState(false);
+  const [fixedQuotaPinInput, setFixedQuotaPinInput] = useState("");
+  const [fixedQuotaPinError, setFixedQuotaPinError] = useState("");
+  const [fixedQuotaAuthorizing, setFixedQuotaAuthorizing] = useState(false);
   const [invoiceSupport, setInvoiceSupport] = useState(null);
   const [cameraLoading, setCameraLoading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -520,7 +531,9 @@ export default function ProveedoresExternos({ user }) {
     (retentionIrEnabled ? Number(retentionIr2 || 0) : 0)
       + (retentionMunicipalEnabled ? Number(retentionMunicipal1 || 0) : 0),
   );
-  const netTotal = roundMoney(Math.max(totals.gross - retentionTotal, 0));
+  const accountingTaxes = fixedQuotaEnabled ? 0 : totals.taxes;
+  const accountingTotal = fixedQuotaEnabled ? totals.subtotal : totals.gross;
+  const netTotal = roundMoney(Math.max(accountingTotal - retentionTotal, 0));
 
   const toggleRetentionIr = () => {
     setRetentionIrEnabled((enabled) => {
@@ -546,6 +559,44 @@ export default function ProveedoresExternos({ user }) {
       }
       return !enabled;
     });
+  };
+
+  const toggleFixedQuota = () => {
+    if (fixedQuotaEnabled && fixedQuotaPin) {
+      setFixedQuotaEnabled(false);
+      setFixedQuotaPin("");
+      setFixedQuotaPinInput("");
+      setFixedQuotaPinError("");
+      return;
+    }
+    setFixedQuotaPinInput("");
+    setFixedQuotaPinError("");
+    setFixedQuotaDialogOpen(true);
+  };
+
+  const confirmFixedQuota = async () => {
+    const pin = `${fixedQuotaPinInput || ""}`.trim();
+    if (!/^\d{4,8}$/.test(pin)) {
+      setFixedQuotaPinError("Ingresa el PIN de 4 a 8 dígitos.");
+      return;
+    }
+    setFixedQuotaAuthorizing(true);
+    setFixedQuotaPinError("");
+    try {
+      await authorizeSicarFixedQuota(pin);
+      setFixedQuotaPin(pin);
+      setFixedQuotaEnabled(true);
+      setFixedQuotaDialogOpen(false);
+      setFixedQuotaPinInput("");
+      setMessage({
+        type: "success",
+        text: "Cuota fija autorizada. Contabilidad registrará IVA acreditable C$0.00.",
+      });
+    } catch (error) {
+      setFixedQuotaPinError(error.message);
+    } finally {
+      setFixedQuotaAuthorizing(false);
+    }
   };
 
   const selectInvoiceSupport = (file) => {
@@ -843,6 +894,7 @@ export default function ProveedoresExternos({ user }) {
     if (items.some((item) => Number(item.netUnitPrice) < 0 || item.netUnitPrice === "")) return "Revisa el precio sin IVA de todos los productos.";
     if (retentionIrEnabled && (!Number.isFinite(Number(retentionIr2)) || Number(retentionIr2) < 0)) return "Revisa la retencion IR.";
     if (retentionMunicipalEnabled && (!Number.isFinite(Number(retentionMunicipal1)) || Number(retentionMunicipal1) < 0)) return "Revisa la retencion municipal.";
+    if (requireInvoice && fixedQuotaEnabled && !fixedQuotaPin) return "Vuelve a autorizar cuota fija con el PIN antes de recibir en SICAR.";
     if (retentionTotal > totals.subtotal) return "Las retenciones no pueden superar el subtotal de la factura.";
     return "";
   };
@@ -862,6 +914,11 @@ export default function ProveedoresExternos({ user }) {
     setRetentionMunicipal1("");
     setRetentionIrEdited(false);
     setRetentionMunicipalEdited(false);
+    setFixedQuotaEnabled(false);
+    setFixedQuotaPin("");
+    setFixedQuotaDialogOpen(false);
+    setFixedQuotaPinInput("");
+    setFixedQuotaPinError("");
     setInvoiceSupport(null);
     setPaymentMethod("");
     setPreview(null);
@@ -907,6 +964,7 @@ export default function ProveedoresExternos({ user }) {
         retentionMunicipalEnabled,
         retentionIr2: retentionIrEnabled ? `${retentionIr2 || 0}` : "",
         retentionMunicipal1: retentionMunicipalEnabled ? `${retentionMunicipal1 || 0}` : "",
+        fixedQuotaEnabled,
         invoiceSupport: serializedSupport,
       };
       await saveProviderPurchaseDraft(draft);
@@ -936,12 +994,21 @@ export default function ProveedoresExternos({ user }) {
     setRetentionMunicipal1(`${draft.retentionMunicipal1 || ""}`);
     setRetentionIrEdited(Boolean(draft.retentionIrEnabled));
     setRetentionMunicipalEdited(Boolean(draft.retentionMunicipalEnabled));
+    setFixedQuotaEnabled(Boolean(draft.fixedQuotaEnabled));
+    setFixedQuotaPin("");
+    setFixedQuotaPinInput("");
+    setFixedQuotaPinError("");
     setInvoiceSupport(draft.invoiceSupport || null);
     setEditingDraftId(draft.id);
     setHandheldDetailsOpen(false);
     setHandheldCaptureMode("scan");
     requestIdRef.current = draft.requestId || globalThis.crypto?.randomUUID?.() || `purchase-${Date.now()}`;
-    setMessage({ type: "success", text: "Recepcion local abierta. Puedes corregirla y enviarla a SICAR." });
+    setMessage({
+      type: "success",
+      text: draft.fixedQuotaEnabled
+        ? "Recepción abierta. Vuelve a autorizar cuota fija con el PIN antes de enviarla a SICAR."
+        : "Recepcion local abierta. Puedes corregirla y enviarla a SICAR.",
+    });
     setView("form");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -994,6 +1061,8 @@ export default function ProveedoresExternos({ user }) {
           paymentMethod: selectedPaymentMethod,
           retentionIr2: retentionIrEnabled ? retentionIr2 : 0,
           retentionMunicipal1: retentionMunicipalEnabled ? retentionMunicipal1 : 0,
+          fixedQuotaEnabled,
+          fixedQuotaPin,
         }),
       );
       setPreview(result);
@@ -1036,6 +1105,8 @@ export default function ProveedoresExternos({ user }) {
           paymentMethod,
           retentionIr2: retentionIrEnabled ? retentionIr2 : 0,
           retentionMunicipal1: retentionMunicipalEnabled ? retentionMunicipal1 : 0,
+          fixedQuotaEnabled,
+          fixedQuotaPin,
           invoiceSupport: invoiceSupportPayload,
         }),
       );
@@ -1238,6 +1309,58 @@ export default function ProveedoresExternos({ user }) {
           )
         : null}
 
+      {fixedQuotaDialogOpen ? (
+        <div className="app-modal z-[125] px-4" role="dialog" aria-modal="true" aria-labelledby="fixed-quota-title">
+          <div className="app-modal-panel w-full max-w-sm p-5 sm:p-6">
+            <div className="csm-overline">Autorización contable</div>
+            <h2 id="fixed-quota-title" className="csm-dialog-title mt-1">Proveedor de cuota fija</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--gray-600)]">
+              La factura se registrará sin IVA acreditable. SICAR conservará el IVA del artículo para su venta.
+            </p>
+            <label className="app-label mt-4" htmlFor="fixed-quota-pin">PIN</label>
+            <input
+              id="fixed-quota-pin"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={8}
+              value={fixedQuotaPinInput}
+              onChange={(event) => {
+                setFixedQuotaPinInput(event.target.value.replace(/\D/g, ""));
+                setFixedQuotaPinError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  confirmFixedQuota();
+                }
+              }}
+              className="app-input csm-num csm-num-lg"
+              aria-invalid={fixedQuotaPinError ? "true" : undefined}
+              autoFocus
+            />
+            {fixedQuotaPinError ? <p className="csm-field-error mt-2" role="alert">{fixedQuotaPinError}</p> : null}
+            <div className="csm-dialog-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  setFixedQuotaDialogOpen(false);
+                  setFixedQuotaPinInput("");
+                  setFixedQuotaPinError("");
+                }}
+                disabled={fixedQuotaAuthorizing}
+                className="csm-btn csm-btn-secondary"
+              >
+                Cancelar
+              </button>
+              <button type="button" onClick={confirmFixedQuota} disabled={fixedQuotaAuthorizing} className="csm-btn csm-btn-primary">
+                {fixedQuotaAuthorizing ? "Validando..." : "Autorizar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {paymentPromptOpen ? (
         <div className="app-modal z-[115] px-4" role="dialog" aria-modal="true" aria-labelledby="payment-method-title">
           <div className="app-modal-panel w-full max-w-lg p-5 sm:p-6">
@@ -1271,7 +1394,18 @@ export default function ProveedoresExternos({ user }) {
               <div><dt>Factura</dt><dd>{invoiceNumber} · {purchaseDate}</dd></div>
               <div><dt>Artículos</dt><dd>{preview.summary?.lines}</dd></div>
               <div><dt>Subtotal sin IVA</dt><dd>{formatMoney(preview.summary?.subtotal)}</dd></div>
-              <div className="is-strong"><dt>Total factura</dt><dd>{formatMoney(preview.summary?.total)}</dd></div>
+              {preview.accounting?.fixedQuota ? (
+                <>
+                  <div><dt>IVA acreditable</dt><dd>{formatMoney(0)}</dd></div>
+                  <div className="is-strong"><dt>Total contable</dt><dd>{formatMoney(preview.accounting?.total)}</dd></div>
+                  <div><dt>Total técnico en SICAR</dt><dd>{formatMoney(preview.accounting?.sicarTotal)}</dd></div>
+                </>
+              ) : (
+                <>
+                  <div><dt>IVA</dt><dd>{formatMoney(preview.summary?.taxes)}</dd></div>
+                  <div className="is-strong"><dt>Total factura</dt><dd>{formatMoney(preview.summary?.total)}</dd></div>
+                </>
+              )}
               <div>
                 <dt>Método de pago</dt>
                 <dd>{preview.payment?.label}{preview.payment?.method === "credit" && preview.payment?.dueDate ? ` · vence ${preview.payment.dueDate}` : ""}</dd>
@@ -1285,7 +1419,9 @@ export default function ProveedoresExternos({ user }) {
               {invoiceSupport ? <div><dt>Foto de factura</dt><dd className="break-all">{invoiceSupport.name}</dd></div> : null}
             </dl>
             <p className="csm-alert is-warn mt-4">
-              SICAR recibe el total de la factura (subtotal más IVA). Las retenciones no se envían a SICAR; solo al sistema contable.
+              {preview.accounting?.fixedQuota
+                ? "Cuota fija: contabilidad registra la compra sin IVA acreditable y paga el subtotal. SICAR conserva el IVA del artículo para facturación."
+                : "SICAR recibe el total de la factura (subtotal más IVA). Las retenciones no se envían a SICAR; solo al sistema contable."}
             </p>
             <div className="csm-dialog-actions">
               <button
@@ -1312,14 +1448,20 @@ export default function ProveedoresExternos({ user }) {
             <span className="csm-tag is-ok">Compra registrada en SICAR</span>
             <h2 id="receipt-title" className="csm-dialog-title mt-2">Factura {receipt.folio}</h2>
             <dl className="csm-totals mt-3">
-              <div className="is-strong"><dt>Total</dt><dd>{formatMoney(receipt.total)}</dd></div>
+              <div><dt>Total SICAR</dt><dd>{formatMoney(receipt.total)}</dd></div>
+              {receipt.accounting?.excludeRecoverableVat ? (
+                <>
+                  <div><dt>IVA acreditable</dt><dd>{formatMoney(0)}</dd></div>
+                  <div className="is-strong"><dt>Total contable</dt><dd>{formatMoney(receipt.accounting.accountingTotal)}</dd></div>
+                </>
+              ) : null}
               <div><dt>Método de pago</dt><dd>{receipt.payment?.label}</dd></div>
             </dl>
             <p className="mt-3 text-sm text-[var(--gray-700)]">Inventario actualizado en SICAR.</p>
             {receipt.accounting?.requested ? (
               <p className={`csm-alert mt-3 ${receipt.accounting?.queued ? "is-ok" : "is-warn"}`}>
                 {receipt.accounting?.queued
-                  ? "Retenciones y factura preparadas para el sistema contable."
+                  ? "Tratamiento contable y factura preparados para el sistema contable."
                   : `Compra registrada; complemento contable pendiente: ${receipt.accounting?.error || "vuelve a intentarlo desde el servidor."}`}
               </p>
             ) : null}
@@ -1369,6 +1511,9 @@ export default function ProveedoresExternos({ user }) {
             retentionMunicipalEnabled,
             retentionIr2,
             retentionMunicipal1,
+            fixedQuotaEnabled,
+            fixedQuotaAuthorized: Boolean(fixedQuotaPin),
+            toggleFixedQuota,
             setRetentionIr2,
             setRetentionMunicipal1,
             setRetentionIrEdited,
@@ -1381,6 +1526,8 @@ export default function ProveedoresExternos({ user }) {
             chooseInvoiceFile: () => invoiceSupportInputRef.current?.click(),
             cameraLoading,
             totals,
+            accountingTaxes,
+            accountingTotal,
             retentionTotal,
             netTotal,
             formatMoney,
@@ -1914,6 +2061,23 @@ export default function ProveedoresExternos({ user }) {
             <span className="text-sm text-[var(--gray-600)]">Base {formatMoney(totals.subtotal)}</span>
           </div>
           <div className="csm-accounting-grid mt-3">
+            <div className={`csm-check-row ${fixedQuotaEnabled ? "border-[var(--ok)] bg-[var(--ok-soft)]" : ""}`}>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">CUOTA FIJA</span>
+                <span className="block text-xs text-[var(--gray-500)]">
+                  {fixedQuotaEnabled
+                    ? `${fixedQuotaPin ? "Autorizada" : "Pendiente de reautorizar"} · IVA acreditable C$0.00`
+                    : "Factura del proveedor sin IVA"}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={toggleFixedQuota}
+                className={`csm-btn csm-btn-sm ${fixedQuotaEnabled ? "csm-btn-secondary" : "csm-btn-primary"}`}
+              >
+                {fixedQuotaEnabled ? (fixedQuotaPin ? "Desactivar" : "Reautorizar") : "Activar con PIN"}
+              </button>
+            </div>
             <div className="csm-check-row">
               <label className="csm-check">
                 <input type="checkbox" checked={retentionIrEnabled} onChange={toggleRetentionIr} />
@@ -1977,7 +2141,8 @@ export default function ProveedoresExternos({ user }) {
         <dl className="csm-command-totals">
           <div><dt>Artículos</dt><dd>{totals.lines}</dd></div>
           <div><dt>Subtotal</dt><dd>{formatMoney(totals.subtotal)}</dd></div>
-          <div className="is-strong"><dt>Total con IVA</dt><dd>{formatMoney(totals.gross)}</dd></div>
+          <div><dt>IVA acreditable</dt><dd>{formatMoney(accountingTaxes)}</dd></div>
+          <div className="is-strong"><dt>{fixedQuotaEnabled ? "Total contable" : "Total con IVA"}</dt><dd>{formatMoney(accountingTotal)}</dd></div>
           {retentionTotal > 0 ? <div><dt>Neto a pagar</dt><dd>{formatMoney(netTotal)}</dd></div> : null}
         </dl>
         <div className="csm-command-actions">

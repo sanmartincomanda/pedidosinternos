@@ -19,7 +19,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:inventory": "node --test lib/inventoryCountUtils.test.mjs",
-    "test:sicar-api": "node --test sicar-purchase-service/mysqlProcess.test.mjs",
+    "test:sicar-api": "node --test sicar-purchase-service/mysqlProcess.test.mjs sicar-purchase-service/accountingTreatment.test.mjs",
     "test:sicar-endpoints": "node --test lib/sicarApiEndpoints.test.mjs",
     "test:inventory-batching": "node --test lib/inventoryApiBatching.test.mjs",
     "test:article-eligibility": "node --test lib/sicarArticleEligibility.test.mjs",

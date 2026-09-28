@@ -3,6 +3,11 @@ import { createServer } from "node:http";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertFixedQuotaPin,
+  buildPurchaseAccountingTreatment,
+  isFixedQuotaAccounting,
+} from "./accountingTreatment.mjs";
 import { runMysqlProcess } from "./mysqlProcess.mjs";
 
 const serviceDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -23,7 +28,11 @@ let purchaseQueue = Promise.resolve();
 let inventoryQueue = Promise.resolve();
 let firebaseAccessToken = null;
 const firebaseIdentityCache = new Map();
+const fixedQuotaPinAttempts = new Map();
 let validatedCompany = null;
+
+const FIXED_QUOTA_MAX_ATTEMPTS = 5;
+const FIXED_QUOTA_LOCK_MS = 15 * 60 * 1000;
 
 const INVENTORY_TRIGGER_EVENT = "inventory.adjustment.requested";
 const INVENTORY_SOURCE_APP = "inventario-sanmartin";
@@ -513,13 +522,14 @@ async function persistInvoiceSupport(sourceRecordId, input) {
 
 async function queueAccountingMetadata(payload, context, purchase) {
   const accounting = payload?.accounting || {};
+  const treatment = context.accounting;
   const retentionIr2 = roundMoney(accounting.retentionIr2);
   const retentionMunicipal1 = roundMoney(accounting.retentionMunicipal1);
   if (retentionIr2 < 0 || retentionMunicipal1 < 0) throw new Error("Las retenciones no pueden ser negativas.");
 
   const retentionTotal = roundMoney(retentionIr2 + retentionMunicipal1);
   if (retentionTotal > context.summary.subtotal) throw new Error("Las retenciones superan el subtotal de la factura.");
-  const requested = retentionTotal > 0 || Boolean(accounting.invoiceSupport);
+  const requested = retentionTotal > 0 || Boolean(accounting.invoiceSupport) || treatment.fixedQuota;
   if (!requested) return { requested: false, queued: false };
 
   await mkdir(accountingQueueDirectory, { recursive: true });
@@ -530,7 +540,7 @@ async function queueAccountingMetadata(payload, context, purchase) {
     ? await persistInvoiceSupport(sourceRecordId, accounting.invoiceSupport)
     : existing?.invoiceSupport || null;
   const metadata = {
-    version: 2,
+    version: 3,
     source: "proveedores-app",
     companyIdentifier: `${config.company?.identifier || ""}`.trim().toLowerCase(),
     branchId: `${config.company?.branchId || ""}`.trim(),
@@ -544,10 +554,19 @@ async function queueAccountingMetadata(payload, context, purchase) {
     date: context.date,
     total: context.summary.total,
     subtotal: context.summary.subtotal,
+    taxes: context.summary.taxes,
+    supplierTaxRegime: treatment.supplierTaxRegime,
+    excludeRecoverableVat: treatment.excludeRecoverableVat,
+    accountingSubtotal: treatment.subtotal,
+    accountingTaxTotal: treatment.recoverableVat,
+    accountingTotal: treatment.total,
+    sicarSubtotal: treatment.sicarSubtotal,
+    sicarTaxTotal: treatment.sicarTaxTotal,
+    sicarTotal: treatment.sicarTotal,
     retentionIr2,
     retentionMunicipal1,
     retentionTotal,
-    netTotal: roundMoney(Math.max(context.summary.total - retentionTotal, 0)),
+    netTotal: roundMoney(Math.max(treatment.total - retentionTotal, 0)),
     invoiceSupport,
     uploadedSupport: existing?.uploadedSupport || null,
     accountingDeliveries: existing?.accountingDeliveries || {},
@@ -559,6 +578,11 @@ async function queueAccountingMetadata(payload, context, purchase) {
     queued: true,
     retentionTotal,
     netTotal: metadata.netTotal,
+    supplierTaxRegime: treatment.supplierTaxRegime,
+    excludeRecoverableVat: treatment.excludeRecoverableVat,
+    accountingTotal: treatment.total,
+    recoverableVat: treatment.recoverableVat,
+    sicarTotal: treatment.sicarTotal,
     hasInvoiceSupport: Boolean(invoiceSupport),
   };
 }
@@ -1036,7 +1060,7 @@ async function getInventoryHistory(limitValue = 100) {
   }));
 }
 
-async function getPurchaseContext(payload) {
+async function getPurchaseContext(payload, { fixedQuotaAuthorized = false } = {}) {
   const supplierId = Number(payload?.supplierId);
   if (!Number.isInteger(supplierId) || supplierId <= 0) throw new Error("Proveedor invalido.");
   const invoiceNumber = `${payload?.invoiceNumber || ""}`.trim().slice(0, 19);
@@ -1150,6 +1174,14 @@ async function getPurchaseContext(payload) {
       orden: Number(row.orden),
       tipoFactor: row.tipoFactor,
     }));
+  const summary = {
+    lines: items.length,
+    subtotal,
+    taxes: Math.round((total - subtotal + Number.EPSILON) * 100) / 100,
+    total,
+    subtotal0,
+  };
+  const accounting = buildPurchaseAccountingTreatment(payload?.accounting, summary, { fixedQuotaAuthorized });
   const purchaseDate = normalizePurchaseDate(payload?.date);
   const creditDays = Math.max(0, Math.trunc(Number(supplierRows[0].diasCredito || 0)));
   return {
@@ -1166,7 +1198,8 @@ async function getPurchaseContext(payload) {
     },
     items,
     activeTaxes,
-    summary: { lines: items.length, subtotal, taxes: Math.round((total - subtotal + Number.EPSILON) * 100) / 100, total, subtotal0 },
+    summary,
+    accounting,
   };
 }
 
@@ -1266,6 +1299,41 @@ function httpError(message, statusCode) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+function fixedQuotaAttemptKey(identity, request) {
+  const actor = identity?.uid || identity?.email || identity?.type || "unknown";
+  const address = request.socket?.remoteAddress || "unknown";
+  return createHash("sha256").update(`${actor}\0${address}`).digest("hex");
+}
+
+function authorizeFixedQuotaRequest(accounting, identity, request) {
+  if (!isFixedQuotaAccounting(accounting)) return false;
+
+  const key = fixedQuotaAttemptKey(identity, request);
+  const now = Date.now();
+  const previous = fixedQuotaPinAttempts.get(key);
+  const current = previous?.lockedUntil && previous.lockedUntil <= now ? null : previous;
+  if (!current && previous) fixedQuotaPinAttempts.delete(key);
+  if (current?.lockedUntil > now) {
+    const waitMinutes = Math.max(1, Math.ceil((current.lockedUntil - now) / 60000));
+    throw httpError(`Demasiados intentos de PIN. Intenta nuevamente en ${waitMinutes} minuto(s).`, 429);
+  }
+
+  try {
+    assertFixedQuotaPin(accounting?.fixedQuotaPin, config.accounting?.fixedQuota || {});
+    fixedQuotaPinAttempts.delete(key);
+    return true;
+  } catch (error) {
+    if (Number(error.statusCode) !== 403) throw error;
+    const attempts = (current?.attempts || 0) + 1;
+    const lockedUntil = attempts >= FIXED_QUOTA_MAX_ATTEMPTS ? now + FIXED_QUOTA_LOCK_MS : 0;
+    fixedQuotaPinAttempts.set(key, { attempts, lockedUntil });
+    if (lockedUntil) {
+      throw httpError("PIN incorrecto. La autorizacion de cuota fija quedo bloqueada durante 15 minutos.", 429);
+    }
+    throw httpError(`PIN de cuota fija incorrecto. Quedan ${FIXED_QUOTA_MAX_ATTEMPTS - attempts} intento(s).`, 403);
+  }
 }
 
 async function verifyFirebaseIdentity(request) {
@@ -1424,7 +1492,20 @@ const server = createServer(async (request, response) => {
           inventoryAdjustments: config.allowInventoryAdjustments === true,
           inventoryTriggers: inventoryTriggerEnabled,
         },
+        accounting: {
+          fixedQuotaEnabled: config.accounting?.fixedQuota?.enabled === true,
+        },
       });
+      return;
+    }
+    if (request.method === "POST" && url.pathname === "/compras/autorizar-cuota-fija") {
+      await validateConfiguredCompany();
+      const body = await readBody(request, 4096);
+      authorizeFixedQuotaRequest({
+        supplierTaxRegime: "fixed-quota",
+        fixedQuotaPin: body?.pin,
+      }, identity, request);
+      sendJson(response, 200, { ok: true, authorized: true, supplierTaxRegime: "fixed-quota" });
       return;
     }
     if (request.method === "GET" && url.pathname === "/catalogos/proveedores") {
@@ -1540,16 +1621,26 @@ const server = createServer(async (request, response) => {
     }
     if (request.method === "POST" && url.pathname === "/compras/preview") {
       await validateConfiguredCompany();
-      const context = await getPurchaseContext(await readBody(request));
-      sendJson(response, 200, { ok: true, supplier: context.supplier, items: context.items, summary: context.summary, payment: context.payment });
+      const body = await readBody(request);
+      const fixedQuotaAuthorized = authorizeFixedQuotaRequest(body?.accounting, identity, request);
+      const context = await getPurchaseContext(body, { fixedQuotaAuthorized });
+      sendJson(response, 200, {
+        ok: true,
+        supplier: context.supplier,
+        items: context.items,
+        summary: context.summary,
+        accounting: context.accounting,
+        payment: context.payment,
+      });
       return;
     }
     if (request.method === "POST" && url.pathname === "/compras/recibir") {
       await validateConfiguredCompany();
       if (config.allowPurchases !== true) throw new Error("La escritura de compras esta deshabilitada en la configuracion del servicio.");
       const body = await readBody(request, 12 * 1024 * 1024);
+      const fixedQuotaAuthorized = authorizeFixedQuotaRequest(body?.accounting, identity, request);
       const result = await enqueuePurchase(async () => {
-        const context = await getPurchaseContext(body);
+        const context = await getPurchaseContext(body, { fixedQuotaAuthorized });
         const { sql, folio, marker } = buildPurchaseSql(context);
         const duplicate = await query(`SELECT com_id, folio, total FROM compra WHERE comentario LIKE ${sqlText(`%${marker}%`)} ORDER BY com_id DESC LIMIT 1;`);
         if (duplicate.length > 0) {

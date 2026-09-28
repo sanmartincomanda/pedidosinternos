@@ -82,6 +82,25 @@ El instalador crea solamente la tarea `CSM SICAR Proveedores API` y una regla pr
 
 La app puede enviar `retentionIr2`, `retentionMunicipal1` y una foto JPG, PNG o WEBP de hasta 8 MB. Despues de confirmar la compra en SICAR, el servicio deja el complemento en `C:\SICAR\state\sicar-purchase-accounting`. El worker de compras contables lo une al mismo `com_id`, sube la foto a Storage y actualiza los documentos ya existentes sin crear otra compra.
 
+### Proveedores de cuota fija
+
+`POST /compras/autorizar-cuota-fija` valida el PIN protegido antes de habilitar el tratamiento. La previsualizacion y la recepcion vuelven a validarlo para impedir que el navegador active la modalidad por su cuenta.
+
+En cuota fija, SICAR conserva el IVA configurado en el articulo para facturacion y control de inventario. El complemento contable registra por separado:
+
+- subtotal de la factura como total contable;
+- IVA acreditable en cero;
+- total original de SICAR para conciliacion;
+- cuenta por pagar calculada sobre el total contable.
+
+El PIN no se guarda en el frontend ni en los complementos. Para configurarlo como hash PBKDF2 en cada servidor, ejecuta como administrador:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Set-SicarFixedQuotaPin.ps1
+```
+
+El script solicita el PIN de forma oculta, conserva un respaldo de la configuracion y comprueba que la API reinicie con la modalidad habilitada.
+
 ## Historial y recepciones en espera
 
 `GET /compras/historial` devuelve solamente compras identificadas con el marcador `APP PROVEEDORES [CSM:...]`. Los borradores de recepciones sin factura no pasan por este servicio: permanecen en IndexedDB dentro del dispositivo hasta que el operador los edita y confirma. Al confirmar, el numero de factura es obligatorio y SICAR recibe subtotal mas IVA; las retenciones siguen fuera de SICAR.
